@@ -49,7 +49,11 @@ class _TaskListState extends State<TaskList> {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        title: const Text('My Tasks'),
+        title: Consumer<AgendaProvider>(
+          builder: (context, agenda, child) {
+            return Text(agenda.currentFilter.title);
+          },
+        ),
         actions: [
           Consumer<AgendaProvider>(
             builder: (context, agenda, child) {

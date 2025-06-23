@@ -314,4 +314,21 @@ extension TaskFilterExtension on TaskFilter {
         return 'Show overdue tasks';
     }
   }
+
+  String get title {
+    switch (this) {
+      case TaskFilter.all:
+        return 'All Tasks';
+      case TaskFilter.completed:
+        return 'Completed Tasks';
+      case TaskFilter.pending:
+        return 'Pending Tasks';
+      case TaskFilter.today:
+        return 'Today\'s Tasks';
+      case TaskFilter.upcoming:
+        return 'Upcoming Tasks';
+      case TaskFilter.overdue:
+        return 'Overdue Tasks';
+    }
+  }
 }
