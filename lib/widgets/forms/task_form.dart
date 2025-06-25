@@ -19,6 +19,7 @@ class _TaskFormState extends State<TaskForm> {
   late final TextEditingController _titleController;
   DateTime? _selectedBeginDate;
   Duration? _selectedDuration;
+  TaskPriority? _selectedPriority;
 
   bool get _isEditing => widget.task != null;
 
@@ -30,6 +31,7 @@ class _TaskFormState extends State<TaskForm> {
     _selectedBeginDate = widget.task?.beginsAt ?? DateTime.now();
     _selectedDuration =
         widget.task?.estimatedDuration ?? const Duration(hours: 1);
+    _selectedPriority = widget.task?.priority ?? TaskPriority.medium;
   }
 
   @override
@@ -101,6 +103,7 @@ class _TaskFormState extends State<TaskForm> {
         title: _titleController.text.trim(),
         beginsAt: _selectedBeginDate,
         estimatedDuration: _selectedDuration!,
+        priority: _selectedPriority!,
       );
       agendaProvider.addTask(newTask);
     }
@@ -143,7 +146,7 @@ class _TaskFormState extends State<TaskForm> {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.all(16.0),
+      padding: const EdgeInsets.only(left: 16.0, right: 16.0, bottom: 16.0),
       child: ConstrainedBox(
         constraints: const BoxConstraints(minWidth: 48, maxWidth: 300),
         child: Form(
@@ -152,6 +155,16 @@ class _TaskFormState extends State<TaskForm> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Text(
+                'Priority: ${_selectedPriority!.displayName}',
+                style: Theme.of(context).textTheme.labelLarge,
+              ),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: _buildPriorityChips(),
+              ),
+              SizedBox(height: 8),
               TextFormField(
                 controller: _titleController,
                 decoration: const InputDecoration(labelText: 'Title'),
@@ -182,6 +195,20 @@ class _TaskFormState extends State<TaskForm> {
     );
   }
 
+  List<Widget> _buildPriorityChips() {
+    return TaskPriority.values.map((priority) {
+      return PriorityChip(
+        priority: priority,
+        isSelected: _selectedPriority == priority,
+        onTap: () {
+          setState(() {
+            _selectedPriority = priority;
+          });
+        },
+      );
+    }).toList();
+  }
+
   Widget _buildDateTimeRow() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -205,6 +232,40 @@ class _TaskFormState extends State<TaskForm> {
           child: Text(_formatDuration(_selectedDuration)),
         ),
       ],
+    );
+  }
+}
+
+class PriorityChip extends StatelessWidget {
+  final TaskPriority priority;
+  final VoidCallback? onTap;
+  final bool isSelected;
+
+  const PriorityChip({
+    super.key,
+    required this.priority,
+    this.onTap,
+    this.isSelected = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 22,
+        height: 22,
+        decoration: BoxDecoration(
+          color: priority.color,
+          shape: BoxShape.circle,
+          border: isSelected
+              ? Border.all(
+                  color: Theme.of(context).colorScheme.primary,
+                  width: 2,
+                )
+              : null,
+        ),
+      ),
     );
   }
 }
