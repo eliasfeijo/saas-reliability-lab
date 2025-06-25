@@ -250,13 +250,14 @@ class PriorityChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return InkWell(
       onTap: onTap,
+      customBorder: CircleBorder(),
       child: Container(
         width: 22,
         height: 22,
         decoration: BoxDecoration(
-          color: priority.color,
+          color: priority.color.withAlpha(isSelected ? 255 : 127),
           shape: BoxShape.circle,
           border: isSelected
               ? Border.all(
