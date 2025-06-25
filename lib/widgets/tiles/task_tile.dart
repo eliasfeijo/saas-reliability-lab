@@ -21,7 +21,7 @@ class TaskTile extends StatelessWidget {
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       color: isSelected
           ? Theme.of(context).primaryColor.withValues(alpha: 0.1)
-          : null,
+          : Theme.of(context).cardColor,
       child: InkWell(
         onTap: onTap,
         child: IntrinsicHeight(
