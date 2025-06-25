@@ -22,44 +22,90 @@ class TaskTile extends StatelessWidget {
       color: isSelected
           ? Theme.of(context).primaryColor.withValues(alpha: 0.1)
           : null,
-      child: ListTile(
-        leading: Checkbox(
-          value: task.isCompleted,
-          onChanged: (_) => onToggleComplete(),
-        ),
-        title: Text(
-          task.title,
-          style: TextStyle(
-            decoration: task.isCompleted ? TextDecoration.lineThrough : null,
-            color: task.isCompleted ? Colors.grey : null,
+      child: InkWell(
+        onTap: onTap,
+        child: IntrinsicHeight(
+          child: Row(
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Container(
+                    width: 20,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(12),
+                        bottomLeft: Radius.circular(12),
+                      ),
+                      color: task.priority.color,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Checkbox(
+                    value: task.isCompleted,
+                    onChanged: (_) => onToggleComplete(),
+                  ),
+                ],
+              ),
+              SizedBox(width: 8),
+              // Task Title and Details
+              Expanded(
+                flex: 8,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      Text(
+                        task.title,
+                        style: Theme.of(context).textTheme.titleMedium!
+                            .copyWith(
+                              decoration: task.isCompleted
+                                  ? TextDecoration.lineThrough
+                                  : null,
+                              color: task.isCompleted ? Colors.grey : null,
+                            ),
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(_formatDateTime(task.beginsAt)),
+                          Text(
+                            _formattedStatusMessage,
+                            style: TextStyle(
+                              color: _getStatusColor(task.status),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              SizedBox(width: 8),
+              // Priority Indicator and Selection Icon
+              Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    _buildPriorityIndicator(task.priority),
+                    const SizedBox(width: 8),
+                    Icon(
+                      isSelected ? Icons.check_circle : Icons.circle_outlined,
+                      color: isSelected
+                          ? Theme.of(context).primaryColor
+                          : Colors.grey,
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(_formatDateTime(task.beginsAt)),
-            Text(
-              _formattedStatusMessage,
-              style: TextStyle(
-                color: _getStatusColor(task.status),
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildPriorityIndicator(task.priority),
-            const SizedBox(width: 8),
-            Icon(
-              isSelected ? Icons.check_circle : Icons.circle_outlined,
-              color: isSelected ? Theme.of(context).primaryColor : Colors.grey,
-            ),
-          ],
-        ),
-        onTap: onTap,
-        selected: isSelected,
       ),
     );
   }
