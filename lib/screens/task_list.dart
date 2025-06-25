@@ -17,6 +17,9 @@ class TaskList extends StatefulWidget {
 class _TaskListState extends State<TaskList> {
   late Timer _refreshTimer;
 
+  // Controller for the search bar
+  final TextEditingController _searchController = TextEditingController();
+
   @override
   void initState() {
     super.initState();
@@ -94,7 +97,40 @@ class _TaskListState extends State<TaskList> {
                     Consumer<AgendaProvider>(
                       builder: (context, agenda, child) {
                         if (!agenda.hasSelectedTask) {
-                          return const SizedBox.shrink();
+                          return Container(
+                            padding: const EdgeInsets.all(16),
+                            child: SearchBar(
+                              controller: _searchController,
+                              elevation: WidgetStatePropertyAll(1),
+                              hintText: 'Search tasks...',
+                              onChanged: (value) {
+                                Provider.of<AgendaProvider>(
+                                  context,
+                                  listen: false,
+                                ).updateSearchQuery(value);
+                              },
+                              leading: const Icon(Icons.search),
+                              trailing: [
+                                Consumer<AgendaProvider>(
+                                  builder: (context, agenda, child) {
+                                    if (agenda.searchQuery.isNotEmpty) {
+                                      return IconButton(
+                                        icon: const Icon(Icons.clear),
+                                        onPressed: () {
+                                          Provider.of<AgendaProvider>(
+                                            context,
+                                            listen: false,
+                                          ).clearSearch();
+                                          _searchController.clear();
+                                        },
+                                      );
+                                    }
+                                    return const SizedBox.shrink();
+                                  },
+                                ),
+                              ],
+                            ),
+                          );
                         }
 
                         return Container(
@@ -149,6 +185,8 @@ class _TaskListState extends State<TaskList> {
                         );
                       },
                     ),
+
+                    SizedBox(height: 8),
 
                     // Task list
                     Expanded(
