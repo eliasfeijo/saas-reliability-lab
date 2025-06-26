@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:todo_flutter/models/task.dart';
 import 'package:todo_flutter/providers/agenda_provider.dart';
+import 'package:todo_flutter/widgets/common/transition_switcher.dart';
 import 'package:todo_flutter/widgets/forms/task_form.dart';
 import 'package:todo_flutter/widgets/tiles/task_tile.dart';
 
@@ -15,10 +16,15 @@ class TaskList extends StatefulWidget {
 }
 
 class _TaskListState extends State<TaskList> {
+  TaskModel? _selectedTask;
+  // Timer to refresh the task list every 5 seconds
   late Timer _refreshTimer;
 
   // Controller for the search bar
   final TextEditingController _searchController = TextEditingController();
+  // Transition controller for the search bar
+  final TransitionSwitcherController _topBarTransitionController =
+      TransitionSwitcherController();
 
   @override
   void initState() {
@@ -64,9 +70,15 @@ class _TaskListState extends State<TaskList> {
                 icon: Icon(
                   agenda.hasSelectedTask ? Icons.clear : Icons.filter_list,
                 ),
-                onPressed: () {
+                onPressed: () async {
                   if (agenda.hasSelectedTask) {
                     agenda.clearSelection();
+                    await _topBarTransitionController.switchChild(
+                      _buildSearchBar(),
+                    );
+                    setState(() {
+                      _selectedTask = null;
+                    });
                   } else {
                     _showFilterDialog(context);
                   }
@@ -95,102 +107,28 @@ class _TaskListState extends State<TaskList> {
                       mainAxisAlignment: MainAxisAlignment.start,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Selected task banner
-                        Consumer<AgendaProvider>(
-                          builder: (context, agenda, child) {
-                            if (!agenda.hasSelectedTask) {
-                              return Container(
-                                padding: const EdgeInsets.all(16),
-                                child: SearchBar(
-                                  controller: _searchController,
-                                  elevation: WidgetStatePropertyAll(1),
-                                  hintText: 'Search tasks...',
-                                  onChanged: (value) {
-                                    Provider.of<AgendaProvider>(
-                                      context,
-                                      listen: false,
-                                    ).updateSearchQuery(value);
-                                  },
-                                  leading: const Icon(Icons.search),
-                                  trailing: [
-                                    Consumer<AgendaProvider>(
-                                      builder: (context, agenda, child) {
-                                        if (agenda.searchQuery.isNotEmpty) {
-                                          return IconButton(
-                                            icon: const Icon(Icons.clear),
-                                            onPressed: () {
-                                              Provider.of<AgendaProvider>(
-                                                context,
-                                                listen: false,
-                                              ).clearSearch();
-                                              _searchController.clear();
-                                            },
-                                          );
-                                        }
-                                        return const SizedBox.shrink();
-                                      },
-                                    ),
-                                  ],
-                                ),
-                              );
-                            }
-
-                            return Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.all(16),
-                              color: Theme.of(
-                                context,
-                              ).primaryColor.withValues(alpha: 0.1),
-                              child: Row(
-                                children: [
-                                  // Display selected task details
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          'Selected: ${agenda.selectedTask!.title}',
-                                          style: Theme.of(
-                                            context,
-                                          ).textTheme.titleMedium,
-                                        ),
-                                        Text(
-                                          'Status: ${agenda.selectedTask!.status.displayName}',
-                                          style: Theme.of(
-                                            context,
-                                          ).textTheme.bodySmall,
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  // Action buttons for selected task
-                                  Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      IconButton(
-                                        icon: const Icon(Icons.edit),
-                                        onPressed: () =>
-                                            _editSelectedTask(context),
-                                      ),
-                                      IconButton(
-                                        icon: const Icon(Icons.delete),
-                                        onPressed: () =>
-                                            _deleteSelectedTask(context),
-                                      ),
-                                      IconButton(
-                                        icon: const Icon(Icons.close),
-                                        onPressed: () =>
-                                            agenda.clearSelection(),
-                                      ),
-                                    ],
-                                  ),
-                                ],
+                        // Transition Switcher: Search Bar and Selected Task Banner
+                        TransitionSwitcher(
+                          controller: _topBarTransitionController,
+                          transitionOut: (child, animation) =>
+                              fadeThroughTransition(
+                                child,
+                                animation,
+                                reverse: true,
                               ),
-                            );
-                          },
+                          transitionIn: (child, animation) =>
+                              fadeThroughTransition(
+                                child,
+                                animation,
+                                reverse: false,
+                              ),
+                          outDuration: const Duration(milliseconds: 200),
+                          inDuration: const Duration(milliseconds: 200),
+                          inDelay: const Duration(milliseconds: 50),
+                          child: _buildSearchBar(),
                         ),
 
+                        // Selected task banner
                         SizedBox(height: 8),
 
                         // Task list
@@ -215,7 +153,15 @@ class _TaskListState extends State<TaskList> {
                                   return TaskTile(
                                     task: task,
                                     isSelected: isSelected,
-                                    onTap: () => agenda.selectTask(task),
+                                    onTap: () => {
+                                      agenda.selectTask(task),
+                                      setState(() {
+                                        _selectedTask = task;
+                                      }),
+                                      _topBarTransitionController.switchChild(
+                                        _buildSelectedTaskBanner(),
+                                      ),
+                                    },
                                     onToggleComplete: () =>
                                         agenda.toggleTaskCompletion(task.id),
                                   );
@@ -273,11 +219,11 @@ class _TaskListState extends State<TaskList> {
     );
   }
 
-  void _editSelectedTask(BuildContext context) {
+  Future<void> _editSelectedTask(BuildContext context) {
     final agenda = Provider.of<AgendaProvider>(context, listen: false);
-    if (agenda.selectedTask == null) return;
+    if (agenda.selectedTask == null) return Future.value();
 
-    showDialog(
+    return showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Edit Task'),
@@ -285,18 +231,17 @@ class _TaskListState extends State<TaskList> {
           task: agenda.selectedTask,
           onSaved: () {
             Navigator.of(context).pop();
-            agenda.clearSelection();
           },
         ),
       ),
     );
   }
 
-  void _deleteSelectedTask(BuildContext context) {
+  Future<void> _deleteSelectedTask(BuildContext context) {
     final agenda = Provider.of<AgendaProvider>(context, listen: false);
-    if (agenda.selectedTask == null) return;
+    if (agenda.selectedTask == null) return Future.value();
 
-    showDialog(
+    return showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Task'),
@@ -326,6 +271,144 @@ class _TaskListState extends State<TaskList> {
       builder: (context) => AlertDialog(
         title: const Text('Create New Task'),
         content: TaskForm(onSaved: () => Navigator.of(context).pop()),
+      ),
+    );
+  }
+
+  Widget _buildSearchBar() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      child: SearchBar(
+        controller: _searchController,
+        elevation: WidgetStatePropertyAll(1),
+        hintText: 'Search tasks...',
+        onChanged: (value) {
+          Provider.of<AgendaProvider>(
+            context,
+            listen: false,
+          ).updateSearchQuery(value);
+        },
+        leading: const Icon(Icons.search),
+        trailing: [
+          Consumer<AgendaProvider>(
+            builder: (context, agenda, child) {
+              if (agenda.searchQuery.isNotEmpty) {
+                return IconButton(
+                  icon: const Icon(Icons.clear),
+                  onPressed: () {
+                    Provider.of<AgendaProvider>(
+                      context,
+                      listen: false,
+                    ).clearSearch();
+                    _searchController.clear();
+                  },
+                );
+              }
+              return const SizedBox.shrink();
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSelectedTaskBanner() {
+    if (_selectedTask == null) {
+      // If no task is selected, return an empty container
+      return const SizedBox.shrink();
+    }
+    return Consumer<AgendaProvider>(
+      builder: (context, agenda, child) {
+        return SelectedTaskBanner(
+          task: _selectedTask!,
+          onEdit: () async {
+            await _editSelectedTask(context);
+          },
+          onDelete: () async {
+            _deleteSelectedTask(context);
+            await _topBarTransitionController.switchChild(_buildSearchBar());
+            setState(() {
+              _selectedTask = null;
+            });
+          },
+          onClose: () async {
+            agenda.clearSelection();
+            await _topBarTransitionController.switchChild(_buildSearchBar());
+            setState(() {
+              _selectedTask = null;
+            });
+          },
+        );
+      },
+    );
+  }
+
+  Widget fadeThroughTransition(
+    Widget child,
+    Animation<double> animation, {
+    bool reverse = false,
+  }) {
+    final fade = CurvedAnimation(parent: animation, curve: Curves.easeInOut);
+    final slide = Tween<Offset>(
+      begin: Offset(0, reverse ? 0 : -1),
+      end: Offset(0, reverse ? -1 : 0),
+    ).animate(fade);
+
+    return FadeTransition(
+      opacity: fade,
+      child: SlideTransition(position: slide, child: child),
+    );
+  }
+}
+
+class SelectedTaskBanner extends StatelessWidget {
+  final TaskModel task;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+  final VoidCallback onClose;
+
+  const SelectedTaskBanner({
+    super.key,
+    required this.task,
+    required this.onEdit,
+    required this.onDelete,
+    required this.onClose,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      height: 88,
+      padding: const EdgeInsets.all(16),
+      color: Theme.of(context).primaryColor.withValues(alpha: 0.1),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  'Selected: ${task.title}',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                Text(
+                  'Status: ${task.status.displayName}',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(icon: const Icon(Icons.edit), onPressed: onEdit),
+              IconButton(icon: const Icon(Icons.delete), onPressed: onDelete),
+              IconButton(icon: const Icon(Icons.close), onPressed: onClose),
+            ],
+          ),
+        ],
       ),
     );
   }
