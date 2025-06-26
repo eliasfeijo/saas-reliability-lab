@@ -88,133 +88,151 @@ class _TaskListState extends State<TaskList> {
                 color: Theme.of(context).colorScheme.surfaceContainerLow,
                 constraints: BoxConstraints(maxWidth: 500),
                 // color: Colors.red,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  mainAxisAlignment: MainAxisAlignment.start,
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                child: Stack(
                   children: [
-                    // Selected task banner
-                    Consumer<AgendaProvider>(
-                      builder: (context, agenda, child) {
-                        if (!agenda.hasSelectedTask) {
-                          return Container(
-                            padding: const EdgeInsets.all(16),
-                            child: SearchBar(
-                              controller: _searchController,
-                              elevation: WidgetStatePropertyAll(1),
-                              hintText: 'Search tasks...',
-                              onChanged: (value) {
-                                Provider.of<AgendaProvider>(
-                                  context,
-                                  listen: false,
-                                ).updateSearchQuery(value);
-                              },
-                              leading: const Icon(Icons.search),
-                              trailing: [
-                                Consumer<AgendaProvider>(
-                                  builder: (context, agenda, child) {
-                                    if (agenda.searchQuery.isNotEmpty) {
-                                      return IconButton(
-                                        icon: const Icon(Icons.clear),
-                                        onPressed: () {
-                                          Provider.of<AgendaProvider>(
-                                            context,
-                                            listen: false,
-                                          ).clearSearch();
-                                          _searchController.clear();
-                                        },
-                                      );
-                                    }
-                                    return const SizedBox.shrink();
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Selected task banner
+                        Consumer<AgendaProvider>(
+                          builder: (context, agenda, child) {
+                            if (!agenda.hasSelectedTask) {
+                              return Container(
+                                padding: const EdgeInsets.all(16),
+                                child: SearchBar(
+                                  controller: _searchController,
+                                  elevation: WidgetStatePropertyAll(1),
+                                  hintText: 'Search tasks...',
+                                  onChanged: (value) {
+                                    Provider.of<AgendaProvider>(
+                                      context,
+                                      listen: false,
+                                    ).updateSearchQuery(value);
                                   },
-                                ),
-                              ],
-                            ),
-                          );
-                        }
-
-                        return Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(16),
-                          color: Theme.of(
-                            context,
-                          ).primaryColor.withValues(alpha: 0.1),
-                          child: Row(
-                            children: [
-                              // Display selected task details
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'Selected: ${agenda.selectedTask!.title}',
-                                      style: Theme.of(
-                                        context,
-                                      ).textTheme.titleMedium,
-                                    ),
-                                    Text(
-                                      'Status: ${agenda.selectedTask!.status.displayName}',
-                                      style: Theme.of(
-                                        context,
-                                      ).textTheme.bodySmall,
+                                  leading: const Icon(Icons.search),
+                                  trailing: [
+                                    Consumer<AgendaProvider>(
+                                      builder: (context, agenda, child) {
+                                        if (agenda.searchQuery.isNotEmpty) {
+                                          return IconButton(
+                                            icon: const Icon(Icons.clear),
+                                            onPressed: () {
+                                              Provider.of<AgendaProvider>(
+                                                context,
+                                                listen: false,
+                                              ).clearSearch();
+                                              _searchController.clear();
+                                            },
+                                          );
+                                        }
+                                        return const SizedBox.shrink();
+                                      },
                                     ),
                                   ],
                                 ),
-                              ),
-                              // Action buttons for selected task
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
+                              );
+                            }
+
+                            return Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(16),
+                              color: Theme.of(
+                                context,
+                              ).primaryColor.withValues(alpha: 0.1),
+                              child: Row(
                                 children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.edit),
-                                    onPressed: () => _editSelectedTask(context),
+                                  // Display selected task details
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Selected: ${agenda.selectedTask!.title}',
+                                          style: Theme.of(
+                                            context,
+                                          ).textTheme.titleMedium,
+                                        ),
+                                        Text(
+                                          'Status: ${agenda.selectedTask!.status.displayName}',
+                                          style: Theme.of(
+                                            context,
+                                          ).textTheme.bodySmall,
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                  IconButton(
-                                    icon: const Icon(Icons.delete),
-                                    onPressed: () =>
-                                        _deleteSelectedTask(context),
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.close),
-                                    onPressed: () => agenda.clearSelection(),
+                                  // Action buttons for selected task
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      IconButton(
+                                        icon: const Icon(Icons.edit),
+                                        onPressed: () =>
+                                            _editSelectedTask(context),
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(Icons.delete),
+                                        onPressed: () =>
+                                            _deleteSelectedTask(context),
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(Icons.close),
+                                        onPressed: () =>
+                                            agenda.clearSelection(),
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
+                            );
+                          },
+                        ),
 
-                    SizedBox(height: 8),
+                        SizedBox(height: 8),
 
-                    // Task list
-                    Expanded(
-                      child: Consumer<AgendaProvider>(
-                        builder: (context, agenda, child) {
-                          final tasks = agenda.filteredTasks;
+                        // Task list
+                        Expanded(
+                          child: Consumer<AgendaProvider>(
+                            builder: (context, agenda, child) {
+                              final tasks = agenda.filteredTasks;
 
-                          if (tasks.isEmpty) {
-                            return const Center(child: Text('No tasks found'));
-                          }
+                              if (tasks.isEmpty) {
+                                return const Center(
+                                  child: Text('No tasks found'),
+                                );
+                              }
 
-                          return ListView.builder(
-                            itemCount: tasks.length,
-                            itemBuilder: (context, index) {
-                              final task = tasks[index];
-                              final isSelected =
-                                  agenda.selectedTask?.id == task.id;
+                              return ListView.builder(
+                                itemCount: tasks.length,
+                                itemBuilder: (context, index) {
+                                  final task = tasks[index];
+                                  final isSelected =
+                                      agenda.selectedTask?.id == task.id;
 
-                              return TaskTile(
-                                task: task,
-                                isSelected: isSelected,
-                                onTap: () => agenda.selectTask(task),
-                                onToggleComplete: () =>
-                                    agenda.toggleTaskCompletion(task.id),
+                                  return TaskTile(
+                                    task: task,
+                                    isSelected: isSelected,
+                                    onTap: () => agenda.selectTask(task),
+                                    onToggleComplete: () =>
+                                        agenda.toggleTaskCompletion(task.id),
+                                  );
+                                },
                               );
                             },
-                          );
-                        },
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    Positioned(
+                      bottom: 16,
+                      right: 16,
+                      child: FloatingActionButton(
+                        onPressed: () => _showCreateTaskDialog(context),
+                        child: const Icon(Icons.add),
                       ),
                     ),
                   ],
@@ -223,10 +241,6 @@ class _TaskListState extends State<TaskList> {
             ),
           ),
         ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showCreateTaskDialog(context),
-        child: const Icon(Icons.add),
       ),
     );
   }
