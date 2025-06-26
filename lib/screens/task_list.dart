@@ -123,8 +123,8 @@ class _TaskListState extends State<TaskList> {
                                 reverse: false,
                               ),
                           outDuration: const Duration(milliseconds: 200),
-                          inDuration: const Duration(milliseconds: 200),
-                          inDelay: const Duration(milliseconds: 50),
+                          inDuration: const Duration(milliseconds: 500),
+                          inDelay: const Duration(milliseconds: 100),
                           child: _buildSearchBar(),
                         ),
 
