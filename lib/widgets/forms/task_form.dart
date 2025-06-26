@@ -67,6 +67,13 @@ class _TaskFormState extends State<TaskForm> {
         context: context,
         initialTime: TimeOfDay.fromDateTime(initialDate),
         initialEntryMode: TimePickerEntryMode.input,
+        // 24-hour format
+        builder: (context, child) {
+          return MediaQuery(
+            data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
+            child: child!,
+          );
+        },
       );
 
       if (pickedTime != null) {
