@@ -36,6 +36,7 @@ class MyApp extends StatelessWidget {
     return ChangeNotifierProvider(
       create: (context) => AgendaProvider(TasksSharedPreferencesRepository()),
       child: MaterialApp(
+        debugShowCheckedModeBanner: false,
         title: 'Agenda',
         theme: ThemeData(
           colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),

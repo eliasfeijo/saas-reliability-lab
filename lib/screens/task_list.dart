@@ -2,8 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:todo_flutter/models/task.dart';
 import 'package:todo_flutter/providers/agenda_provider.dart';
+import 'package:todo_flutter/widgets/bottomsheets/login.dart';
 import 'package:todo_flutter/widgets/common/transition_switcher.dart';
 import 'package:todo_flutter/widgets/forms/task_form.dart';
 import 'package:todo_flutter/widgets/tiles/task_tile.dart';
@@ -84,6 +86,49 @@ class _TaskListState extends State<TaskList> {
                   }
                 },
               );
+            },
+          ),
+          Consumer<AgendaProvider>(
+            builder: (context, agenda, child) {
+              if (Supabase.instance.client.auth.currentUser == null) {
+                return Padding(
+                  padding: const EdgeInsets.only(right: 16),
+                  child: TextButton(
+                    onPressed: () => showModalBottomSheet(
+                      context: context,
+                      isScrollControlled: true,
+                      builder: (_) => const LoginBottomSheet(),
+                    ),
+                    child: Text(
+                      'Login',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onPrimary,
+                      ),
+                    ),
+                  ),
+                );
+              } else {
+                return Padding(
+                  padding: const EdgeInsets.only(right: 16),
+                  child: TextButton(
+                    onPressed: () async {
+                      await Supabase.instance.client.auth.signOut();
+                      ScaffoldMessenger.of(
+                        // ignore: use_build_context_synchronously
+                        context,
+                      ).showSnackBar(
+                        const SnackBar(content: Text('Logged out')),
+                      );
+                    },
+                    child: Text(
+                      'Logout',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onPrimary,
+                      ),
+                    ),
+                  ),
+                );
+              }
             },
           ),
         ],
