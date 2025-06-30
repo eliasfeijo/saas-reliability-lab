@@ -108,6 +108,7 @@ class TaskModel {
     if (!isCompleted) {
       isCompleted = true;
       completedAt = DateTime.now();
+      dirty();
     }
   }
 
@@ -115,17 +116,20 @@ class TaskModel {
     if (isCompleted) {
       isCompleted = false;
       completedAt = null;
+      dirty();
     }
   }
 
   void addTag(String tag) {
     if (!tags.contains(tag)) {
       tags = [...tags, tag];
+      dirty();
     }
   }
 
   void removeTag(String tag) {
     tags = tags.where((t) => t != tag).toList();
+    dirty();
   }
 
   bool hasTag(String tag) => tags.contains(tag);
@@ -133,12 +137,14 @@ class TaskModel {
   // Reschedule task to a new start time
   void reschedule(DateTime newBeginTime) {
     beginsAt = newBeginTime;
+    dirty();
   }
 
   // Extend or reduce task estimatedDuration
   void updateDuration(Duration newDuration) {
     if (newDuration.inMinutes > 0) {
       estimatedDuration = newDuration;
+      dirty();
     }
   }
 
