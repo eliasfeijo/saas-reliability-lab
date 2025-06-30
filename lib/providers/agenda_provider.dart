@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:todo_flutter/models/task.dart';
 import 'package:todo_flutter/repositories/tasks_repository.dart';
@@ -12,7 +15,16 @@ class AgendaProvider extends ChangeNotifier {
   String _searchQuery = '';
   TaskFilter _currentFilter = TaskFilter.all;
 
+  // User ID for cloud sync
+  // This is used to identify the user for cloud sync operations.
+  String? _userId;
+
+  // Loading state
   bool _isLoading = false;
+
+  // Timer for debouncing sync operations
+  // This is used to prevent multiple sync operations from being triggered in quick succession.
+  Timer? _syncDebounceTimer;
 
   // Constructor
   AgendaProvider(this._repository);
@@ -28,6 +40,7 @@ class AgendaProvider extends ChangeNotifier {
   String get searchQuery => _searchQuery;
   TaskFilter get currentFilter => _currentFilter;
   bool get isLoading => _isLoading;
+  String? get userId => _userId;
 
   // Computed getters
   List<TaskModel> get filteredTasks {
@@ -64,6 +77,11 @@ class AgendaProvider extends ChangeNotifier {
     return filtered;
   }
 
+  // List<TaskModel> get anonymousTasks {
+  //   // Return tasks that are not associated with any user
+  //   return _tasks.where((task) => task.userId == null).toList();
+  // }
+
   bool get hasSelectedTask => _selectedTask != null;
   bool get isTaskSelected => _selectedTask != null;
 
@@ -83,7 +101,45 @@ class AgendaProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  set userId(String? userId) {
+    _userId = userId;
+    notifyListeners();
+  }
+
   // Methods
+
+  // Load user ID from SharedPreferences
+  Future<void> loadUser() async {
+    _isLoading = true;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    final String? lastLocalUserId = prefs.getString('userId');
+    // Check if the user is logged in
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user != null) {
+      // If the user is logged in, use their ID
+      _userId = user.id;
+      debugPrint('Using logged in user ID: $_userId');
+    } else if (lastLocalUserId != null) {
+      // If not logged in, use the last saved local user ID
+      // This is useful for offline mode or when the user was previously logged in
+      debugPrint('Using last local user ID: $lastLocalUserId');
+      _userId = lastLocalUserId;
+    } else {
+      // No user ID available
+      _userId = null;
+      debugPrint('No user ID found in SharedPreferences or Supabase auth.');
+    }
+    _isLoading = false;
+    notifyListeners();
+  }
+
+  // Save user ID to SharedPreferences
+  Future<void> saveUser(String userId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('userId', userId);
+    return loadUser(); // Reload user to update state
+  }
 
   // Loading from repository
   Future<void> loadTasks() async {
@@ -96,10 +152,12 @@ class AgendaProvider extends ChangeNotifier {
 
   // Task Management Methods
   Future<void> addTask(TaskModel task) async {
+    task.userId = _userId; // Set user ID for the task
     task.dirty(); // Mark task as dirty for sync
     _tasks.add(task);
     await _repository.saveTasks(_tasks);
     notifyListeners();
+    await _debouncedSync(task); // Debounced sync
   }
 
   Future<void> updateTask(TaskModel updatedTask) async {
@@ -109,6 +167,7 @@ class AgendaProvider extends ChangeNotifier {
       _tasks[index] = updatedTask;
       await _repository.saveTasks(_tasks);
       notifyListeners();
+      await _debouncedSync(updatedTask); // Debounced sync
     }
   }
 
@@ -121,6 +180,7 @@ class AgendaProvider extends ChangeNotifier {
     }
     await _repository.saveTasks(_tasks);
     notifyListeners();
+    await _debouncedSync(_tasks.firstWhere((task) => task.id == taskId));
   }
 
   Future<void> toggleTaskCompletion(String taskId) async {
@@ -260,7 +320,13 @@ class AgendaProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // Sync with Cloud on Login
   Future<void> syncWithCloudOnLogin() async {
+    // final result = await Connectivity().checkConnectivity();
+    // if (result != ConnectivityResult.none) {
+    //   // You're online
+    // }
+
     _isLoading = true;
     notifyListeners();
     final supabase = Supabase.instance.client;
@@ -376,5 +442,30 @@ class AgendaProvider extends ChangeNotifier {
 
     _isLoading = false;
     notifyListeners();
+  }
+
+  /// Attempts to auto-sync a single task with the cloud.
+  Future<void> _tryAutoSync(TaskModel task) async {
+    // Attempt to sync with cloud if user is logged in
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user != null) {
+      debugPrint('Auto-syncing tasks for user: ${user.id}');
+      // TODO: Refactor this to sync only the specific task
+      // For now, we will call the full sync method
+      await syncWithCloudOnLogin();
+    } else {
+      debugPrint('No user logged in. Skipping auto-sync.');
+    }
+  }
+
+  /// Debounced sync method to prevent multiple sync operations in quick succession.
+  Future<void> _debouncedSync(TaskModel task) async {
+    // Cancel any existing timer
+    _syncDebounceTimer?.cancel();
+    // Start a new timer
+    _syncDebounceTimer = Timer(
+      const Duration(seconds: 3),
+      () => _tryAutoSync(task),
+    );
   }
 }

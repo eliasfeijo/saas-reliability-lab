@@ -47,17 +47,27 @@ class _TaskListState extends State<TaskList> {
     // Load initial tasks
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final agenda = Provider.of<AgendaProvider>(context, listen: false);
+      // Load user and tasks when the widget is first built
+      // This ensures that the user is loaded before tasks are fetched
+      // and that the UI is ready to display them
+      agenda.loadUser();
       agenda.loadTasks();
     });
 
-    Supabase.instance.client.auth.onAuthStateChange.listen((event) {
+    Supabase.instance.client.auth.onAuthStateChange.listen((event) async {
       if (event.event == AuthChangeEvent.signedIn) {
+        // User has signed in
+        final user = Supabase.instance.client.auth.currentUser;
+        if (user == null) return;
         if (!mounted) return;
-        // If the user signed in, sync tasks with the cloud
-        Provider.of<AgendaProvider>(
+        final AgendaProvider provider = Provider.of<AgendaProvider>(
           context,
           listen: false,
-        ).syncWithCloudOnLogin();
+        );
+        // Set the user ID in the provider
+        await provider.saveUser(user.id);
+        // Sync tasks with the cloud when the user logs in
+        await provider.syncWithCloudOnLogin();
       }
     });
   }

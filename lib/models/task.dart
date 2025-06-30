@@ -21,6 +21,10 @@ class TaskModel {
   DateTime? createdAt;
   DateTime? updatedAt;
 
+  // User ID for cloud sync
+  // This is used to identify the user for cloud sync operations.
+  String? userId;
+
   TaskModel({
     this.isCompleted = false,
     this.title = '',
@@ -35,6 +39,7 @@ class TaskModel {
     DateTime? createdAt,
     DateTime? updatedAt,
     DateTime? lastModifiedAt,
+    String? userId,
   }) : id = id ?? const Uuid().v4(),
        beginsAt = beginsAt ?? DateTime.now();
 
@@ -236,7 +241,8 @@ class TaskModel {
           : null,
       lastModifiedAt = json['updated_at'] != null
           ? DateTime.parse(json['updated_at'])
-          : null;
+          : null,
+      userId = json['user_id'];
 
   // To JSON
   Map<String, dynamic> toJson() => {
