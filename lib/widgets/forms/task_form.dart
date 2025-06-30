@@ -102,6 +102,7 @@ class _TaskFormState extends State<TaskForm> {
         title: _titleController.text.trim(),
         beginsAt: _selectedBeginDate,
         estimatedDuration: _selectedDuration,
+        priority: _selectedPriority!,
       );
       agendaProvider.updateTask(updatedTask);
     } else {
