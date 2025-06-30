@@ -163,6 +163,7 @@ class AgendaProvider extends ChangeNotifier {
       _tasks[index].toggleCompletion();
       await _repository.saveTasks(_tasks);
       notifyListeners();
+      _triggerSync(_tasks[index]); // Trigger sync immediately
     }
   }
 

@@ -101,6 +101,7 @@ class TaskModel {
   void toggleCompletion() {
     isCompleted = !isCompleted;
     completedAt = isCompleted ? DateTime.now() : null;
+    dirty();
   }
 
   void markAsCompleted() {
