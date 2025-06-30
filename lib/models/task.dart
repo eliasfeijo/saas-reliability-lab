@@ -277,6 +277,10 @@ class TaskModel {
     // 'completed_at': completedAt?.toUtc().toIso8601String(),
     'description': description,
     'priority': priority.index,
+    'notify_at': beginsAt
+        .subtract(Duration(minutes: 30))
+        .toUtc()
+        .toIso8601String(),
     // 'tags': tags,
     // 'sync_status': syncStatus.index,
     // 'user_id': userId,

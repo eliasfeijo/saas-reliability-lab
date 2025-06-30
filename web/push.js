@@ -3,7 +3,6 @@ async function registerPush(publicKey) {
   const registration = await navigator.serviceWorker.ready;
 
   console.log('Registering push service worker');
-  console.log('Public key:', publicKey);
 
   const subscription = await registration.pushManager.subscribe({
     userVisibleOnly: true,
@@ -31,5 +30,11 @@ function urlBase64ToUint8Array(base64String) {
 }
 
 function arrayBufferToBase64(buffer) {
-  return btoa(String.fromCharCode.apply(null, new Uint8Array(buffer)));
+  const bytes = new Uint8Array(buffer);
+  let binary = String.fromCharCode(...bytes);
+  const base64 = btoa(binary);
+  return base64
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, ''); // remove any padding
 }

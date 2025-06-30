@@ -62,10 +62,10 @@ class _TaskListState extends State<TaskList> {
         );
         // Set the user ID in the provider
         await provider.saveUser(user.id);
-        // Register web push subscription
-        await registerWebPushSubscription();
         // Sync tasks with the cloud when the user logs in
         await provider.syncAllTasks();
+        // Register web push subscription
+        await registerWebPushSubscription();
       }
     });
   }

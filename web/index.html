@@ -35,5 +35,17 @@
 <body>
   <script src="flutter_bootstrap.js" async></script>
   <script src="push.js"></script>
+  <script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', async () => {
+      try {
+        const reg = await navigator.serviceWorker.register('/push-sw.js');
+        console.log('Push SW registered:', reg.scope);
+      } catch (e) {
+        console.error('Push SW registration failed:', e);
+      }
+    });
+  }
+</script>
 </body>
 </html>
