@@ -12,4 +12,5 @@ jobs:
       - uses: bluefireteam/flutter-gh-pages@v9
         with:
           baseHref: /flutter-agenda-pwa/
+          customArgs: --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }} --dart-define=VAPID_PUBLIC_KEY=${{ secrets.VAPID_PUBLIC_KEY }}
       
