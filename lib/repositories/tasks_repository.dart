@@ -26,8 +26,6 @@ class TasksSharedPreferencesRepository implements TasksRepository {
     final tasksJson = prefs.getStringList(_key) ?? [];
     return tasksJson
         .map((jsonString) => TaskModel.fromJson(json.decode(jsonString)))
-        // Filter out tasks that are marked as deleted
-        .where((task) => task.syncStatus != SyncStatus.deleted)
         .toList();
   }
 

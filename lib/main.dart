@@ -4,6 +4,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:todo_flutter/providers/agenda_provider.dart';
 import 'package:todo_flutter/repositories/tasks_repository.dart';
 import 'package:todo_flutter/screens/task_list.dart';
+import 'package:todo_flutter/services/task_sync_service.dart';
+import 'package:todo_flutter/services/user_session_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -36,8 +38,14 @@ class MyApp extends StatelessWidget {
   // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
+    // Initialize the tasks repository
+    final tasksRepository = TasksSharedPreferencesRepository();
     return ChangeNotifierProvider(
-      create: (context) => AgendaProvider(TasksSharedPreferencesRepository()),
+      create: (context) => AgendaProvider(
+        tasksRepository,
+        TaskSyncService(tasksRepository, Supabase.instance.client),
+        UserSessionService(),
+      ),
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
         title: 'Agenda',

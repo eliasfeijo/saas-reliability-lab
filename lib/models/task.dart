@@ -239,23 +239,40 @@ class TaskModel {
       updatedAt = json['updated_at'] != null
           ? DateTime.parse(json['updated_at'])
           : null,
-      lastModifiedAt = json['updated_at'] != null
+      lastModifiedAt = json['modified_at'] != null
+          ? DateTime.parse(json['modified_at'])
+          : json['updated_at'] != null
           ? DateTime.parse(json['updated_at'])
           : null,
       userId = json['user_id'];
 
-  // To JSON
+  // To JSON (for local storage)
   Map<String, dynamic> toJson() => {
     'id': id,
     'title': title,
-    'start_date': beginsAt.toIso8601String(),
-    'due_date': endsAt.toIso8601String(),
+    'start_date': beginsAt.toUtc().toIso8601String(),
+    'due_date': endsAt.toUtc().toIso8601String(),
     'completed': isCompleted,
-    // 'completed_at': completedAt?.toIso8601String(),
+    'completed_at': completedAt?.toUtc().toIso8601String(),
+    'description': description,
+    'priority': priority.index,
+    'tags': tags,
+    'sync_status': syncStatus.index,
+    'modified_at': lastModifiedAt?.toUtc().toIso8601String(),
+  };
+  // To JSON (for cloud sync)
+  Map<String, dynamic> toCloudJson() => {
+    'id': id,
+    'title': title,
+    'start_date': beginsAt.toUtc().toIso8601String(),
+    'due_date': endsAt.toUtc().toIso8601String(),
+    'completed': isCompleted,
+    // 'completed_at': completedAt?.toUtc().toIso8601String(),
     'description': description,
     'priority': priority.index,
     // 'tags': tags,
     // 'sync_status': syncStatus.index,
+    // 'user_id': userId,
   };
 }
 

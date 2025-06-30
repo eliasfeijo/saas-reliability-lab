@@ -67,7 +67,7 @@ class _TaskListState extends State<TaskList> {
         // Set the user ID in the provider
         await provider.saveUser(user.id);
         // Sync tasks with the cloud when the user logs in
-        await provider.syncWithCloudOnLogin();
+        await provider.syncAllTasks();
       }
     });
   }
