@@ -18,7 +18,9 @@ class TaskList extends StatefulWidget {
 }
 
 class _TaskListState extends State<TaskList> {
+  // This will hold the currently selected task
   TaskModel? _selectedTask;
+
   // Timer to refresh the task list every 5 seconds
   late Timer _refreshTimer;
 
@@ -46,6 +48,17 @@ class _TaskListState extends State<TaskList> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final agenda = Provider.of<AgendaProvider>(context, listen: false);
       agenda.loadTasks();
+    });
+
+    Supabase.instance.client.auth.onAuthStateChange.listen((event) {
+      if (event.event == AuthChangeEvent.signedIn) {
+        if (!mounted) return;
+        // If the user signed in, sync tasks with the cloud
+        Provider.of<AgendaProvider>(
+          context,
+          listen: false,
+        ).syncWithCloudOnLogin();
+      }
     });
   }
 

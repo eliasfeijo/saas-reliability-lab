@@ -18,6 +18,9 @@ void main() async {
     defaultValue: "<your-anon-key>",
   );
 
+  debugPrint('Supabase URL: $supabaseUrl');
+  debugPrint('Supabase Anon Key: $supabaseAnonKey');
+
   await Supabase.initialize(
     url: supabaseUrl,
     anonKey: supabaseAnonKey,

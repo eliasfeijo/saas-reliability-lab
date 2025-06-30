@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 
+enum SyncStatus { synced, dirty, deleted }
+
 class TaskModel {
   final String id;
   String title;
@@ -12,6 +14,13 @@ class TaskModel {
   TaskPriority priority;
   List<String> tags;
 
+  SyncStatus syncStatus;
+  DateTime? lastModifiedAt;
+
+  // DB Timestamps
+  DateTime? createdAt;
+  DateTime? updatedAt;
+
   TaskModel({
     this.isCompleted = false,
     this.title = '',
@@ -19,9 +28,13 @@ class TaskModel {
     this.description,
     this.priority = TaskPriority.medium,
     this.tags = const [],
+    this.syncStatus = SyncStatus.synced,
     this.completedAt,
     String? id,
     DateTime? beginsAt,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    DateTime? lastModifiedAt,
   }) : id = id ?? const Uuid().v4(),
        beginsAt = beginsAt ?? DateTime.now();
 
@@ -70,6 +83,16 @@ class TaskModel {
   }
 
   // Methods
+  void dirty() {
+    syncStatus = SyncStatus.dirty;
+    lastModifiedAt = DateTime.now();
+  }
+
+  void markAsDeleted() {
+    syncStatus = SyncStatus.deleted;
+    lastModifiedAt = DateTime.now();
+  }
+
   void toggleCompletion() {
     isCompleted = !isCompleted;
     completedAt = isCompleted ? DateTime.now() : null;
@@ -187,33 +210,47 @@ class TaskModel {
         ')';
   }
 
-  // Serialization methods for offline storage
+  // From JSON
+  TaskModel.fromJson(Map<String, dynamic> json)
+    : id = json['id'],
+      title = json['title'],
+      beginsAt = DateTime.parse(json['start_date']),
+      estimatedDuration = DateTime.parse(
+        json['due_date'],
+      ).difference(DateTime.parse(json['start_date'])),
+      isCompleted = json['completed'],
+      completedAt = json['completed_at'] != null
+          ? DateTime.parse(json['completed_at'])
+          : null,
+      description = json['description'],
+      priority =
+          TaskPriority.values[json['priority'] ?? TaskPriority.medium.index],
+      tags = List<String>.from(json['tags'] ?? []),
+      syncStatus =
+          SyncStatus.values[json['sync_status'] ?? SyncStatus.synced.index],
+      createdAt = json['created_at'] != null
+          ? DateTime.parse(json['created_at'])
+          : null,
+      updatedAt = json['updated_at'] != null
+          ? DateTime.parse(json['updated_at'])
+          : null,
+      lastModifiedAt = json['updated_at'] != null
+          ? DateTime.parse(json['updated_at'])
+          : null;
+
+  // To JSON
   Map<String, dynamic> toJson() => {
     'id': id,
     'title': title,
-    'beginsAt': beginsAt.toIso8601String(),
-    'estimatedDuration': estimatedDuration.inMilliseconds,
-    'isCompleted': isCompleted,
-    'completedAt': completedAt?.toIso8601String(),
+    'start_date': beginsAt.toIso8601String(),
+    'due_date': endsAt.toIso8601String(),
+    'completed': isCompleted,
+    // 'completed_at': completedAt?.toIso8601String(),
     'description': description,
     'priority': priority.index,
-    'tags': tags,
+    // 'tags': tags,
+    // 'sync_status': syncStatus.index,
   };
-
-  factory TaskModel.fromJson(Map<String, dynamic> json) => TaskModel(
-    id: json['id'],
-    title: json['title'],
-    beginsAt: DateTime.parse(json['beginsAt']),
-    estimatedDuration: Duration(milliseconds: json['estimatedDuration']),
-    isCompleted: json['isCompleted'],
-    completedAt: json['completedAt'] != null
-        ? DateTime.parse(json['completedAt'])
-        : null,
-    description: json['description'],
-    priority:
-        TaskPriority.values[json['priority'] ?? TaskPriority.medium.index],
-    tags: List<String>.from(json['tags'] ?? []),
-  );
 }
 
 enum TaskPriority { low, medium, high, urgent }
