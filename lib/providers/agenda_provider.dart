@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -322,10 +323,13 @@ class AgendaProvider extends ChangeNotifier {
 
   // Sync with Cloud on Login
   Future<void> syncWithCloudOnLogin() async {
-    // final result = await Connectivity().checkConnectivity();
-    // if (result != ConnectivityResult.none) {
-    //   // You're online
-    // }
+    final connectivityResult = await (Connectivity().checkConnectivity());
+    if (!connectivityResult.contains(ConnectivityResult.none)) {
+      debugPrint('Internet connection available. Starting sync...');
+    } else {
+      debugPrint('No internet connection. Skipping sync.');
+      return;
+    }
 
     _isLoading = true;
     notifyListeners();
