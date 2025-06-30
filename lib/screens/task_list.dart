@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:todo_flutter/helpers/web_push_helper.dart';
 import 'package:todo_flutter/models/task.dart';
 import 'package:todo_flutter/providers/agenda_provider.dart';
 import 'package:todo_flutter/widgets/bottomsheets/login.dart';
@@ -46,12 +47,7 @@ class _TaskListState extends State<TaskList> {
 
     // Load initial tasks
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final agenda = Provider.of<AgendaProvider>(context, listen: false);
-      // Load user and tasks when the widget is first built
-      // This ensures that the user is loaded before tasks are fetched
-      // and that the UI is ready to display them
-      agenda.loadUser();
-      agenda.loadTasks();
+      _initAgenda();
     });
 
     Supabase.instance.client.auth.onAuthStateChange.listen((event) async {
@@ -66,6 +62,8 @@ class _TaskListState extends State<TaskList> {
         );
         // Set the user ID in the provider
         await provider.saveUser(user.id);
+        // Register web push subscription
+        await registerWebPushSubscription();
         // Sync tasks with the cloud when the user logs in
         await provider.syncAllTasks();
       }
@@ -257,6 +255,19 @@ class _TaskListState extends State<TaskList> {
         ],
       ),
     );
+  }
+
+  Future<void> _initAgenda() async {
+    final agenda = Provider.of<AgendaProvider>(context, listen: false);
+    // Load user and tasks when the widget is first built
+    // This ensures that the user is loaded before tasks are fetched
+    // and that the UI is ready to display them
+    await agenda.loadUser();
+    await agenda.loadTasks();
+    if (agenda.userId != null && agenda.userId!.isNotEmpty) {
+      // Register web push subscription if user is logged in
+      await registerWebPushSubscription();
+    }
   }
 
   void _showFilterDialog(BuildContext context) {
