@@ -66,6 +66,12 @@ class _TaskListState extends State<TaskList> {
         await provider.syncAllTasks();
         // Register web push subscription
         await registerWebPushSubscription();
+
+        if (provider.anonymousTasks.isNotEmpty) {
+          if (!mounted) return;
+          // Show dialog to discard anonymous tasks
+          _showDiscardAnonymousTasksDialog(context);
+        }
       }
     });
   }
@@ -280,6 +286,43 @@ class _TaskListState extends State<TaskList> {
       return const Center(child: CircularProgressIndicator());
     }
     return const SizedBox.shrink();
+  }
+
+  void _showDiscardAnonymousTasksDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Discard Anonymous Tasks'),
+        content: const Text(
+          'Do you want to discard the anonymous tasks that were created before you logged in? This will remove them permanently.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              final agenda = Provider.of<AgendaProvider>(
+                context,
+                listen: false,
+              );
+              agenda.takeOwnershipOfAnonymousTasks();
+              Navigator.of(context).pop();
+            },
+            child: const Text('Keep'),
+          ),
+          TextButton(
+            onPressed: () async {
+              final agenda = Provider.of<AgendaProvider>(
+                context,
+                listen: false,
+              );
+              await agenda.removeFromLocalStorage(agenda.anonymousTasks);
+              // ignore: use_build_context_synchronously
+              Navigator.of(context).pop();
+            },
+            child: const Text('Discard', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showFilterDialog(BuildContext context) {

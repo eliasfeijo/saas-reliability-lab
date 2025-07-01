@@ -48,10 +48,9 @@ class AgendaProvider extends ChangeNotifier {
     }),
   );
 
-  // List<TaskModel> get anonymousTasks {
-  //   // Return tasks that are not associated with any user
-  //   return _tasks.where((task) => task.userId == null).toList();
-  // }
+  /// Return tasks that are not associated with any user
+  List<TaskModel> get anonymousTasks =>
+      _tasks.where((task) => task.userId == null).toList();
 
   // Getters for filtered tasks, search query, and current filter
   // These getters provide access to the filtered tasks based on the current search query and filter.
@@ -315,5 +314,26 @@ class AgendaProvider extends ChangeNotifier {
         notifyListeners();
       },
     );
+  }
+
+  Future<void> removeFromLocalStorage(List<TaskModel> tasks) async {
+    // Remove tasks from the local storage
+    for (var task in tasks) {
+      _tasks.removeWhere((t) => t.id == task.id);
+    }
+    await _repository.saveTasks(_tasks);
+    notifyListeners();
+  }
+
+  Future<void> takeOwnershipOfAnonymousTasks() async {
+    // Take ownership of anonymous tasks by assigning the current user ID
+    for (final task in anonymousTasks) {
+      task.userId = _userId;
+      task.dirty(); // Mark as dirty for sync
+    }
+    await _repository.saveTasks(_tasks);
+    notifyListeners();
+    // Trigger sync for all tasks after taking ownership
+    await syncAllTasks();
   }
 }
