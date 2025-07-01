@@ -1,34 +1,38 @@
 async function registerPush(publicKey) {
-  if (!('serviceWorker' in navigator)) return null;
+  if (!('serviceWorker' in navigator)) {
+    console.error('Service workers are not supported in this browser.');
+    return null;
+  };
   
   console.log('Registering push service worker');
 
   const baseHref = document.querySelector('base')?.getAttribute('href') ?? '/'
   const swPath = `${baseHref}push-sw.js`;
   
-  navigator.serviceWorker.register(swPath).then((registration) => {
+  const registration = await navigator.serviceWorker.register(swPath);
+  if (!registration) {
+    console.error('Push service worker registration failed');
+    return Promise.reject('Push service worker registration failed');
+  }
 
-    console.log('Push service worker registered');
-
-    registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(publicKey),
-    }).then((subscription) => {
-      console.log('Push subscription successful:', subscription);
-      return {
-        endpoint: subscription.endpoint,
-        keys: {
-          p256dh: arrayBufferToBase64(subscription.getKey('p256dh')),
-          auth: arrayBufferToBase64(subscription.getKey('auth')),
-        }
-      };
-    }).catch((error) => {
-      console.error('Push subscription failed:', error);
-    });
-  }).catch((error) => {
-    console.error('Push service worker registration failed:', error);
-    return null;
+  const subscription = await registration.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: urlBase64ToUint8Array(publicKey),
   });
+  if (!subscription) {
+    console.error('Push subscription failed');
+    return Promise.reject('Push subscription failed');
+  }
+
+  console.log('Push subscription successful:', subscription);
+  
+  return {
+    endpoint: subscription.endpoint,
+    keys: {
+      p256dh: arrayBufferToBase64(subscription.getKey('p256dh')),
+      auth: arrayBufferToBase64(subscription.getKey('auth')),
+    }
+  };    
 }
 
 function urlBase64ToUint8Array(base64String) {
