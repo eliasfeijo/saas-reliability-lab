@@ -1,21 +1,31 @@
 async function registerPush(publicKey) {
   if (!('serviceWorker' in navigator)) return null;
-  const registration = await navigator.serviceWorker.ready;
-
+  
   console.log('Registering push service worker');
+  
+  navigator.serviceWorker.register('/push-sw.js').then((registration) => {
 
-  const subscription = await registration.pushManager.subscribe({
-    userVisibleOnly: true,
-    applicationServerKey: urlBase64ToUint8Array(publicKey),
+    console.log('Push service worker registered');
+
+    registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(publicKey),
+    }).then((subscription) => {
+      console.log('Push subscription successful:', subscription);
+      return {
+        endpoint: subscription.endpoint,
+        keys: {
+          p256dh: arrayBufferToBase64(subscription.getKey('p256dh')),
+          auth: arrayBufferToBase64(subscription.getKey('auth')),
+        }
+      };
+    }).catch((error) => {
+      console.error('Push subscription failed:', error);
+    });
+  }).catch((error) => {
+    console.error('Push service worker registration failed:', error);
+    return null;
   });
-
-  return {
-    endpoint: subscription.endpoint,
-    keys: {
-      p256dh: arrayBufferToBase64(subscription.getKey('p256dh')),
-      auth: arrayBufferToBase64(subscription.getKey('auth')),
-    }
-  };
 }
 
 function urlBase64ToUint8Array(base64String) {
