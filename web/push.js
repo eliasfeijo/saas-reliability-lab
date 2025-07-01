@@ -2,8 +2,11 @@ async function registerPush(publicKey) {
   if (!('serviceWorker' in navigator)) return null;
   
   console.log('Registering push service worker');
+
+  const baseHref = document.querySelector('base')?.getAttribute('href') ?? '/'
+  const swPath = `${baseHref}push-sw.js`;
   
-  navigator.serviceWorker.register('/push-sw.js').then((registration) => {
+  navigator.serviceWorker.register(swPath).then((registration) => {
 
     console.log('Push service worker registered');
 
