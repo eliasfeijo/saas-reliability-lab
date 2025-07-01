@@ -8,8 +8,9 @@ async function registerPush(publicKey) {
 
   const baseHref = document.querySelector('base')?.getAttribute('href') ?? '/'
   const swPath = `${baseHref}push-sw.js`;
+  const scope = `${baseHref}push/`;
   
-  const registration = await navigator.serviceWorker.register(swPath);
+  const registration = await navigator.serviceWorker.register(swPath, { scope });
   if (!registration) {
     console.error('Push service worker registration failed');
     return Promise.reject('Push service worker registration failed');
@@ -25,7 +26,7 @@ async function registerPush(publicKey) {
   }
 
   console.log('Push subscription successful:', subscription);
-  
+
   return {
     endpoint: subscription.endpoint,
     keys: {
