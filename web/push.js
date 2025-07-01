@@ -10,10 +10,12 @@ async function registerPush(publicKey) {
   const swPath = `${baseHref}push-sw.js`;
   const scope = `${baseHref}push/`;
   
-  const registration = await navigator.serviceWorker.register(swPath, { scope });
-  if (!registration) {
-    console.error('Push service worker registration failed');
-    return Promise.reject('Push service worker registration failed');
+  await navigator.serviceWorker.register(swPath, { scope });
+
+  const registration = await navigator.serviceWorker.ready;
+  if (!registration.pushManager) {
+    console.error('Push manager is not available in this browser.');
+    return Promise.reject('Push manager is not available');
   }
 
   const subscription = await registration.pushManager.subscribe({
