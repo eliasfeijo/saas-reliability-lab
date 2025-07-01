@@ -62,6 +62,8 @@ class _LoginBottomSheetState extends State<LoginBottomSheet> {
 
         setState(() {
           _signUpEmail = email;
+          _loading = false;
+          _error = null;
         });
 
         _showOtpVerifyDialog();
