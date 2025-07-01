@@ -78,7 +78,12 @@ class _LoginBottomSheetState extends State<LoginBottomSheet> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Center(child: Text('OTP Verification')),
-        content: OtpVerifyForm(signUpEmail: _signUpEmail),
+        content: OtpVerifyForm(
+          signUpEmail: _signUpEmail,
+          onVerified: () {
+            Navigator.pop(context); // Close the dialog
+          },
+        ),
       ),
     );
   }
