@@ -63,3 +63,23 @@ function arrayBufferToBase64(buffer) {
     .replace(/\//g, '_')
     .replace(/=+$/, ''); // remove any padding
 }
+
+async function unregisterPush() {
+  if (!('serviceWorker' in navigator)) {
+    console.error('No service worker available.');
+    return null;
+  }
+
+  const registration = await navigator.serviceWorker.ready;
+  const subscription = await registration.pushManager.getSubscription();
+  if (!subscription) {
+    console.log('No subscription to unsubscribe.');
+    return null;
+  }
+
+  const endpoint = subscription.endpoint;
+  const success = await subscription.unsubscribe();
+  console.log('Unsubscribed:', success);
+
+  return endpoint;
+}

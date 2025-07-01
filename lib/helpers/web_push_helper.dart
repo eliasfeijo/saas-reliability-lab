@@ -66,3 +66,27 @@ Future<void> registerWebPushSubscription() async {
     debugPrint('Failed to subscribe: $e');
   }
 }
+
+@JS('unregisterPush')
+external JSPromise<JSString?> _unregisterPush();
+
+Future<void> unregisterWebPushSubscription() async {
+  try {
+    final result = await _unregisterPush().toDart;
+    final endpoint = result?.toDart;
+    if (endpoint != null) {
+      // debugPrint('[Push] Unregistering web push subscription: $endpoint');
+      final res = await Supabase.instance.client.functions.invoke(
+        'delete_subscription',
+        body: {'endpoint': endpoint},
+      );
+      if (res.status == 200) {
+        debugPrint('[Push] Subscription removed from Supabase');
+      } else {
+        debugPrint('[Push] Failed to remove from Supabase: ${res.data}');
+      }
+    }
+  } catch (e) {
+    debugPrint('[Push] Failed to unregister web push: $e');
+  }
+}

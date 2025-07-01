@@ -82,8 +82,6 @@ class _TaskListState extends State<TaskList> {
         await provider.clearUser();
         // Clear all tasks from local storage
         await provider.clearAllTasksFromLocalStorage();
-        // Unregister web push subscription
-        // await unregisterWebPushSubscription();
       }
     });
   }
@@ -151,6 +149,8 @@ class _TaskListState extends State<TaskList> {
                   padding: const EdgeInsets.only(right: 16),
                   child: TextButton(
                     onPressed: () async {
+                      // Unregister web push subscription
+                      await unregisterWebPushSubscription();
                       await Supabase.instance.client.auth.signOut();
                       ScaffoldMessenger.of(
                         // ignore: use_build_context_synchronously
