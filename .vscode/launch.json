@@ -8,27 +8,15 @@
       "name": "Flutter",
       "type": "dart",
       "request": "launch",
-      "program": "lib/main.dart"
-    },
-    {
-      "name": "todo_flutter",
-      "request": "launch",
-      "type": "dart",
+      "program": "lib/main.dart",
       "args": [
-        "--dart-define-from-file=env.json"
+        "--dart-define-from-file",
+        "env.json",
+        "-d",
+        "chrome",
+        "--web-port",
+        "3000"
       ]
-    },
-    {
-      "name": "todo_flutter (profile mode)",
-      "request": "launch",
-      "type": "dart",
-      "flutterMode": "profile"
-    },
-    {
-      "name": "todo_flutter (release mode)",
-      "request": "launch",
-      "type": "dart",
-      "flutterMode": "release"
     }
   ]
 }
