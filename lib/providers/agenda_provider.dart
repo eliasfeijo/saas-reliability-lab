@@ -97,7 +97,7 @@ class AgendaProvider extends ChangeNotifier {
     notifyListeners();
 
     _userId = await _userSession.loadUserId();
-    debugPrint('Loaded user ID: $_userId');
+    // debugPrint('Loaded user ID: $_userId');
 
     _isLoading = false;
     notifyListeners();

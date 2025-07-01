@@ -42,7 +42,7 @@ Future<void> registerWebPushSubscription() async {
     defaultValue: "<your-vapid-public-key>",
   );
 
-  debugPrint('VAPID Public Key: $vapidPublicKey');
+  // debugPrint('VAPID Public Key: $vapidPublicKey');
 
   try {
     final subscription = await _registerWebPush(vapidPublicKey);
