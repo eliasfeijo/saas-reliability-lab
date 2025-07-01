@@ -112,9 +112,13 @@ class TaskSyncService {
 
   void debouncedSync(
     TaskModel task,
+    Function()? beforeSync,
     Function(List<TaskModel> syncedTasks) callback,
   ) {
     _debouncedSync.trigger(() async {
+      if (beforeSync != null) {
+        beforeSync();
+      }
       final tasks = await repository.loadTasks();
       final syncedTasks = await syncAllTasks(tasks);
       callback(syncedTasks);
@@ -123,11 +127,12 @@ class TaskSyncService {
 
   void syncIfLoggedIn(
     TaskModel task,
+    Function()? beforeSync,
     Function(List<TaskModel> syncedTasks) callback,
   ) async {
     final user = supabase.auth.currentUser;
     if (user != null) {
-      debouncedSync(task, callback);
+      debouncedSync(task, beforeSync, callback);
     } else {
       debugPrint('User not logged in. Skipping sync.');
     }

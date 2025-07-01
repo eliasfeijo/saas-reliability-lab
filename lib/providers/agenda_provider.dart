@@ -299,21 +299,22 @@ class AgendaProvider extends ChangeNotifier {
   // Trigger sync for a specific task
   void _triggerSync(TaskModel task) {
     if (_userId == null) {
-      debugPrint('No user ID found. Skipping sync for task: ${task.id}');
+      debugPrint('No user ID found. Skipping sync for task');
       return;
     }
     if (_isLoading) {
-      debugPrint(
-        'Sync already in progress. Skipping sync for task: ${task.id}',
-      );
+      debugPrint('Sync already in progress. Skipping sync for task');
       return;
     }
-    _isLoading = true;
-    notifyListeners();
     // debugPrint('Triggering sync for task: ${task.id}');
     // debugPrint('Task sync status: ${task.syncStatus}');
     _taskSyncService.syncIfLoggedIn(
       task.copyWith(), // Use a copy to avoid modifying the original task
+      () {
+        // Optional: handle before sync logic here
+        _isLoading = true; // Set loading state before sync
+        notifyListeners();
+      },
       (List<TaskModel> syncedTasks) async {
         // Optional: handle synced tasks here
         await loadTasks(); // Reload tasks after sync

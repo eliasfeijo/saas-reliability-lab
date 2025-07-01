@@ -1,16 +1,17 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
-
 class DebounceController {
   final Duration debounceDuration;
   Timer? _debounce;
 
   DebounceController({this.debounceDuration = const Duration(seconds: 3)});
 
-  void trigger(VoidCallback action) {
+  void trigger(FutureOr<void> Function() action) {
     _debounce?.cancel();
-    _debounce = Timer(debounceDuration, action);
+    _debounce = Timer(debounceDuration, () {
+      action();
+      _debounce = null; // Reset debounce after action is executed
+    });
   }
 
   void cancel() {
