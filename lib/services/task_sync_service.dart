@@ -91,6 +91,14 @@ class TaskSyncService {
         .map((json) => TaskModel.fromJson(json))
         .toList();
 
+    // Check for tasks that might have been deleted by another device
+    // Compare remote tasks with local tasks
+    final remoteTaskIds = remoteTasks.map((t) => t.id).toSet();
+    final localTaskIds = updatedTasks.map((t) => t.id).toSet();
+    final remainingTaskIds = localTaskIds.difference(remoteTaskIds).toList();
+    // Remove deleted tasks from updatedTasks so they are not saved again
+    updatedTasks.removeWhere((task) => remainingTaskIds.contains(task.id));
+
     final merged = <String, TaskModel>{};
     for (final task in [...remoteTasks, ...updatedTasks]) {
       merged[task.id] = task;

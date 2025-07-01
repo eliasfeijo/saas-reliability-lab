@@ -8,7 +8,7 @@ async function registerPush(publicKey) {
 
   const inRelease = self.isReleaseMode ?? true;
 
-  console.log('In release mode:', inRelease);
+  // console.log('In release mode:', inRelease);
 
   const swFile = inRelease ? 'flutter_service_worker.js' : 'push-sw.js';
 
