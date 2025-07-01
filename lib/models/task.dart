@@ -266,6 +266,7 @@ class TaskModel {
     'tags': tags,
     'sync_status': syncStatus.index,
     'modified_at': lastModifiedAt?.toUtc().toIso8601String(),
+    'user_id': userId,
   };
   // To JSON (for cloud sync)
   Map<String, dynamic> toCloudJson() => {

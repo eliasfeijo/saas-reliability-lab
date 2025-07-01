@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:todo_flutter/helpers/web_push_helper.dart';
+import 'package:todo_flutter/keys.dart';
 import 'package:todo_flutter/models/task.dart';
 import 'package:todo_flutter/providers/agenda_provider.dart';
 import 'package:todo_flutter/widgets/bottomsheets/login.dart';
@@ -68,10 +69,21 @@ class _TaskListState extends State<TaskList> {
         await registerWebPushSubscription();
 
         if (provider.anonymousTasks.isNotEmpty) {
-          if (!mounted) return;
           // Show dialog to discard anonymous tasks
-          _showDiscardAnonymousTasksDialog(context);
+          _showDiscardAnonymousTasksDialog(navigatorKey.currentContext!);
         }
+      } else if (event.event == AuthChangeEvent.signedOut) {
+        // User has signed out
+        final AgendaProvider provider = Provider.of<AgendaProvider>(
+          navigatorKey.currentContext!,
+          listen: false,
+        );
+        // Clear user ID in the provider
+        await provider.clearUser();
+        // Clear all tasks from local storage
+        await provider.clearAllTasksFromLocalStorage();
+        // Unregister web push subscription
+        // await unregisterWebPushSubscription();
       }
     });
   }

@@ -108,6 +108,13 @@ class AgendaProvider extends ChangeNotifier {
     await loadUser(); // Reload user after saving
   }
 
+  // Clear user ID from SharedPreferences
+  Future<void> clearUser() async {
+    await _userSession.clearUserId();
+    _userId = null; // Clear the user ID in the provider
+    notifyListeners();
+  }
+
   // Loading from repository
   Future<void> loadTasks() async {
     final storedTasks = await _repository.loadTasks();
@@ -322,6 +329,13 @@ class AgendaProvider extends ChangeNotifier {
       _tasks.removeWhere((t) => t.id == task.id);
     }
     await _repository.saveTasks(_tasks);
+    notifyListeners();
+  }
+
+  Future<void> clearAllTasksFromLocalStorage() async {
+    // Clear all tasks from local storage
+    _tasks.clear();
+    await _repository.clearTasks();
     notifyListeners();
   }
 
