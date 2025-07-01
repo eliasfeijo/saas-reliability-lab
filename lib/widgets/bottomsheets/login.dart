@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:todo_flutter/widgets/forms/otp_verify_form.dart';
 
 class LoginBottomSheet extends StatefulWidget {
   const LoginBottomSheet({super.key});
@@ -14,74 +15,70 @@ class _LoginBottomSheetState extends State<LoginBottomSheet> {
   bool _loading = false;
   String? _error;
 
-  // void _setAutofillAttributes() {
-  //   if (!kIsWeb) return;
+  // Variables for OTP verification on sign-up
+  String? _signUpEmail;
 
-  //   final inputs = web.document.querySelectorAll('input');
+  // @override
+  // void initState() {
+  //   super.initState();
 
-  //   for (final input in inputs) {
-  //     final el = input as web.HTMLInputElement;
-
-  //     if (el.labels?.isEmpty ?? true) continue;
-
-  //     final label = el.labels?.first.textContent?.toLowerCase() ?? '';
-
-  //     if (label.contains('email')) {
-  //       el.name = 'username';
-  //       el.autocomplete = 'email';
-  //     } else if (label.contains('password')) {
-  //       el.name = 'current-password';
-  //       el.autocomplete = 'current-password';
-  //     }
-  //   }
+  //   WidgetsBinding.instance.addPostFrameCallback((_) {
+  //     _showOtpVerifyDialog();
+  //   });
   // }
 
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
   Future<void> _loginOrSignup() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+
     setState(() {
       _loading = true;
       _error = null;
     });
 
-    final email = _emailController.text.trim();
-    final password = _passwordController.text;
-
     try {
-      final supabase = Supabase.instance.client;
-
-      final response = await supabase.auth.signInWithPassword(
+      final response = await Supabase.instance.client.auth.signInWithPassword(
         email: email,
         password: password,
       );
-
       if (mounted && response.user != null) {
-        Navigator.pop(context); // close bottom sheet
+        Navigator.pop(context);
         return;
       }
-
       throw AuthException('No user found');
     } on AuthException {
       try {
-        const emailRedirectUrl = String.fromEnvironment(
-          'EMAIL_REDIRECT_URL',
-          defaultValue: 'https://eliasfeijo.github.io/flutter-agenda-pwa/',
-        );
         await Supabase.instance.client.auth.signUp(
-          email: _emailController.text.trim(),
-          password: _passwordController.text,
-          emailRedirectTo: emailRedirectUrl,
+          email: email,
+          password: password,
         );
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Account created! Check your email.')),
-        );
+
+        setState(() {
+          _signUpEmail = email;
+        });
+
+        _showOtpVerifyDialog();
       } catch (e) {
         setState(() => _error = e.toString());
       }
-    } catch (e) {
-      setState(() => _error = e.toString());
-    } finally {
-      setState(() => _loading = false);
     }
+  }
+
+  Future<void> _showOtpVerifyDialog() async {
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Center(child: Text('OTP Verification')),
+        content: OtpVerifyForm(signUpEmail: _signUpEmail),
+      ),
+    );
   }
 
   @override
