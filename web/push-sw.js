@@ -8,11 +8,14 @@ self.addEventListener("push", function (event) {
 
   console.log(text);
 
+  const baseHref = document.querySelector('base')?.getAttribute('href') ?? '/'
+  const iconPath = `${baseHref}icons/Icon-192.png`;
+
   const title = "Agenda";
   const options = {
     body: text || "Check your task list.",
-    icon: "/icons/Icon-192.png",
-    badge: "/icons/Icon-192.png",
+    icon: iconPath,
+    badge: iconPath,
   };
 
   event.waitUntil(
