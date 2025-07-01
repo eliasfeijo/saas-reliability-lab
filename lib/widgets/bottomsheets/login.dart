@@ -14,6 +14,28 @@ class _LoginBottomSheetState extends State<LoginBottomSheet> {
   bool _loading = false;
   String? _error;
 
+  // void _setAutofillAttributes() {
+  //   if (!kIsWeb) return;
+
+  //   final inputs = web.document.querySelectorAll('input');
+
+  //   for (final input in inputs) {
+  //     final el = input as web.HTMLInputElement;
+
+  //     if (el.labels?.isEmpty ?? true) continue;
+
+  //     final label = el.labels?.first.textContent?.toLowerCase() ?? '';
+
+  //     if (label.contains('email')) {
+  //       el.name = 'username';
+  //       el.autocomplete = 'email';
+  //     } else if (label.contains('password')) {
+  //       el.name = 'current-password';
+  //       el.autocomplete = 'current-password';
+  //     }
+  //   }
+  // }
+
   Future<void> _loginOrSignup() async {
     setState(() {
       _loading = true;
@@ -71,31 +93,36 @@ class _LoginBottomSheetState extends State<LoginBottomSheet> {
         top: 24,
         bottom: MediaQuery.of(context).viewInsets.bottom + 24,
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Text('Login or Sign Up'),
-          TextField(
-            controller: _emailController,
-            decoration: const InputDecoration(labelText: 'Email'),
-            keyboardType: TextInputType.emailAddress,
-          ),
-          TextField(
-            controller: _passwordController,
-            obscureText: true,
-            decoration: const InputDecoration(labelText: 'Password'),
-          ),
-          const SizedBox(height: 12),
-          if (_error != null)
-            Text(_error!, style: const TextStyle(color: Colors.red)),
-          const SizedBox(height: 12),
-          ElevatedButton(
-            onPressed: _loading ? null : _loginOrSignup,
-            child: _loading
-                ? const CircularProgressIndicator()
-                : const Text('Continue'),
-          ),
-        ],
+      child: AutofillGroup(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Login or Sign Up'),
+            TextField(
+              controller: _emailController,
+              autofocus: true,
+              autofillHints: const [AutofillHints.email],
+              decoration: const InputDecoration(labelText: 'Email'),
+              keyboardType: TextInputType.emailAddress,
+            ),
+            TextField(
+              controller: _passwordController,
+              obscureText: true,
+              autofillHints: const [AutofillHints.password],
+              decoration: const InputDecoration(labelText: 'Password'),
+            ),
+            const SizedBox(height: 12),
+            if (_error != null)
+              Text(_error!, style: const TextStyle(color: Colors.red)),
+            const SizedBox(height: 12),
+            ElevatedButton(
+              onPressed: _loading ? null : _loginOrSignup,
+              child: _loading
+                  ? const CircularProgressIndicator()
+                  : const Text('Continue'),
+            ),
+          ],
+        ),
       ),
     );
   }
