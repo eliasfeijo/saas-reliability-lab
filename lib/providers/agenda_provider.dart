@@ -276,6 +276,10 @@ class AgendaProvider extends ChangeNotifier {
       debugPrint('No user ID found. Skipping task sync on login.');
       return;
     }
+    if (_isLoading) {
+      debugPrint('Sync already in progress. Skipping task sync.');
+      return;
+    }
     _isLoading = true;
     notifyListeners();
     debugPrint('Syncing all tasks...');
@@ -288,23 +292,27 @@ class AgendaProvider extends ChangeNotifier {
 
   // Trigger sync for a specific task
   void _triggerSync(TaskModel task) {
+    if (_userId == null) {
+      debugPrint('No user ID found. Skipping sync for task: ${task.id}');
+      return;
+    }
+    if (_isLoading) {
+      debugPrint(
+        'Sync already in progress. Skipping sync for task: ${task.id}',
+      );
+      return;
+    }
+    _isLoading = true;
+    notifyListeners();
     // debugPrint('Triggering sync for task: ${task.id}');
     // debugPrint('Task sync status: ${task.syncStatus}');
     _taskSyncService.syncIfLoggedIn(
       task.copyWith(), // Use a copy to avoid modifying the original task
       (List<TaskModel> syncedTasks) async {
-        final isDeleted = task.syncStatus == SyncStatus.deleted;
-        final wasSelected = selectedTask?.id == task.id;
-        // If the task was deleted and it was selected, clear the selection
-        if (isDeleted && wasSelected) {
-          _selectionController.clear();
-          notifyListeners();
-          debugPrint('Task deleted during sync. Selection cleared.');
-        }
-
         // Optional: handle synced tasks here
-
         await loadTasks(); // Reload tasks after sync
+        _isLoading = false;
+        notifyListeners();
       },
     );
   }

@@ -123,7 +123,7 @@ class _TaskListState extends State<TaskList> {
                     child: Text(
                       'Login',
                       style: TextStyle(
-                        color: Theme.of(context).colorScheme.onPrimary,
+                        color: Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
                   ),
@@ -144,7 +144,7 @@ class _TaskListState extends State<TaskList> {
                     child: Text(
                       'Logout',
                       style: TextStyle(
-                        color: Theme.of(context).colorScheme.onPrimary,
+                        color: Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
                   ),
@@ -154,104 +154,109 @@ class _TaskListState extends State<TaskList> {
           ),
         ],
       ),
-      body: Row(
-        mainAxisSize: MainAxisSize.max,
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.center,
+      body: Stack(
         children: [
-          Flexible(
-            child: Container(
-              color: Theme.of(context).colorScheme.surfaceContainerLowest,
-              child: Container(
-                color: Theme.of(context).colorScheme.surfaceContainerLow,
-                constraints: BoxConstraints(maxWidth: 500),
-                // color: Colors.red,
-                child: Stack(
-                  children: [
-                    Column(
-                      mainAxisSize: MainAxisSize.min,
-                      mainAxisAlignment: MainAxisAlignment.start,
-                      crossAxisAlignment: CrossAxisAlignment.start,
+          Row(
+            mainAxisSize: MainAxisSize.max,
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Flexible(
+                child: Container(
+                  color: Theme.of(context).colorScheme.surfaceContainerLowest,
+                  child: Container(
+                    color: Theme.of(context).colorScheme.surfaceContainerLow,
+                    constraints: BoxConstraints(maxWidth: 500),
+                    // color: Colors.red,
+                    child: Stack(
                       children: [
-                        // Transition Switcher: Search Bar and Selected Task Banner
-                        TransitionSwitcher(
-                          controller: _topBarTransitionController,
-                          transitionOut: (child, animation) =>
-                              fadeThroughTransition(
-                                child,
-                                animation,
-                                reverse: true,
-                              ),
-                          transitionIn: (child, animation) =>
-                              fadeThroughTransition(
-                                child,
-                                animation,
-                                reverse: false,
-                              ),
-                          outDuration: const Duration(milliseconds: 200),
-                          inDuration: const Duration(milliseconds: 500),
-                          inDelay: const Duration(milliseconds: 100),
-                          child: _buildSearchBar(),
-                        ),
+                        Column(
+                          mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.start,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Transition Switcher: Search Bar and Selected Task Banner
+                            TransitionSwitcher(
+                              controller: _topBarTransitionController,
+                              transitionOut: (child, animation) =>
+                                  fadeThroughTransition(
+                                    child,
+                                    animation,
+                                    reverse: true,
+                                  ),
+                              transitionIn: (child, animation) =>
+                                  fadeThroughTransition(
+                                    child,
+                                    animation,
+                                    reverse: false,
+                                  ),
+                              outDuration: const Duration(milliseconds: 200),
+                              inDuration: const Duration(milliseconds: 500),
+                              inDelay: const Duration(milliseconds: 100),
+                              child: _buildSearchBar(),
+                            ),
 
-                        // Selected task banner
-                        SizedBox(height: 8),
+                            // Selected task banner
+                            SizedBox(height: 8),
 
-                        // Task list
-                        Expanded(
-                          child: Consumer<AgendaProvider>(
-                            builder: (context, agenda, child) {
-                              final tasks = agenda.filteredTasks;
+                            // Task list
+                            Expanded(
+                              child: Consumer<AgendaProvider>(
+                                builder: (context, agenda, child) {
+                                  final tasks = agenda.filteredTasks;
+                                  if (tasks.isEmpty) {
+                                    return const Center(
+                                      child: Text('No tasks found'),
+                                    );
+                                  }
 
-                              if (tasks.isEmpty) {
-                                return const Center(
-                                  child: Text('No tasks found'),
-                                );
-                              }
+                                  return ListView.builder(
+                                    itemCount: tasks.length,
+                                    itemBuilder: (context, index) {
+                                      final task = tasks[index];
+                                      final isSelected =
+                                          agenda.selectedTask?.id == task.id;
 
-                              return ListView.builder(
-                                itemCount: tasks.length,
-                                itemBuilder: (context, index) {
-                                  final task = tasks[index];
-                                  final isSelected =
-                                      agenda.selectedTask?.id == task.id;
-
-                                  return TaskTile(
-                                    task: task,
-                                    isSelected: isSelected,
-                                    onTap: () => {
-                                      agenda.selectTask(task),
-                                      setState(() {
-                                        _selectedTask = task;
-                                      }),
-                                      _topBarTransitionController.switchChild(
-                                        _buildSelectedTaskBanner(),
-                                      ),
+                                      return TaskTile(
+                                        task: task,
+                                        isSelected: isSelected,
+                                        onTap: () => {
+                                          agenda.selectTask(task),
+                                          setState(() {
+                                            _selectedTask = task;
+                                          }),
+                                          _topBarTransitionController
+                                              .switchChild(
+                                                _buildSelectedTaskBanner(),
+                                              ),
+                                        },
+                                        onToggleComplete: () => agenda
+                                            .toggleTaskCompletion(task.id),
+                                      );
                                     },
-                                    onToggleComplete: () =>
-                                        agenda.toggleTaskCompletion(task.id),
                                   );
                                 },
-                              );
-                            },
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        Positioned(
+                          bottom: 16,
+                          right: 16,
+                          child: FloatingActionButton(
+                            onPressed: () => _showCreateTaskDialog(context),
+                            child: const Icon(Icons.add),
                           ),
                         ),
                       ],
                     ),
-
-                    Positioned(
-                      bottom: 16,
-                      right: 16,
-                      child: FloatingActionButton(
-                        onPressed: () => _showCreateTaskDialog(context),
-                        child: const Icon(Icons.add),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
-            ),
+            ],
           ),
+          _buildLoadingIndicator(),
         ],
       ),
     );
@@ -268,6 +273,13 @@ class _TaskListState extends State<TaskList> {
       // Register web push subscription if user is logged in
       await registerWebPushSubscription();
     }
+  }
+
+  Widget _buildLoadingIndicator() {
+    if (Provider.of<AgendaProvider>(context, listen: false).isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    return const SizedBox.shrink();
   }
 
   void _showFilterDialog(BuildContext context) {
@@ -404,11 +416,14 @@ class _TaskListState extends State<TaskList> {
             await _editSelectedTask(context);
           },
           onDelete: () async {
-            _deleteSelectedTask(context);
-            await _topBarTransitionController.switchChild(_buildSearchBar());
-            setState(() {
-              _selectedTask = null;
-            });
+            await _deleteSelectedTask(context);
+            if (agenda.selectedTask == null) {
+              // If the selected task was deleted, switch back to the search bar
+              await _topBarTransitionController.switchChild(_buildSearchBar());
+              setState(() {
+                _selectedTask = null;
+              });
+            }
           },
           onClose: () async {
             agenda.clearSelection();
