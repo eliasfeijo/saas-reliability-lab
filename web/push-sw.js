@@ -10,7 +10,8 @@ self.addEventListener("push", function (event) {
 
   console.log(text);
 
-  const baseHref = document.querySelector('base')?.getAttribute('href') ?? '/'
+  const baseHref = self.location.pathname.split('/').slice(0, -1).join('/') + '/';
+  console.log("[push-sw] Base Href:", baseHref);
   const iconPath = `${baseHref}icons/Icon-192.png`;
 
   const title = "Agenda";
