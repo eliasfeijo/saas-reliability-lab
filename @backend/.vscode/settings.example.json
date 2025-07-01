@@ -1,0 +1,30 @@
+{
+  "deno.enablePaths": [
+    "supabase/functions"
+  ],
+  "deno.lint": true,
+  "deno.unstable": [
+    "bare-node-builtins",
+    "byonm",
+    "sloppy-imports",
+    "unsafe-proto",
+    "webgpu",
+    "broadcast-channel",
+    "worker-options",
+    "cron",
+    "kv",
+    "ffi",
+    "fs",
+    "http",
+    "net"
+  ],
+  "[typescript]": {
+    "editor.defaultFormatter": "denoland.vscode-deno"
+  },
+  "rest-client.environmentVariables": {
+    "local": {
+        "supabaseUrl": "https://xsjmofnqcrlrfyfapoew.supabase.co",
+        "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhzam1vZm5xY3JscmZ5ZmFwb2V3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA5ODU4NjYsImV4cCI6MjA2NjU2MTg2Nn0._Xpqa0jVy4DxYQ0DA9iTn_6R9VZ-BEy6VwYnjr2go7A"
+    }
+  }
+}

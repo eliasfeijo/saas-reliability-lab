@@ -1,0 +1,7 @@
+# Supabase gitignore file
+node_modules
+dist
+.env
+.vscode/settings.json
+coverage
+supabase/.temp

@@ -1,0 +1,42 @@
+@accessToken = paste your access token here
+
+### Sign Up a New User
+
+POST {{supabaseUrl}}/auth/v1/signup
+Content-Type: application/json
+apikey: {{apikey}}
+
+{
+  "email": "testing@email.com",
+  "password": "123456"
+}
+
+### Sign In a User
+POST {{supabaseUrl}}/auth/v1/token?grant_type=password
+Content-Type: application/json
+apikey: {{apikey}}
+
+{
+  "email": "testing@email.com",
+  "password": "123456"
+}
+
+### Get Tasks for the Authenticated User
+
+GET {{supabaseUrl}}/rest/v1/tasks
+apikey: {{apikey}}
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+### Create a Task
+POST {{supabaseUrl}}/rest/v1/tasks
+apikey: {{apikey}}
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "title": "Test Push Reminder",
+  "description": "Just testing the API",
+  "due_date": "2025-06-27T10:00:00.000Z",
+  "notify_at": "2025-06-27T09:45:00.000Z"
+}
