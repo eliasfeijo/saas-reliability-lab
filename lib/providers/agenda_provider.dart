@@ -140,11 +140,11 @@ class AgendaProvider extends ChangeNotifier {
   }
 
   Future<void> deleteTask(String taskId) async {
-    debugPrint('Marking task $taskId as deleted');
+    // debugPrint('Marking task $taskId as deleted');
     // Mark the task as deleted instead of removing it
     final index = _tasks.indexWhere((task) => task.id == taskId);
     if (index == -1) {
-      debugPrint('Task with ID $taskId not found');
+      // debugPrint('Task with ID $taskId not found');
       return;
     }
     _tasks[index].markAsDeleted();
@@ -288,8 +288,8 @@ class AgendaProvider extends ChangeNotifier {
 
   // Trigger sync for a specific task
   void _triggerSync(TaskModel task) {
-    debugPrint('Triggering sync for task: ${task.id}');
-    debugPrint('Task sync status: ${task.syncStatus}');
+    // debugPrint('Triggering sync for task: ${task.id}');
+    // debugPrint('Task sync status: ${task.syncStatus}');
     _taskSyncService.syncIfLoggedIn(
       task.copyWith(), // Use a copy to avoid modifying the original task
       (List<TaskModel> syncedTasks) async {

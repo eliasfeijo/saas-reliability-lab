@@ -31,7 +31,7 @@ class TaskSyncService {
       return [];
     }
 
-    debugPrint('Starting sync for user ${user.id}');
+    // debugPrint('Starting sync for user ${user.id}');
     List<TaskModel> syncedTasks = [];
     final updatedTasks = [...tasks];
 
@@ -63,7 +63,7 @@ class TaskSyncService {
 
         if (existing == null) {
           await supabase.from('tasks').insert(task.toCloudJson());
-          debugPrint('Inserted new task: ${task.id}');
+          // debugPrint('Inserted new task: ${task.id}');
         } else if (task.lastModifiedAt != null &&
             task.lastModifiedAt!.isAfter(
               DateTime.parse(existing['updated_at']),
@@ -72,7 +72,7 @@ class TaskSyncService {
               .from('tasks')
               .update(task.toCloudJson())
               .eq('id', task.id);
-          debugPrint('Updated existing task: ${task.id}');
+          // debugPrint('Updated existing task: ${task.id}');
         }
         // Update local task status
         task.syncStatus = SyncStatus.synced;
