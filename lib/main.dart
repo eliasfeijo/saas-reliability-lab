@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:todo_flutter/helpers/app_mode_helper.dart';
 import 'package:todo_flutter/providers/agenda_provider.dart';
 import 'package:todo_flutter/repositories/tasks_repository.dart';
 import 'package:todo_flutter/screens/task_list.dart';
@@ -9,6 +10,9 @@ import 'package:todo_flutter/services/user_session_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // App mode detection
+  configureAppModeInterop();
 
   const supabaseUrl = String.fromEnvironment(
     'SUPABASE_URL',

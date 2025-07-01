@@ -3,11 +3,17 @@ async function registerPush(publicKey) {
     console.error('Service workers are not supported in this browser.');
     return null;
   };
-  
+
   console.log('Registering push service worker');
 
+  const inRelease = self.isReleaseMode ?? true;
+
+  console.log('In release mode:', inRelease);
+
+  const swFile = inRelease ? 'flutter_service_worker.js' : 'push-sw.js';
+
   const baseHref = document.querySelector('base')?.getAttribute('href') ?? '/'
-  const swPath = `${baseHref}flutter_service_worker.js`;
+  const swPath = `${baseHref}${swFile}`;
   
   await navigator.serviceWorker.register(swPath);
 
