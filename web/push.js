@@ -7,10 +7,9 @@ async function registerPush(publicKey) {
   console.log('Registering push service worker');
 
   const baseHref = document.querySelector('base')?.getAttribute('href') ?? '/'
-  const swPath = `${baseHref}push-sw.js`;
-  const scope = `${baseHref}push/`;
+  const swPath = `${baseHref}flutter_service_worker.js`;
   
-  await navigator.serviceWorker.register(swPath, { scope });
+  await navigator.serviceWorker.register(swPath);
 
   const registration = await navigator.serviceWorker.ready;
   if (!registration.pushManager) {
