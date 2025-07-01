@@ -39,9 +39,14 @@ class _LoginBottomSheetState extends State<LoginBottomSheet> {
       throw AuthException('No user found');
     } on AuthException {
       try {
+        const emailRedirectUrl = String.fromEnvironment(
+          'EMAIL_REDIRECT_URL',
+          defaultValue: 'https://eliasfeijo.github.io/flutter-agenda-pwa/',
+        );
         await Supabase.instance.client.auth.signUp(
           email: _emailController.text.trim(),
           password: _passwordController.text,
+          emailRedirectTo: emailRedirectUrl,
         );
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
