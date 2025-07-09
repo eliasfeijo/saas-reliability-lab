@@ -226,7 +226,7 @@ class TaskModel {
   TaskModel.fromJson(Map<String, dynamic> json)
     : id = json['id'],
       title = json['title'],
-      beginsAt = DateTime.parse(json['start_date']),
+      beginsAt = DateTime.parse(json['start_date']).toLocal(),
       estimatedDuration = DateTime.parse(
         json['due_date'],
       ).difference(DateTime.parse(json['start_date'])),
