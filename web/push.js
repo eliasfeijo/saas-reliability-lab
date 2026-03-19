@@ -6,6 +6,24 @@ function getPushServiceWorkerUrl() {
   return `${getBaseHref()}flutter_service_worker.js`;
 }
 
+async function getPushServiceWorkerRegistration() {
+  const existingRegistration = await navigator.serviceWorker.getRegistration();
+  if (existingRegistration) {
+    console.log('Using existing push service worker registration');
+    return existingRegistration;
+  }
+
+  console.log('Registering push service worker');
+
+  const baseHref = getBaseHref();
+  const registration = await navigator.serviceWorker.register(
+    getPushServiceWorkerUrl(),
+    { scope: baseHref },
+  );
+
+  return registration.active ? registration : await navigator.serviceWorker.ready;
+}
+
 async function requestPushPermission() {
   if (!('Notification' in window)) {
     console.error('Notifications are not supported in this browser.');
@@ -32,16 +50,7 @@ async function registerPush(publicKey) {
     return Promise.reject('Notification permission was not granted');
   }
 
-  console.log('Registering push service worker');
-
-  const baseHref = getBaseHref();
-  const registration = await navigator.serviceWorker.register(
-    getPushServiceWorkerUrl(),
-    { scope: baseHref },
-  );
-  const activeRegistration = registration.active
-    ? registration
-    : await navigator.serviceWorker.ready;
+  const activeRegistration = await getPushServiceWorkerRegistration();
 
   if (!activeRegistration.pushManager) {
     console.error('Push manager is not available in this browser.');
