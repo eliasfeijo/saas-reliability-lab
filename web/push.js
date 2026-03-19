@@ -1,32 +1,57 @@
+function getBaseHref() {
+  return document.querySelector('base')?.getAttribute('href') ?? '/';
+}
+
+function getPushServiceWorkerUrl() {
+  return `${getBaseHref()}flutter_service_worker.js`;
+}
+
 async function registerPush(publicKey) {
   if (!('serviceWorker' in navigator)) {
     console.error('Service workers are not supported in this browser.');
     return null;
   };
 
+  if (!('PushManager' in window)) {
+    console.error('Push messaging is not supported in this browser.');
+    return Promise.reject('Push manager is not available');
+  }
+
+  if (!('Notification' in window)) {
+    console.error('Notifications are not supported in this browser.');
+    return Promise.reject('Notifications are not available');
+  }
+
+  const permission = await Notification.requestPermission();
+  if (permission !== 'granted') {
+    console.error('Notification permission was not granted.');
+    return Promise.reject('Notification permission was not granted');
+  }
+
   console.log('Registering push service worker');
 
-  const inRelease = self.isReleaseMode ?? true;
+  const baseHref = getBaseHref();
+  const registration = await navigator.serviceWorker.register(
+    getPushServiceWorkerUrl(),
+    { scope: baseHref },
+  );
+  const activeRegistration = registration.active
+    ? registration
+    : await navigator.serviceWorker.ready;
 
-  // console.log('In release mode:', inRelease);
-
-  const swFile = inRelease ? 'flutter_service_worker.js' : 'push-sw.js';
-
-  const baseHref = document.querySelector('base')?.getAttribute('href') ?? '/'
-  const swPath = `${baseHref}${swFile}`;
-  
-  await navigator.serviceWorker.register(swPath);
-
-  const registration = await navigator.serviceWorker.ready;
-  if (!registration.pushManager) {
+  if (!activeRegistration.pushManager) {
     console.error('Push manager is not available in this browser.');
     return Promise.reject('Push manager is not available');
   }
 
-  const subscription = await registration.pushManager.subscribe({
-    userVisibleOnly: true,
-    applicationServerKey: urlBase64ToUint8Array(publicKey),
-  });
+  let subscription = await activeRegistration.pushManager.getSubscription();
+  if (!subscription) {
+    subscription = await activeRegistration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(publicKey),
+    });
+  }
+
   if (!subscription) {
     console.error('Push subscription failed');
     return Promise.reject('Push subscription failed');
@@ -70,7 +95,14 @@ async function unregisterPush() {
     return null;
   }
 
-  const registration = await navigator.serviceWorker.ready;
+  const registration = await navigator.serviceWorker.getRegistration(
+    getBaseHref(),
+  );
+  if (!registration) {
+    console.log('No push service worker registration found.');
+    return null;
+  }
+
   const subscription = await registration.pushManager.getSubscription();
   if (!subscription) {
     console.log('No subscription to unsubscribe.');

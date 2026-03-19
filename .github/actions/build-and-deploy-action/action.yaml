@@ -42,11 +42,11 @@ runs:
       working-directory: ${{inputs.workingDir}}
     - run: |
         if [ "${{ inputs.compileToWasm }}" == "true" ]; then
-          flutter build web --release --wasm --base-href ${{inputs.baseHref}} ${{inputs.customArgs}}
+          flutter build web --release --wasm --pwa-strategy=offline-first --base-href ${{inputs.baseHref}} ${{inputs.customArgs}}
         elif [ ${{ env.flutter_version }} -lt 3290 ]; then
-          flutter build web --release --web-renderer=${{inputs.webRenderer}} --base-href ${{inputs.baseHref}} ${{inputs.customArgs}}
+          flutter build web --release --web-renderer=${{inputs.webRenderer}} --pwa-strategy=offline-first --base-href ${{inputs.baseHref}} ${{inputs.customArgs}}
         else
-          flutter build web --release --base-href ${{inputs.baseHref}} ${{inputs.customArgs}}
+          flutter build web --release --pwa-strategy=offline-first --base-href ${{inputs.baseHref}} ${{inputs.customArgs}}
         fi
       shell: bash
       working-directory: ${{inputs.workingDir}}
