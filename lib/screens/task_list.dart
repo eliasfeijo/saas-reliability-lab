@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:todo_flutter/helpers/web_push_helper.dart';
-import 'package:todo_flutter/keys.dart';
 import 'package:todo_flutter/models/task.dart';
 import 'package:todo_flutter/providers/agenda_provider.dart';
 import 'package:todo_flutter/widgets/bottomsheets/login.dart';
@@ -25,6 +24,8 @@ class _TaskListState extends State<TaskList> {
 
   // Timer to refresh the task list every 5 seconds
   late Timer _refreshTimer;
+  late final StreamSubscription<AuthState> _authStateSubscription;
+  bool _isLoggingOut = false;
 
   // Controller for the search bar
   final TextEditingController _searchController = TextEditingController();
@@ -51,45 +52,123 @@ class _TaskListState extends State<TaskList> {
       _initAgenda();
     });
 
-    Supabase.instance.client.auth.onAuthStateChange.listen((event) async {
-      if (event.event == AuthChangeEvent.signedIn) {
-        // User has signed in
-        final user = Supabase.instance.client.auth.currentUser;
-        if (user == null) return;
-        if (!mounted) return;
-        final AgendaProvider provider = Provider.of<AgendaProvider>(
-          context,
-          listen: false,
+    _authStateSubscription = Supabase.instance.client.auth.onAuthStateChange
+        .listen(
+          (event) async {
+            await _handleAuthStateChange(event);
+          },
+          onError: (Object error, StackTrace stackTrace) {
+            debugPrint('Auth state listener error: $error');
+          },
         );
-        // Set the user ID in the provider
-        await provider.saveUser(user.id);
-        // Sync tasks with the cloud when the user logs in
-        await provider.syncAllTasks();
-        // Register web push subscription
-        await registerWebPushSubscription();
-
-        if (provider.anonymousTasks.isNotEmpty) {
-          // Show dialog to discard anonymous tasks
-          _showDiscardAnonymousTasksDialog(navigatorKey.currentContext!);
-        }
-      } else if (event.event == AuthChangeEvent.signedOut) {
-        // User has signed out
-        final AgendaProvider provider = Provider.of<AgendaProvider>(
-          navigatorKey.currentContext!,
-          listen: false,
-        );
-        // Clear user ID in the provider
-        await provider.clearUser();
-        // Clear all tasks from local storage
-        await provider.clearAllTasksFromLocalStorage();
-      }
-    });
   }
 
   @override
   void dispose() {
+    _authStateSubscription.cancel();
     _refreshTimer.cancel();
+    _searchController.dispose();
     super.dispose();
+  }
+
+  bool get _hasAuthenticatedSession {
+    final auth = Supabase.instance.client.auth;
+    return auth.currentUser != null && auth.currentSession != null;
+  }
+
+  Future<void> _handleAuthStateChange(AuthState authState) async {
+    if (!mounted) return;
+
+    final provider = context.read<AgendaProvider>();
+
+    if (authState.event == AuthChangeEvent.signedIn) {
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) return;
+
+      await provider.saveUser(user.id);
+      await _syncAuthenticatedAgenda(provider);
+      return;
+    }
+
+    if (authState.event == AuthChangeEvent.signedOut) {
+      provider.clearSelection();
+      provider.clearSearch();
+      await provider.clearUser();
+      await provider.clearAllTasksFromLocalStorage();
+
+      if (!mounted) return;
+
+      _searchController.clear();
+      await _topBarTransitionController.switchChild(_buildSearchBar());
+      setState(() {
+        _selectedTask = null;
+      });
+    }
+  }
+
+  Future<void> _syncAuthenticatedAgenda(AgendaProvider agenda) async {
+    await agenda.syncAllTasks();
+    await registerWebPushSubscription();
+
+    if (!mounted) return;
+
+    if (agenda.anonymousTasks.isNotEmpty) {
+      _showDiscardAnonymousTasksDialog(context);
+    }
+  }
+
+  Future<void> _logout() async {
+    if (_isLoggingOut) return;
+
+    setState(() {
+      _isLoggingOut = true;
+    });
+
+    String failureMessage = 'Logout failed. Please try again.';
+    var loggedOut = false;
+
+    try {
+      try {
+        await unregisterWebPushSubscription();
+      } catch (error) {
+        debugPrint(
+          '[Auth] Failed to unregister web push during logout: $error',
+        );
+      }
+
+      try {
+        await Supabase.instance.client.auth.signOut();
+        loggedOut = !_hasAuthenticatedSession;
+      } on AuthException catch (error) {
+        loggedOut = !_hasAuthenticatedSession;
+        if (loggedOut) {
+          debugPrint(
+            '[Auth] Remote logout cleanup failed after local sign-out: ${error.message}',
+          );
+        } else {
+          failureMessage = error.message;
+        }
+      } catch (error) {
+        loggedOut = !_hasAuthenticatedSession;
+        if (loggedOut) {
+          debugPrint(
+            '[Auth] Remote logout cleanup failed after local sign-out: $error',
+          );
+        }
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoggingOut = false;
+        });
+      }
+    }
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(loggedOut ? 'Logged out' : failureMessage)),
+    );
   }
 
   @override
@@ -127,7 +206,10 @@ class _TaskListState extends State<TaskList> {
           ),
           Consumer<AgendaProvider>(
             builder: (context, agenda, child) {
-              if (Supabase.instance.client.auth.currentUser == null) {
+              final isLoggedIn =
+                  agenda.userId != null && agenda.userId!.isNotEmpty;
+
+              if (!isLoggedIn) {
                 return Padding(
                   padding: const EdgeInsets.only(right: 16),
                   child: TextButton(
@@ -148,19 +230,9 @@ class _TaskListState extends State<TaskList> {
                 return Padding(
                   padding: const EdgeInsets.only(right: 16),
                   child: TextButton(
-                    onPressed: () async {
-                      // Unregister web push subscription
-                      await unregisterWebPushSubscription();
-                      await Supabase.instance.client.auth.signOut();
-                      ScaffoldMessenger.of(
-                        // ignore: use_build_context_synchronously
-                        context,
-                      ).showSnackBar(
-                        const SnackBar(content: Text('Logged out')),
-                      );
-                    },
+                    onPressed: _isLoggingOut ? null : _logout,
                     child: Text(
-                      'Logout',
+                      _isLoggingOut ? 'Logging out...' : 'Logout',
                       style: TextStyle(
                         color: Theme.of(context).colorScheme.onSurface,
                       ),
@@ -287,9 +359,10 @@ class _TaskListState extends State<TaskList> {
     // and that the UI is ready to display them
     await agenda.loadUser();
     await agenda.loadTasks();
-    if (agenda.userId != null && agenda.userId!.isNotEmpty) {
-      // Register web push subscription if user is logged in
-      await registerWebPushSubscription();
+    if (_hasAuthenticatedSession &&
+        agenda.userId != null &&
+        agenda.userId!.isNotEmpty) {
+      await _syncAuthenticatedAgenda(agenda);
     }
   }
 

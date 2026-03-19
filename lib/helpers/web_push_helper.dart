@@ -1,9 +1,13 @@
+import 'dart:async';
 import 'dart:js_interop';
 
 import 'package:flutter/widgets.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 // This file is used to register web push notifications in a Flutter web application.
+
+const _pushRegistrationTimeout = Duration(seconds: 5);
+const _pushCleanupTimeout = Duration(seconds: 3);
 
 extension type PushSubscriptionKeys._(JSObject _) implements JSObject {
   external PushSubscriptionKeys();
@@ -28,7 +32,9 @@ external JSPromise<PushSubscriptionJSON> _registerPush(JSString vapidPublicKey);
 
 Future<Map<String, dynamic>?> _registerWebPush(String vapidPublicKey) async {
   try {
-    final result = await _registerPush(vapidPublicKey.toJS).toDart;
+    final result = await _registerPush(
+      vapidPublicKey.toJS,
+    ).toDart.timeout(_pushRegistrationTimeout);
     return {'endpoint': result.endpoint, 'keys': result.keys?.toMap()};
   } catch (e) {
     debugPrint('Error registering web push: $e');
@@ -37,6 +43,11 @@ Future<Map<String, dynamic>?> _registerWebPush(String vapidPublicKey) async {
 }
 
 Future<void> registerWebPushSubscription() async {
+  final auth = Supabase.instance.client.auth;
+  if (auth.currentUser == null || auth.currentSession == null) {
+    return;
+  }
+
   const vapidPublicKey = String.fromEnvironment(
     'VAPID_PUBLIC_KEY',
     defaultValue: "<your-vapid-public-key>",
@@ -48,13 +59,15 @@ Future<void> registerWebPushSubscription() async {
     final subscription = await _registerWebPush(vapidPublicKey);
     if (subscription != null) {
       final supabase = Supabase.instance.client;
-      final res = await supabase.functions.invoke(
-        'save_subscription',
-        body: {
-          'endpoint': subscription['endpoint'],
-          'keys': subscription['keys'],
-        },
-      );
+      final res = await supabase.functions
+          .invoke(
+            'save_subscription',
+            body: {
+              'endpoint': subscription['endpoint'],
+              'keys': subscription['keys'],
+            },
+          )
+          .timeout(_pushRegistrationTimeout);
 
       if (res.status != 200) {
         debugPrint('[Push] Failed to save subscription: ${res.data}');
@@ -72,14 +85,13 @@ external JSPromise<JSString?> _unregisterPush();
 
 Future<void> unregisterWebPushSubscription() async {
   try {
-    final result = await _unregisterPush().toDart;
+    final result = await _unregisterPush().toDart.timeout(_pushCleanupTimeout);
     final endpoint = result?.toDart;
     if (endpoint != null) {
       // debugPrint('[Push] Unregistering web push subscription: $endpoint');
-      final res = await Supabase.instance.client.functions.invoke(
-        'delete_subscription',
-        body: {'endpoint': endpoint},
-      );
+      final res = await Supabase.instance.client.functions
+          .invoke('delete_subscription', body: {'endpoint': endpoint})
+          .timeout(_pushCleanupTimeout);
       if (res.status == 200) {
         debugPrint('[Push] Subscription removed from Supabase');
       } else {
