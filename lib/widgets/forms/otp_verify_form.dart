@@ -5,7 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class OtpVerifyForm extends StatefulWidget {
   const OtpVerifyForm({super.key, this.signUpEmail, this.onVerified});
   final String? signUpEmail;
-  final Function? onVerified;
+  final VoidCallback? onVerified;
 
   @override
   State<OtpVerifyForm> createState() => _OtpVerifyFormState();
@@ -65,9 +65,10 @@ class _OtpVerifyFormState extends State<OtpVerifyForm> {
         type: OtpType.signup,
       );
       if (res.user != null && mounted) {
-        Navigator.pop(context); // Close bottom sheet
         if (widget.onVerified != null) {
           widget.onVerified!();
+        } else {
+          Navigator.pop(context);
         }
       } else {
         throw Exception('Invalid code');

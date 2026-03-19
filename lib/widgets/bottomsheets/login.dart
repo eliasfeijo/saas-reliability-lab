@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:todo_flutter/widgets/forms/otp_verify_form.dart';
 
+enum _AuthAction { login, signUp }
+
 class LoginBottomSheet extends StatefulWidget {
   const LoginBottomSheet({super.key});
 
@@ -13,6 +15,7 @@ class _LoginBottomSheetState extends State<LoginBottomSheet> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _loading = false;
+  _AuthAction? _activeAction;
   String? _error;
 
   // Variables for OTP verification on sign-up
@@ -34,12 +37,45 @@ class _LoginBottomSheetState extends State<LoginBottomSheet> {
     super.dispose();
   }
 
-  Future<void> _loginOrSignup() async {
+  String _formatAuthError(Object error) {
+    if (error is AuthException) {
+      return error.message;
+    }
+
+    final message = error.toString();
+    const prefix = 'Exception: ';
+    if (message.startsWith(prefix)) {
+      return message.substring(prefix.length);
+    }
+
+    return message;
+  }
+
+  Future<bool> _validateCredentials() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+
+    if (email.isEmpty || password.isEmpty) {
+      setState(() {
+        _error = 'Email and password are required.';
+      });
+      return false;
+    }
+
+    return true;
+  }
+
+  Future<void> _login() async {
+    if (!await _validateCredentials()) {
+      return;
+    }
+
     final email = _emailController.text.trim();
     final password = _passwordController.text;
 
     setState(() {
       _loading = true;
+      _activeAction = _AuthAction.login;
       _error = null;
     });
 
@@ -53,35 +89,65 @@ class _LoginBottomSheetState extends State<LoginBottomSheet> {
         return;
       }
       throw AuthException('No user found');
-    } on AuthException {
-      try {
-        await Supabase.instance.client.auth.signUp(
-          email: email,
-          password: password,
-        );
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _activeAction = null;
+        _error = _formatAuthError(error);
+      });
+    }
+  }
 
-        setState(() {
-          _signUpEmail = email;
-          _loading = false;
-          _error = null;
-        });
+  Future<void> _signUp() async {
+    if (!await _validateCredentials()) {
+      return;
+    }
 
-        _showOtpVerifyDialog();
-      } catch (e) {
-        setState(() => _error = e.toString());
-      }
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+
+    setState(() {
+      _loading = true;
+      _activeAction = _AuthAction.signUp;
+      _error = null;
+    });
+
+    try {
+      await Supabase.instance.client.auth.signUp(
+        email: email,
+        password: password,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _signUpEmail = email;
+        _loading = false;
+        _activeAction = null;
+        _error = null;
+      });
+
+      await _showOtpVerifyDialog();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _activeAction = null;
+        _error = _formatAuthError(error);
+      });
     }
   }
 
   Future<void> _showOtpVerifyDialog() async {
     await showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Center(child: Text('OTP Verification')),
         content: OtpVerifyForm(
           signUpEmail: _signUpEmail,
           onVerified: () {
-            Navigator.pop(context); // Close the dialog
+            Navigator.of(dialogContext).pop();
+            Navigator.of(context).pop();
           },
         ),
       ),
@@ -120,10 +186,29 @@ class _LoginBottomSheetState extends State<LoginBottomSheet> {
               Text(_error!, style: const TextStyle(color: Colors.red)),
             const SizedBox(height: 12),
             ElevatedButton(
-              onPressed: _loading ? null : _loginOrSignup,
+              onPressed: _loading ? null : _login,
               child: _loading
-                  ? const CircularProgressIndicator()
-                  : const Text('Continue'),
+                  ? Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const SizedBox(
+                          height: 18,
+                          width: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          _activeAction == _AuthAction.signUp
+                              ? 'Creating account...'
+                              : 'Logging in...',
+                        ),
+                      ],
+                    )
+                  : const Text('Log In'),
+            ),
+            TextButton(
+              onPressed: _loading ? null : _signUp,
+              child: const Text('Create Account'),
             ),
           ],
         ),
