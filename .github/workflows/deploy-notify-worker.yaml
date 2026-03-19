@@ -1,0 +1,36 @@
+name: Deploy Notify Worker
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+    paths:
+      - '@backend/agenda-notify-worker/**'
+      - '.github/workflows/deploy-notify-worker.yaml'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: yarn
+          cache-dependency-path: '@backend/agenda-notify-worker/yarn.lock'
+
+      - run: corepack enable
+
+      - run: yarn install --frozen-lockfile
+        working-directory: ./@backend/agenda-notify-worker
+
+      - uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy
+          workingDirectory: ./@backend/agenda-notify-worker
