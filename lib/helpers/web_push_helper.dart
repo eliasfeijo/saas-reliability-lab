@@ -27,8 +27,41 @@ extension type PushSubscriptionJSON._(JSObject _) implements JSObject {
   external PushSubscriptionKeys? get keys;
 }
 
+@JS('requestPushPermission')
+external JSPromise<JSString> _requestPushPermission();
+
 @JS('registerPush')
 external JSPromise<PushSubscriptionJSON> _registerPush(JSString vapidPublicKey);
+
+Future<String?> primeWebPushPermission() async {
+  try {
+    final permission = await _requestPushPermission().toDart.timeout(
+      _pushRegistrationTimeout,
+    );
+    return permission.toDart;
+  } catch (e) {
+    debugPrint('[Push] Failed to request notification permission: $e');
+    return null;
+  }
+}
+
+Future<bool> _waitForAuthenticatedSession() async {
+  final auth = Supabase.instance.client.auth;
+  final deadline = DateTime.now().add(_pushRegistrationTimeout);
+
+  while (DateTime.now().isBefore(deadline)) {
+    if (auth.currentUser != null && auth.currentSession != null) {
+      return true;
+    }
+
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+  }
+
+  debugPrint(
+    '[Push] Skipping registration because auth session is unavailable',
+  );
+  return false;
+}
 
 Future<Map<String, dynamic>?> _registerWebPush(String vapidPublicKey) async {
   try {
@@ -43,8 +76,7 @@ Future<Map<String, dynamic>?> _registerWebPush(String vapidPublicKey) async {
 }
 
 Future<void> registerWebPushSubscription() async {
-  final auth = Supabase.instance.client.auth;
-  if (auth.currentUser == null || auth.currentSession == null) {
+  if (!await _waitForAuthenticatedSession()) {
     return;
   }
 
@@ -53,27 +85,37 @@ Future<void> registerWebPushSubscription() async {
     defaultValue: "<your-vapid-public-key>",
   );
 
+  if (vapidPublicKey.isEmpty || vapidPublicKey == '<your-vapid-public-key>') {
+    debugPrint(
+      '[Push] Skipping registration because VAPID public key is unset',
+    );
+    return;
+  }
+
   // debugPrint('VAPID Public Key: $vapidPublicKey');
 
   try {
     final subscription = await _registerWebPush(vapidPublicKey);
-    if (subscription != null) {
-      final supabase = Supabase.instance.client;
-      final res = await supabase.functions
-          .invoke(
-            'save_subscription',
-            body: {
-              'endpoint': subscription['endpoint'],
-              'keys': subscription['keys'],
-            },
-          )
-          .timeout(_pushRegistrationTimeout);
+    if (subscription == null) {
+      debugPrint('[Push] Browser did not return a push subscription');
+      return;
+    }
 
-      if (res.status != 200) {
-        debugPrint('[Push] Failed to save subscription: ${res.data}');
-      } else {
-        debugPrint('[Push] Subscription saved!');
-      }
+    final supabase = Supabase.instance.client;
+    final res = await supabase.functions
+        .invoke(
+          'save_subscription',
+          body: {
+            'endpoint': subscription['endpoint'],
+            'keys': subscription['keys'],
+          },
+        )
+        .timeout(_pushRegistrationTimeout);
+
+    if (res.status != 200) {
+      debugPrint('[Push] Failed to save subscription: ${res.data}');
+    } else {
+      debugPrint('[Push] Subscription saved!');
     }
   } catch (e) {
     debugPrint('Failed to subscribe: $e');

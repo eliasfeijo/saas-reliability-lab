@@ -1,5 +1,7 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:todo_flutter/helpers/web_push_helper.dart';
 import 'package:todo_flutter/widgets/forms/otp_verify_form.dart';
 
 enum _AuthAction { login, signUp }
@@ -80,6 +82,10 @@ class _LoginBottomSheetState extends State<LoginBottomSheet> {
     });
 
     try {
+      if (kIsWeb) {
+        await primeWebPushPermission();
+      }
+
       final response = await Supabase.instance.client.auth.signInWithPassword(
         email: email,
         password: password,

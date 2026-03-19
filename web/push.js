@@ -6,6 +6,15 @@ function getPushServiceWorkerUrl() {
   return `${getBaseHref()}flutter_service_worker.js`;
 }
 
+async function requestPushPermission() {
+  if (!('Notification' in window)) {
+    console.error('Notifications are not supported in this browser.');
+    return 'unsupported';
+  }
+
+  return Notification.requestPermission();
+}
+
 async function registerPush(publicKey) {
   if (!('serviceWorker' in navigator)) {
     console.error('Service workers are not supported in this browser.');
@@ -17,12 +26,7 @@ async function registerPush(publicKey) {
     return Promise.reject('Push manager is not available');
   }
 
-  if (!('Notification' in window)) {
-    console.error('Notifications are not supported in this browser.');
-    return Promise.reject('Notifications are not available');
-  }
-
-  const permission = await Notification.requestPermission();
+  const permission = await requestPushPermission();
   if (permission !== 'granted') {
     console.error('Notification permission was not granted.');
     return Promise.reject('Notification permission was not granted');
