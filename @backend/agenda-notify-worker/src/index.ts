@@ -24,6 +24,15 @@ export interface Env {
 	VAPID_PRIVATE_KEY: string;
 }
 
+interface PendingNotification {
+	id: string;
+	title: string;
+	user_id: string;
+	endpoint: string;
+	p256dh: string;
+	auth: string;
+}
+
 async function sendPushNotifications(env: Env): Promise<Response> {
 	if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE) {
 		return new Response("Environment variables not set", { status: 500 });
@@ -53,8 +62,10 @@ async function sendPushNotifications(env: Env): Promise<Response> {
 
 	// Log the number of successful notifications
 	let count = 0;
+	let failed = 0;
+	let staleSubscriptionsDeleted = 0;
 
-	for (const task of tasks) {
+	for (const task of tasks as PendingNotification[]) {
 		try {
 			const subscription: PushSubscription = {
 				endpoint: task.endpoint,
@@ -79,6 +90,25 @@ async function sendPushNotifications(env: Env): Promise<Response> {
 			const res = await fetch(subscription.endpoint, payload);
 
 			if (!res.ok) {
+				failed++;
+
+				if (res.status === 404 || res.status === 410) {
+					const { error: deleteError } = await supabase
+						.from("push_subscriptions")
+						.delete()
+						.eq("user_id", task.user_id)
+						.eq("endpoint", task.endpoint);
+
+					if (deleteError) {
+						console.error(
+							`Failed to delete stale subscription for ${task.user_id}:`,
+							deleteError,
+						);
+					} else {
+						staleSubscriptionsDeleted++;
+					}
+				}
+
 				console.error(
 					`Push failed for task ${task.id}: ${res.status} ${res.statusText}`,
 				);
@@ -92,11 +122,18 @@ async function sendPushNotifications(env: Env): Promise<Response> {
 
 			count++;
 		} catch (err) {
+			failed++;
 			console.error(`Push failed for task ${task.id}`, err);
 		}
 	}
 
-	return new Response(`${count} notifications sent`, { status: 200 });
+	return new Response(
+		JSON.stringify({ sent: count, failed, staleSubscriptionsDeleted }),
+		{
+			status: 200,
+			headers: { "Content-Type": "application/json" },
+		},
+	);
 }
 
 export default {

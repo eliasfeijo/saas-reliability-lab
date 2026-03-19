@@ -69,10 +69,37 @@ function getVapidKeys() {
 interface Notification {
   id: string;
   title: string;
+  user_id: string;
   notify_at: string;
   endpoint: string;
   p256dh: string;
   auth: string;
+}
+
+function getWebPushErrorStatus(error: unknown): number | null {
+  if (!error || typeof error !== "object") {
+    return null;
+  }
+
+  const maybeError = error as {
+    status?: unknown;
+    statusCode?: unknown;
+    response?: { status?: unknown };
+  };
+
+  const candidates = [
+    maybeError.status,
+    maybeError.statusCode,
+    maybeError.response?.status,
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === "number") {
+      return candidate;
+    }
+  }
+
+  return null;
 }
 
 const corsHeaders = {
@@ -130,7 +157,7 @@ Deno.serve(async (req) => {
       vapidKeys,
     });
 
-    const results = await Promise.allSettled(
+    const results = await Promise.all(
       notifications.map(async (notif: Notification) => {
         try {
           const subscriber = appServer.subscribe({
@@ -148,19 +175,47 @@ Deno.serve(async (req) => {
             .from("tasks")
             .update({ notification_sent: true })
             .eq("id", notif.id);
+
+          return { sent: true, staleSubscriptionDeleted: false };
         } catch (err) {
+          const status = getWebPushErrorStatus(err);
+          let staleSubscriptionDeleted = false;
+
+          if (status === 404 || status === 410) {
+            const { error: deleteError } = await supabase
+              .from("push_subscriptions")
+              .delete()
+              .eq("user_id", notif.user_id)
+              .eq("endpoint", notif.endpoint);
+
+            if (deleteError) {
+              console.error(
+                `Failed to delete stale subscription for ${notif.user_id}:`,
+                deleteError,
+              );
+            } else {
+              staleSubscriptionDeleted = true;
+            }
+          }
+
           console.error(`Failed to send notification ${notif.id}:`, err);
-          throw err;
+          return { sent: false, staleSubscriptionDeleted };
         }
       })
     );
 
-    const failed = results.filter(r => r.status === "rejected").length;
+    const sent = results.filter((result) => result.sent).length;
+    const failed = results.length - sent;
+    const staleSubscriptionsDeleted = results.filter(
+      (result) => result.staleSubscriptionDeleted,
+    ).length;
+
     return new Response(
       JSON.stringify({
         success: true,
-        sent: notifications.length - failed,
-        failed
+        sent,
+        failed,
+        staleSubscriptionsDeleted,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
