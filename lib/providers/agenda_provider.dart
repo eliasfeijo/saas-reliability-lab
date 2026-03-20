@@ -47,22 +47,24 @@ class AgendaProvider extends ChangeNotifier {
 
   // Getters
 
+  List<TaskModel> get _activeTasks => _tasks
+      .where((task) => task.syncStatus != SyncStatus.deleted)
+      .toList(growable: false);
+
+  List<TaskModel> get _storedAnonymousTasks =>
+      _tasks.where((task) => task.userId == null).toList(growable: false);
+
   // This getter returns an unmodifiable list of tasks, filtering out those marked as deleted.
   // It ensures that the tasks list is read-only and cannot be modified directly.
-  List<TaskModel> get tasks => List.unmodifiable(
-    _tasks.where((task) {
-      // Filter out tasks that are marked as deleted
-      return task.syncStatus != SyncStatus.deleted;
-    }),
-  );
+  List<TaskModel> get tasks => List.unmodifiable(_activeTasks);
 
   /// Return tasks that are not associated with any user
   List<TaskModel> get anonymousTasks =>
-      _tasks.where((task) => task.userId == null).toList();
+      _activeTasks.where((task) => task.userId == null).toList(growable: false);
 
   // Getters for filtered tasks, search query, and current filter
   // These getters provide access to the filtered tasks based on the current search query and filter.
-  List<TaskModel> get filteredTasks => _filterController.apply(_tasks);
+  List<TaskModel> get filteredTasks => _filterController.apply(_activeTasks);
   String get searchQuery => _filterController.searchQuery;
   TaskFilter get currentFilter => _filterController.filter;
   bool get isLoading => _isLoading;
@@ -77,12 +79,14 @@ class AgendaProvider extends ChangeNotifier {
 
   // Getters for task counts
   // These getters provide various counts of tasks based on their status.
-  int get totalTasks => _tasks.length;
+  int get totalTasks => _activeTasks.length;
   int get completedTasksCount =>
-      _tasks.where((task) => task.isCompleted).length;
-  int get pendingTasksCount => _tasks.where((task) => !task.isCompleted).length;
-  int get todayTasksCount => _tasks.where((task) => task.isToday).length;
-  int get overdueTasksCount => _tasks.where((task) => task.isOverdue).length;
+      _activeTasks.where((task) => task.isCompleted).length;
+  int get pendingTasksCount =>
+      _activeTasks.where((task) => !task.isCompleted).length;
+  int get todayTasksCount => _activeTasks.where((task) => task.isToday).length;
+  int get overdueTasksCount =>
+      _activeTasks.where((task) => task.isOverdue).length;
 
   // Setters
 
@@ -90,6 +94,7 @@ class AgendaProvider extends ChangeNotifier {
   set tasks(List<TaskModel> tasks) {
     _tasks.clear();
     _tasks.addAll(tasks);
+    _pruneLocallyDeletedAnonymousTasks();
     _publishTaskDebugState();
     notifyListeners();
   }
@@ -132,6 +137,10 @@ class AgendaProvider extends ChangeNotifier {
     _tasks
       ..clear()
       ..addAll(storedTasks);
+    final didPrune = _pruneLocallyDeletedAnonymousTasks();
+    if (didPrune) {
+      await _repository.saveTasks(_tasks);
+    }
     _publishTaskDebugState();
     notifyListeners();
   }
@@ -141,9 +150,7 @@ class AgendaProvider extends ChangeNotifier {
     task.userId = _userId; // Set user ID for the task
     task.dirty(); // Mark task as dirty for sync
     _tasks.add(task);
-    await _repository.saveTasks(_tasks);
-    _publishTaskDebugState();
-    notifyListeners();
+    await _saveTasks();
     _triggerSync(task); // Trigger sync immediately
   }
 
@@ -152,39 +159,41 @@ class AgendaProvider extends ChangeNotifier {
     final index = _tasks.indexWhere((task) => task.id == updatedTask.id);
     if (index != -1) {
       _tasks[index] = updatedTask;
-      await _repository.saveTasks(_tasks);
-      _publishTaskDebugState();
-      notifyListeners();
+      await _saveTasks();
       _triggerSync(updatedTask); // Trigger sync immediately
     }
   }
 
   Future<void> deleteTask(String taskId) async {
     // debugPrint('Marking task $taskId as deleted');
-    // Mark the task as deleted instead of removing it
     final index = _tasks.indexWhere((task) => task.id == taskId);
     if (index == -1) {
       // debugPrint('Task with ID $taskId not found');
       return;
     }
-    _tasks[index].markAsDeleted();
-    // Clear selection if deleted task was selected
+    final task = _tasks[index];
+
     if (selectedTask?.id == taskId) {
       _selectionController.clear();
     }
-    await _repository.saveTasks(_tasks);
-    _publishTaskDebugState();
-    notifyListeners();
-    _triggerSync(_tasks[index]); // Trigger sync immediately
+
+    if (task.userId == null) {
+      _tasks.removeAt(index);
+      await _saveTasks();
+      return;
+    }
+
+    task.markAsDeleted();
+    // Clear selection if deleted task was selected
+    await _saveTasks();
+    _triggerSync(task); // Trigger sync immediately
   }
 
   Future<void> toggleTaskCompletion(String taskId) async {
     final index = _tasks.indexWhere((task) => task.id == taskId);
     if (index != -1) {
       _tasks[index].toggleCompletion();
-      await _repository.saveTasks(_tasks);
-      _publishTaskDebugState();
-      notifyListeners();
+      await _saveTasks();
       _triggerSync(_tasks[index]); // Trigger sync immediately
     }
   }
@@ -357,9 +366,7 @@ class AgendaProvider extends ChangeNotifier {
     for (var task in tasks) {
       _tasks.removeWhere((t) => t.id == task.id);
     }
-    await _repository.saveTasks(_tasks);
-    _publishTaskDebugState();
-    notifyListeners();
+    await _saveTasks();
   }
 
   Future<void> clearAllTasksFromLocalStorage() async {
@@ -371,7 +378,7 @@ class AgendaProvider extends ChangeNotifier {
   }
 
   Future<void> discardAnonymousTasks() async {
-    final tasksToDiscard = List<TaskModel>.from(anonymousTasks);
+    final tasksToDiscard = List<TaskModel>.from(_storedAnonymousTasks);
     if (tasksToDiscard.isEmpty) {
       return;
     }
@@ -393,11 +400,24 @@ class AgendaProvider extends ChangeNotifier {
       task.userId = _userId;
       task.dirty(); // Mark as dirty for sync
     }
+    await _saveTasks();
+    // Trigger sync for all tasks after taking ownership
+    await syncAllTasks();
+  }
+
+  Future<void> _saveTasks() async {
+    _pruneLocallyDeletedAnonymousTasks();
     await _repository.saveTasks(_tasks);
     _publishTaskDebugState();
     notifyListeners();
-    // Trigger sync for all tasks after taking ownership
-    await syncAllTasks();
+  }
+
+  bool _pruneLocallyDeletedAnonymousTasks() {
+    final initialCount = _tasks.length;
+    _tasks.removeWhere(
+      (task) => task.userId == null && task.syncStatus == SyncStatus.deleted,
+    );
+    return _tasks.length != initialCount;
   }
 
   void _publishTaskDebugState() {

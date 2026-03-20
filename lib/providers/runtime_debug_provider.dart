@@ -135,7 +135,10 @@ class RuntimeDebugProvider extends ChangeNotifier {
         .where((task) => task.syncStatus == SyncStatus.deleted)
         .length;
     final anonymousTaskCount = tasks
-        .where((task) => task.userId == null)
+        .where(
+          (task) =>
+              task.userId == null && task.syncStatus != SyncStatus.deleted,
+        )
         .length;
 
     final nextState = _state.copyWith(
