@@ -464,6 +464,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
         value: '${agenda.filteredTasks.length}',
         tone: theme.colorScheme.primaryContainer,
         foreground: theme.colorScheme.onPrimaryContainer,
+        valueKey: const ValueKey('task-workspace-in-view-value'),
         dense: dense,
       ),
       _WorkspaceMetricChip(
@@ -471,6 +472,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
         value: '${agenda.pendingTasksCount}',
         tone: theme.colorScheme.secondaryContainer,
         foreground: theme.colorScheme.onSecondaryContainer,
+        valueKey: const ValueKey('task-workspace-pending-value'),
         dense: dense,
       ),
       _WorkspaceMetricChip(
@@ -478,6 +480,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
         value: '${agenda.overdueTasksCount}',
         tone: theme.colorScheme.errorContainer,
         foreground: theme.colorScheme.onErrorContainer,
+        valueKey: const ValueKey('task-workspace-overdue-value'),
         dense: dense,
       ),
       _WorkspaceMetricChip(
@@ -491,6 +494,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
         foreground: agenda.hasPendingAnonymousReview
             ? theme.colorScheme.onTertiaryContainer
             : theme.colorScheme.onSurface,
+        valueKey: const ValueKey('task-workspace-review-value'),
         dense: dense,
       ),
     ];
@@ -1304,6 +1308,7 @@ class _WorkspaceMetricChip extends StatelessWidget {
     required this.tone,
     required this.foreground,
     this.dense = false,
+    this.valueKey,
   });
 
   final String label;
@@ -1311,6 +1316,7 @@ class _WorkspaceMetricChip extends StatelessWidget {
   final Color tone;
   final Color foreground;
   final bool dense;
+  final Key? valueKey;
 
   @override
   Widget build(BuildContext context) {
@@ -1329,6 +1335,7 @@ class _WorkspaceMetricChip extends StatelessWidget {
               children: [
                 Text(
                   value,
+                  key: valueKey,
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
                     color: foreground,
                     fontWeight: FontWeight.w700,
@@ -1349,6 +1356,7 @@ class _WorkspaceMetricChip extends StatelessWidget {
               children: [
                 Text(
                   value,
+                  key: valueKey,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     color: foreground,
                     fontWeight: FontWeight.w700,

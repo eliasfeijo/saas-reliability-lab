@@ -363,16 +363,19 @@ class _LabLeftRailState extends State<LabLeftRail> {
                           context,
                           'Visible',
                           agenda.filteredTasks.length.toString(),
+                          valueKey: const ValueKey('task-scope-visible-value'),
                         ),
                         _metricPill(
                           context,
                           'Total',
                           agenda.totalTasks.toString(),
+                          valueKey: const ValueKey('task-scope-total-value'),
                         ),
                         _metricPill(
                           context,
                           'Overdue',
                           agenda.overdueTasksCount.toString(),
+                          valueKey: const ValueKey('task-scope-overdue-value'),
                         ),
                       ],
                     ),
@@ -396,6 +399,7 @@ class _LabLeftRailState extends State<LabLeftRail> {
                       context,
                       'Anonymous tasks',
                       agenda.anonymousTasks.length.toString(),
+                      valueKey: const ValueKey('anonymous-review-count-value'),
                     ),
                     Text(
                       state.hasAuthenticatedSession
@@ -481,7 +485,12 @@ class _LabLeftRailState extends State<LabLeftRail> {
     );
   }
 
-  Widget _line(BuildContext context, String label, String value) {
+  Widget _line(
+    BuildContext context,
+    String label,
+    String value, {
+    Key? valueKey,
+  }) {
     final theme = Theme.of(context);
 
     return Padding(
@@ -493,13 +502,24 @@ class _LabLeftRailState extends State<LabLeftRail> {
             width: 96,
             child: Text(label, style: theme.textTheme.bodySmall),
           ),
-          Expanded(child: Text(value, style: theme.textTheme.bodyMedium)),
+          Expanded(
+            child: Text(
+              value,
+              key: valueKey,
+              style: theme.textTheme.bodyMedium,
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _metricPill(BuildContext context, String label, String value) {
+  Widget _metricPill(
+    BuildContext context,
+    String label,
+    String value, {
+    Key? valueKey,
+  }) {
     final theme = Theme.of(context);
 
     return Container(
@@ -514,7 +534,7 @@ class _LabLeftRailState extends State<LabLeftRail> {
         children: [
           Text(label, style: theme.textTheme.bodySmall),
           const SizedBox(height: 4),
-          Text(value, style: theme.textTheme.titleMedium),
+          Text(value, key: valueKey, style: theme.textTheme.titleMedium),
         ],
       ),
     );

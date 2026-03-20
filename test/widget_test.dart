@@ -119,6 +119,109 @@ void main() {
       expect(savedTasks.single.syncStatus, SyncStatus.synced);
     },
   );
+
+  test(
+    'deleteTask removes anonymous tasks from storage and clears active counts',
+    () async {
+      final anonymousTask = _buildTask(
+        id: 'task-delete-anon',
+        title: 'Throwaway local task',
+        beginsAt: DateTime(2026, 2, 12, 9),
+        estimatedDuration: const Duration(hours: 1),
+        syncStatus: SyncStatus.dirty,
+      );
+
+      final repository = _InMemoryTasksRepository([anonymousTask]);
+      final remote = _FakeTaskRemoteDataSource([]);
+      final service = TaskSyncService.forTesting(
+        repository,
+        remote: remote,
+        connectivityCheck: () async => [ConnectivityResult.wifi],
+        hasActiveSession: () => false,
+      );
+      final agenda = AgendaProvider(repository, service, UserSessionService());
+
+      agenda.tasks = [anonymousTask];
+      await agenda.deleteTask(anonymousTask.id);
+
+      final savedTasks = await repository.loadTasks();
+
+      expect(savedTasks, isEmpty);
+      expect(agenda.tasks, isEmpty);
+      expect(agenda.filteredTasks, isEmpty);
+      expect(agenda.totalTasks, 0);
+      expect(agenda.pendingTasksCount, 0);
+      expect(agenda.anonymousTasks, isEmpty);
+    },
+  );
+
+  test('loadTasks prunes legacy deleted anonymous tombstones', () async {
+    final deletedAnonymousTask = _buildTask(
+      id: 'task-legacy-tombstone',
+      title: 'Legacy deleted local task',
+      beginsAt: DateTime(2026, 2, 13, 9),
+      estimatedDuration: const Duration(hours: 1),
+      syncStatus: SyncStatus.deleted,
+    );
+
+    final repository = _InMemoryTasksRepository([deletedAnonymousTask]);
+    final remote = _FakeTaskRemoteDataSource([]);
+    final service = TaskSyncService.forTesting(
+      repository,
+      remote: remote,
+      connectivityCheck: () async => [ConnectivityResult.wifi],
+      hasActiveSession: () => false,
+    );
+    final agenda = AgendaProvider(repository, service, UserSessionService());
+
+    await agenda.loadTasks();
+
+    final savedTasks = await repository.loadTasks();
+
+    expect(savedTasks, isEmpty);
+    expect(agenda.tasks, isEmpty);
+    expect(agenda.totalTasks, 0);
+    expect(agenda.anonymousTasks, isEmpty);
+    expect(agenda.pendingTasksCount, 0);
+  });
+
+  test(
+    'deleteTask keeps authenticated tombstones for sync while hiding them from active counts',
+    () async {
+      final accountTask = _buildTask(
+        id: 'task-delete-account',
+        title: 'Cloud task',
+        beginsAt: DateTime(2026, 2, 14, 9),
+        estimatedDuration: const Duration(hours: 1),
+        syncStatus: SyncStatus.synced,
+        userId: 'user-1',
+      );
+
+      final repository = _InMemoryTasksRepository([accountTask]);
+      final remote = _FakeTaskRemoteDataSource([]);
+      final service = TaskSyncService.forTesting(
+        repository,
+        remote: remote,
+        connectivityCheck: () async => [ConnectivityResult.wifi],
+        hasActiveSession: () => false,
+      );
+      final agenda = AgendaProvider(repository, service, UserSessionService())
+        ..userId = 'user-1';
+
+      agenda.tasks = [accountTask];
+      await agenda.deleteTask(accountTask.id);
+
+      final savedTasks = await repository.loadTasks();
+
+      expect(savedTasks, hasLength(1));
+      expect(savedTasks.single.syncStatus, SyncStatus.deleted);
+      expect(agenda.tasks, isEmpty);
+      expect(agenda.filteredTasks, isEmpty);
+      expect(agenda.totalTasks, 0);
+      expect(agenda.pendingTasksCount, 0);
+      expect(agenda.anonymousTasks, isEmpty);
+    },
+  );
 }
 
 class _InMemoryTasksRepository implements TasksRepository {
