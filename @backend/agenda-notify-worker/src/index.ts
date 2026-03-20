@@ -15,7 +15,7 @@ import {
 	buildPushPayload,
 	type PushSubscription,
 } from "@block65/webcrypto-web-push";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 export interface Env {
 	SUPABASE_URL: string;
@@ -33,9 +33,67 @@ interface PendingNotification {
 	auth: string;
 }
 
-async function sendPushNotifications(
+export interface PendingNotificationRepository {
+	fetchPendingNotifications(now: string): Promise<PendingNotification[]>;
+	markNotificationSent(taskId: string): Promise<void>;
+	deleteSubscription(userId: string, endpoint: string): Promise<void>;
+}
+
+class SupabasePendingNotificationRepository
+	implements PendingNotificationRepository
+{
+	constructor(private readonly supabase: SupabaseClient) {}
+
+	async fetchPendingNotifications(now: string): Promise<PendingNotification[]> {
+		const { data: tasks, error } = await this.supabase.rpc(
+			"get_pending_notifications",
+			{ now },
+		);
+
+		if (error) {
+			throw error;
+		}
+
+		return (tasks ?? []) as PendingNotification[];
+	}
+
+	async markNotificationSent(taskId: string): Promise<void> {
+		const { error } = await this.supabase
+			.from("tasks")
+			.update({ notification_sent: true })
+			.eq("id", taskId);
+
+		if (error) {
+			throw error;
+		}
+	}
+
+	async deleteSubscription(userId: string, endpoint: string): Promise<void> {
+		const { error } = await this.supabase
+			.from("push_subscriptions")
+			.delete()
+			.eq("user_id", userId)
+			.eq("endpoint", endpoint);
+
+		if (error) {
+			throw error;
+		}
+	}
+}
+
+type BuildPushPayloadFn = typeof buildPushPayload;
+type FetchFn = typeof fetch;
+
+export interface NotifyWorkerDeps {
+	repository?: PendingNotificationRepository;
+	buildPushPayloadFn?: BuildPushPayloadFn;
+	fetchFn?: FetchFn;
+}
+
+export async function sendPushNotifications(
 	env: Env,
 	trigger: string,
+	deps: NotifyWorkerDeps = {},
 ): Promise<Response> {
 	if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE) {
 		return new Response("Environment variables not set", { status: 500 });
@@ -44,22 +102,26 @@ async function sendPushNotifications(
 		return new Response("VAPID keys not set", { status: 500 });
 	}
 
-	const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE);
+	const repository =
+		deps.repository ??
+		new SupabasePendingNotificationRepository(
+			createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE),
+		);
+	const buildPushPayloadFn = deps.buildPushPayloadFn ?? buildPushPayload;
+	const fetchFn = deps.fetchFn ?? fetch;
 
 	const now = new Date().toISOString();
 	console.log(`[notify-worker] Trigger=${trigger} now=${now}`);
 
-	const { data: tasks, error } = await supabase.rpc(
-		"get_pending_notifications",
-		{ now },
-	);
-
-	if (error) {
+	let tasks: PendingNotification[];
+	try {
+		tasks = await repository.fetchPendingNotifications(now);
+	} catch (error) {
 		console.error("Failed to fetch tasks:", error);
 		return new Response("DB error", { status: 500 });
 	}
 
-	if (!tasks || tasks.length === 0) {
+	if (tasks.length === 0) {
 		console.log("No tasks to notify");
 		return new Response("No tasks to notify", { status: 200 });
 	}
@@ -71,7 +133,7 @@ async function sendPushNotifications(
 	let failed = 0;
 	let staleSubscriptionsDeleted = 0;
 
-	for (const task of tasks as PendingNotification[]) {
+	for (const task of tasks) {
 		try {
 			const subscription: PushSubscription = {
 				endpoint: task.endpoint,
@@ -87,31 +149,26 @@ async function sendPushNotifications(
 				options: { topic: "Task Reminder", ttl: 900, urgency: "high" as const },
 			};
 
-			const payload = await buildPushPayload(message, subscription, {
+			const payload = await buildPushPayloadFn(message, subscription, {
 				subject: "mailto:you@example.com",
 				publicKey: env.VAPID_PUBLIC_KEY,
 				privateKey: env.VAPID_PRIVATE_KEY,
 			});
 
-			const res = await fetch(subscription.endpoint, payload);
+			const res = await fetchFn(subscription.endpoint, payload);
 
 			if (!res.ok) {
 				failed++;
 
 				if (res.status === 404 || res.status === 410) {
-					const { error: deleteError } = await supabase
-						.from("push_subscriptions")
-						.delete()
-						.eq("user_id", task.user_id)
-						.eq("endpoint", task.endpoint);
-
-					if (deleteError) {
+					try {
+						await repository.deleteSubscription(task.user_id, task.endpoint);
+						staleSubscriptionsDeleted++;
+					} catch (deleteError) {
 						console.error(
 							`Failed to delete stale subscription for ${task.user_id}:`,
 							deleteError,
 						);
-					} else {
-						staleSubscriptionsDeleted++;
 					}
 				}
 
@@ -121,10 +178,7 @@ async function sendPushNotifications(
 				continue;
 			}
 
-			await supabase
-				.from("tasks")
-				.update({ notification_sent: true })
-				.eq("id", task.id);
+			await repository.markNotificationSent(task.id);
 
 			console.log(
 				`[notify-worker] Sent notification for task ${task.id} (${task.title})`,
