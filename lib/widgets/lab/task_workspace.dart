@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:todo_flutter/helpers/web_push_helper.dart';
-import 'package:todo_flutter/models/runtime_event.dart';
 import 'package:todo_flutter/models/task.dart';
 import 'package:todo_flutter/providers/agenda_provider.dart';
 import 'package:todo_flutter/providers/runtime_debug_provider.dart';
@@ -24,7 +23,6 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
   TaskModel? _selectedTask;
   late Timer _refreshTimer;
   late final StreamSubscription<AuthState> _authStateSubscription;
-  bool _isLoggingOut = false;
 
   final TextEditingController _searchController = TextEditingController();
   final TransitionSwitcherController _topBarTransitionController =
@@ -116,68 +114,6 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
     if (agenda.anonymousTasks.isNotEmpty) {
       _showDiscardAnonymousTasksDialog(context);
     }
-  }
-
-  Future<void> _logout() async {
-    if (_isLoggingOut) return;
-
-    final runtimeDebug = context.read<RuntimeDebugProvider>();
-
-    setState(() {
-      _isLoggingOut = true;
-    });
-
-    String failureMessage = 'Logout failed. Please try again.';
-    var loggedOut = false;
-
-    try {
-      try {
-        await unregisterWebPushSubscription(runtimeDebug: runtimeDebug);
-      } catch (error) {
-        debugPrint(
-          '[Auth] Failed to unregister web push during logout: $error',
-        );
-      }
-
-      try {
-        await Supabase.instance.client.auth.signOut();
-        loggedOut = !_hasAuthenticatedSession;
-      } on AuthException catch (error) {
-        loggedOut = !_hasAuthenticatedSession;
-        if (loggedOut) {
-          debugPrint(
-            '[Auth] Remote logout cleanup failed after local sign-out: ${error.message}',
-          );
-        } else {
-          failureMessage = error.message;
-        }
-      } catch (error) {
-        loggedOut = !_hasAuthenticatedSession;
-        if (loggedOut) {
-          debugPrint(
-            '[Auth] Remote logout cleanup failed after local sign-out: $error',
-          );
-        }
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoggingOut = false;
-        });
-      }
-    }
-
-    runtimeDebug.addEvent(
-      category: RuntimeEventCategory.auth,
-      message: loggedOut ? 'User logged out.' : failureMessage,
-      level: loggedOut ? RuntimeEventLevel.info : RuntimeEventLevel.error,
-    );
-
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(loggedOut ? 'Logged out' : failureMessage)),
-    );
   }
 
   void _showLoginBottomSheet() {
@@ -371,7 +307,9 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
                     Text('Task Workspace', style: theme.textTheme.titleLarge),
                     const SizedBox(height: 4),
                     Text(
-                      agenda.currentFilter.title,
+                      agenda.hasSelectedTask
+                          ? 'Selection controls stay in the workspace; durable controls live in the operator rail.'
+                          : agenda.currentFilter.title,
                       style: theme.textTheme.bodyMedium,
                     ),
                   ],
@@ -382,47 +320,22 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
           const SizedBox(width: 12),
           Consumer<AgendaProvider>(
             builder: (context, agenda, child) {
-              return IconButton(
-                tooltip: agenda.hasSelectedTask
-                    ? 'Clear selection'
-                    : 'Filter tasks',
-                icon: Icon(
-                  agenda.hasSelectedTask ? Icons.clear : Icons.filter_list,
-                ),
-                onPressed: () async {
-                  if (agenda.hasSelectedTask) {
-                    agenda.clearSelection();
-                    await _topBarTransitionController.switchChild(
-                      _buildSearchBar(),
-                    );
-                    setState(() {
-                      _selectedTask = null;
-                    });
-                  } else {
-                    _showFilterDialog(context);
-                  }
-                },
-              );
-            },
-          ),
-          const SizedBox(width: 8),
-          Consumer<AgendaProvider>(
-            builder: (context, agenda, child) {
-              final isLoggedIn =
-                  agenda.userId != null && agenda.userId!.isNotEmpty;
-
-              if (!isLoggedIn) {
-                return FilledButton.tonalIcon(
-                  onPressed: _showLoginBottomSheet,
-                  icon: const Icon(Icons.login),
-                  label: const Text('Login'),
-                );
+              if (!agenda.hasSelectedTask) {
+                return const SizedBox.shrink();
               }
 
-              return FilledButton.tonalIcon(
-                onPressed: _isLoggingOut ? null : _logout,
-                icon: const Icon(Icons.logout),
-                label: Text(_isLoggingOut ? 'Logging out...' : 'Logout'),
+              return OutlinedButton.icon(
+                onPressed: () async {
+                  agenda.clearSelection();
+                  await _topBarTransitionController.switchChild(
+                    _buildSearchBar(),
+                  );
+                  setState(() {
+                    _selectedTask = null;
+                  });
+                },
+                icon: const Icon(Icons.clear),
+                label: const Text('Clear selection'),
               );
             },
           ),
@@ -458,34 +371,6 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
             child: const Text('Discard', style: TextStyle(color: Colors.red)),
           ),
         ],
-      ),
-    );
-  }
-
-  void _showFilterDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Filter Tasks'),
-        content: Consumer<AgendaProvider>(
-          builder: (context, agenda, child) {
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              children: TaskFilter.values.map((filter) {
-                return RadioListTile<TaskFilter>(
-                  title: Text(filter.displayName),
-                  subtitle: Text(filter.description),
-                  value: filter,
-                  groupValue: agenda.currentFilter,
-                  onChanged: (value) {
-                    agenda.setFilter(value!);
-                    Navigator.of(context).pop();
-                  },
-                );
-              }).toList(),
-            );
-          },
-        ),
       ),
     );
   }
