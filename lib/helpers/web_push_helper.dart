@@ -63,9 +63,7 @@ Future<bool> _waitForAuthenticatedSession() async {
 
 Future<Map<String, dynamic>?> _registerWebPush(String vapidPublicKey) async {
   try {
-    final result = await _registerPush(
-      vapidPublicKey.toJS,
-    ).toDart.timeout(_pushRegistrationTimeout);
+    final result = await _registerPush(vapidPublicKey.toJS).toDart;
     return {'endpoint': result.endpoint, 'keys': result.keys?.toMap()};
   } catch (e) {
     debugPrint('Error registering web push: $e');

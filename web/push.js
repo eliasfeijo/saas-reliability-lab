@@ -14,6 +14,25 @@ function getPushServiceWorkerUrl() {
 }
 
 const pushServiceWorkerActivationTimeoutMs = 5000;
+const pushSubscriptionTimeoutMs = 15000;
+const pushPermissionTimeoutMs = 15000;
+
+async function withTimeout(promise, timeoutMs, errorMessage) {
+  let timeoutId;
+
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timeoutId = setTimeout(() => {
+          reject(new Error(errorMessage));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
 
 async function waitForServiceWorkerActivation(registration) {
   if (registration?.active) {
@@ -77,35 +96,36 @@ async function waitForActiveServiceWorkerRegistration() {
 }
 
 async function getPushServiceWorkerRegistration() {
-  if (isReleaseBuild()) {
-    const readyRegistration = await waitForActiveServiceWorkerRegistration();
-    if (readyRegistration) {
-      console.log('Using active push service worker registration');
-      return readyRegistration;
-    }
+  const registrationScope = isReleaseBuild() ? getBaseHref() : undefined;
+  const existingRegistration = registrationScope
+    ? await navigator.serviceWorker.getRegistration(registrationScope)
+    : await navigator.serviceWorker.getRegistration();
 
-    const existingRegistration = await navigator.serviceWorker.getRegistration(
-      getBaseHref(),
-    );
-    if (existingRegistration?.active) {
-      console.log('Using existing active push service worker registration');
-      return existingRegistration;
-    }
-
-    return Promise.reject('No active push service worker registration');
-  }
-
-  const existingRegistration = await navigator.serviceWorker.getRegistration();
   if (existingRegistration?.active) {
-    console.log('Using existing development push service worker registration');
+    console.log('Using existing active push service worker registration');
     return existingRegistration;
   }
 
-  console.log('Registering development push service worker');
+  if (existingRegistration) {
+    const activatedRegistration = await waitForServiceWorkerActivation(
+      existingRegistration,
+    );
+    if (activatedRegistration) {
+      console.log('Using newly activated push service worker registration');
+      return activatedRegistration;
+    }
+  }
+
+  console.log(
+    `Registering ${isReleaseBuild() ? 'release' : 'development'} push service worker`,
+  );
 
   const registration = await navigator.serviceWorker.register(
     getPushServiceWorkerUrl(),
-    { scope: getBaseHref() },
+    {
+      scope: getBaseHref(),
+      updateViaCache: 'none',
+    },
   );
   const activatedRegistration = await waitForServiceWorkerActivation(
     registration,
@@ -113,6 +133,12 @@ async function getPushServiceWorkerRegistration() {
 
   if (activatedRegistration) {
     return activatedRegistration;
+  }
+
+  const readyRegistration = await waitForActiveServiceWorkerRegistration();
+  if (readyRegistration) {
+    console.log('Using active push service worker registration from ready');
+    return readyRegistration;
   }
 
   return Promise.reject('No active push service worker registration');
@@ -124,7 +150,16 @@ async function requestPushPermission() {
     return 'unsupported';
   }
 
-  return Notification.requestPermission();
+  if (Notification.permission !== 'default') {
+    return Notification.permission;
+  }
+
+  console.log('Requesting notification permission from user gesture');
+  return withTimeout(
+    Notification.requestPermission(),
+    pushPermissionTimeoutMs,
+    'Timed out waiting for notification permission',
+  );
 }
 
 async function registerPush(publicKey) {
@@ -138,13 +173,15 @@ async function registerPush(publicKey) {
     return Promise.reject('Push manager is not available');
   }
 
-  const permission = await requestPushPermission();
+  const permission = Notification.permission;
+  console.log(`Current notification permission: ${permission}`);
   if (permission !== 'granted') {
-    console.error('Notification permission was not granted.');
-    return Promise.reject('Notification permission was not granted');
+    console.error('Notification permission must be granted before registering push.');
+    return Promise.reject(`Notification permission is ${permission}`);
   }
 
   const activeRegistration = await getPushServiceWorkerRegistration();
+  console.log('Using push service worker registration:', activeRegistration);
 
   if (!activeRegistration.pushManager) {
     console.error('Push manager is not available in this browser.');
@@ -153,10 +190,15 @@ async function registerPush(publicKey) {
 
   let subscription = await activeRegistration.pushManager.getSubscription();
   if (!subscription) {
-    subscription = await activeRegistration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(publicKey),
-    });
+    console.log('Creating new push subscription');
+    subscription = await withTimeout(
+      activeRegistration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(publicKey),
+      }),
+      pushSubscriptionTimeoutMs,
+      'Timed out waiting for push subscription',
+    );
   }
 
   if (!subscription) {
