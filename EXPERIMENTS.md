@@ -2,18 +2,39 @@
 
 ## Purpose
 
-This document defines the reliability scenarios the lab is intended to demonstrate.
+This document defines the reliability scenarios the lab is meant to demonstrate and the evidence each scenario should leave behind.
 
-The experiments are split into two groups:
+The current shell transformation matters here.
+Experiments are no longer expected to hide behind dialogs or console output alone.
+They should be inspectable through the operator shell:
 
-- scenarios that can already be exercised meaningfully with the current codebase
-- scenarios that are part of the target lab roadmap but still require more infrastructure, observability, or sync semantics
+- `LabLeftRail` for durable controls and session context
+- `TaskWorkspace` for direct task interactions
+- `SyncDebugPanel` for runtime evidence
 
-Each experiment is written as an engineering exercise, not a product feature.
+## Current experiment surface
 
-## Experiment Format
+What the UI can already expose today:
 
-Each experiment should eventually have:
+- authenticated versus anonymous session state
+- cached identity versus live auth identity
+- manual sync initiation from the operator rail
+- sync lifecycle and last outcome summaries
+- local dirty, deleted, and anonymous task counts
+- push permission and subscription state
+- recent runtime events in memory
+
+What the UI intentionally reserves but does not yet truly implement:
+
+- queued operations
+- sending and acknowledged operation states
+- failed operations with retry policy
+- conflict capture and resolution
+- fault injection controls
+
+## Experiment format
+
+Each experiment should eventually include:
 
 - objective
 - setup
@@ -22,15 +43,16 @@ Each experiment should eventually have:
 - expected evidence
 - current gaps
 
-The "expected evidence" section is important. A reliability experiment is only complete when the system leaves behind enough information to explain what happened.
+The evidence section is mandatory.
+An experiment is not complete until the system leaves behind enough visible information to explain what happened.
 
-## Currently Runnable Experiments
+## Currently runnable experiments
 
 ## 1. Anonymous local work before login
 
 ### Objective
 
-Verify that a user can create tasks locally without authentication and later decide whether to keep or discard that local work after signing in.
+Verify that a user can create tasks locally without authentication and later decide whether to keep or discard that work after signing in.
 
 ### Setup
 
@@ -45,21 +67,90 @@ Verify that a user can create tasks locally without authentication and later dec
 
 - the app restores the authenticated user id
 - the app runs a full sync pass for the authenticated account
-- if local anonymous tasks still exist, the app shows a decision dialog
+- if anonymous tasks still exist, the app offers an explicit decision path
 - choosing `Keep` assigns the current user id to those tasks and syncs them
 - choosing `Discard` removes them from local storage
 
-### Current evidence
+### Expected evidence
 
-- visible dialog in the UI
-- resulting task state in the list after the choice
+- anonymous-task count is visible in the operator rail
+- the login-time decision flow appears when needed
+- the event timeline records the related auth and storage activity
+- the resulting task state is visible in the workspace after the choice
 
 ### Current gaps
 
-- no audit trail of which anonymous tasks were adopted
-- no explicit conflict handling if remote tasks already represent similar work
+- no audit trail of exactly which tasks were adopted versus discarded
+- no conflict-aware strategy if local anonymous work overlaps meaningfully with remote state
 
-## 2. Remote-wins on stale local state
+## 2. Session truth and startup recovery visibility
+
+### Objective
+
+Verify that the UI distinguishes cached identity from the actual authenticated session and shows startup recovery behavior clearly.
+
+### Setup
+
+- sign in
+- refresh the page or relaunch the app with a stored session
+
+### Action
+
+- observe startup
+- sign out again
+
+### Expected behavior
+
+- the app restores local snapshot and cached identity first
+- the runtime model reflects initial-load activity
+- Supabase auth remains the source of truth for authenticated state
+- signed-out cleanup clears local session state and local tasks as designed
+
+### Expected evidence
+
+- `Session Truth` in the diagnostics rail shows active versus cached identity
+- `Initial load` changes from running to settled
+- auth-related runtime events appear in the event timeline
+- the operator rail updates between anonymous and authenticated states
+
+### Current gaps
+
+- there is no persisted audit history of session transitions across reloads
+- there is no separate incident trail for startup recovery anomalies
+
+## 3. Manual sync visibility for authenticated users
+
+### Objective
+
+Verify that an authenticated user can trigger sync manually and inspect the resulting sync state in the UI.
+
+### Setup
+
+- sign in
+- create or edit tasks so local sync work exists
+
+### Action
+
+- use `Sync now` in the operator rail
+
+### Expected behavior
+
+- the sync pass starts immediately
+- the diagnostics rail reflects sync lifecycle changes
+- the latest sync outcome is captured visibly after completion
+
+### Expected evidence
+
+- `Sync State` and `Sync Outcomes` update in the diagnostics rail
+- `Last sync` and outcome timestamps change in the operator and debug rails
+- the event timeline records the manual sync request and resulting sync outcome
+
+### Current gaps
+
+- there is no operation-level breakdown of what was actually replayed
+- retry and backoff semantics are still absent
+
+## 4. Remote-wins on stale local state
 
 ### Objective
 
@@ -68,7 +159,7 @@ Verify that a stale local dirty task does not overwrite a fresher remote version
 ### Setup
 
 - create a task with the same id locally and remotely
-- ensure the remote copy is newer than the local `lastModifiedAt`
+- make the remote copy newer than the local `lastModifiedAt`
 
 ### Action
 
@@ -76,29 +167,29 @@ Verify that a stale local dirty task does not overwrite a fresher remote version
 
 ### Expected behavior
 
-- the local stale copy is replaced by the remote canonical copy
+- the stale local copy is replaced by the remote canonical copy
 - the stale local copy is not pushed back over the fresher remote state
 
-### Current evidence
+### Expected evidence
 
-- automated Flutter regression test in `test/widget_test.dart`
-- debug log line: `Remote task <id> is newer or equal. Keeping remote version.`
+- automated Flutter regression coverage in `test/widget_test.dart`
+- a completed sync outcome in the diagnostics rail
 
 ### Current gaps
 
-- no explicit `conflict` state is shown in the UI
-- the user is not told that a local edit was discarded in favor of remote state
+- the user is still not told explicitly that a local change lost to remote state
+- there is still no conflict state or per-task reconciliation explanation in the UI
 
-## 3. Scheduled notification dispatch
+## 5. Scheduled notification dispatch
 
 ### Objective
 
-Verify that due tasks can be dispatched by backend infrastructure without requiring an active client session.
+Verify that due tasks can be dispatched by backend infrastructure without requiring an active client session at send time.
 
 ### Setup
 
-- sign in in a browser that supports web push
-- register a subscription for the current profile
+- sign in on a browser that supports web push
+- register a push subscription for the current browser profile
 - create a task whose `notify_at` will become due
 
 ### Action
@@ -109,21 +200,22 @@ Verify that due tasks can be dispatched by backend infrastructure without requir
 
 - the worker fetches due notifications
 - a push request is sent to the provider
-- the task is marked with `notification_sent = true` if the provider accepts it
+- the task is marked with `notification_sent = true` when the provider accepts it
 - the browser service worker shows the notification
 
-### Current evidence
+### Expected evidence
 
-- notification arrives in the subscribed browser profile
+- notification appears in the subscribed browser profile
 - worker logs show pending count and send outcome
+- the diagnostics rail shows push permission and subscription state for the current profile
 
 ### Current gaps
 
-- no delivery-attempt history table
-- no UI for last notification attempt or delivery status
-- current cadence is cron-based and coarse at 5 minutes
+- there is no delivery-attempt history table
+- there is no client-side panel for last notification dispatch outcome
+- notification cadence remains cron-based and coarse at five minutes
 
-## 4. Stale subscription cleanup
+## 6. Stale subscription cleanup
 
 ### Objective
 
@@ -131,7 +223,7 @@ Verify that dead push subscriptions are removed when the provider reports them a
 
 ### Setup
 
-- use a push subscription that has become invalid or simulate a `404` or `410` response in tests
+- use an invalid subscription or simulate `404` or `410` responses in tests
 
 ### Action
 
@@ -139,21 +231,21 @@ Verify that dead push subscriptions are removed when the provider reports them a
 
 ### Expected behavior
 
-- push send fails
-- the worker deletes the stale subscription from persistence
-- the send run reports one failed send and one stale subscription deletion
+- push send fails for the stale subscription
+- the stale subscription is deleted from persistence
+- the send run reports both the failed push and the cleanup
 
-### Current evidence
+### Expected evidence
 
-- automated worker test in `@backend/agenda-notify-worker/test/index.spec.ts`
-- worker logs show failed push and stale-subscription cleanup count
+- automated worker coverage in `@backend/agenda-notify-worker/test/index.spec.ts`
+- worker logs show stale-subscription cleanup activity
 
 ### Current gaps
 
-- no separate metric or dashboard for churn in subscriptions
-- no user-facing prompt to re-register after cleanup
+- the current user-facing diagnostics rail does not expose subscription churn history
+- there is no re-registration prompt tied to cleanup
 
-## 5. Per-profile notification fan-out
+## 7. Per-profile notification fan-out
 
 ### Objective
 
@@ -170,55 +262,46 @@ Verify that multiple active browser profiles for the same account can each recei
 
 ### Expected behavior
 
-- each still-valid subscription for that user receives a push attempt
-- multiple profiles can receive the same reminder
+- every still-valid subscription for the user receives a push attempt
+- multiple profiles can receive the same reminder independently
 
-### Current evidence
+### Expected evidence
 
-- observable in the live browser behavior
-- reflected implicitly by multiple `push_subscriptions` rows
+- observable live behavior across multiple profiles
+- multiple `push_subscriptions` rows for the same account
 
 ### Current gaps
 
-- no admin/debug view listing active subscriptions per account
+- there is no admin or debug UI listing subscriptions per account
+- there is no delivery fan-out summary in the app shell
 
-## Planned Experiments That Need More Infrastructure
+## Planned experiments that still need more infrastructure
 
-## 6. Duplicate operation replay after reconnect
+## 8. Duplicate operation replay after reconnect
 
 ### Goal
 
 Study whether repeated delivery of the same local mutation creates duplicate or inconsistent remote state.
 
-### Why it matters
-
-This is one of the central SaaS reliability concerns described in the README.
-
 ### What is still needed
 
 - durable outbox
-- idempotency keys or operation ids
+- operation ids or idempotency keys
 - server-side idempotency handling
 
-## 7. Auth expiry during sync replay
+## 9. Auth expiry during replay
 
 ### Goal
 
 Study how queued local work behaves when the user session expires during replay.
 
-### What should be answered
-
-- are operations retried later?
-- does the UI surface blocked sync clearly?
-- what happens to push subscription management during auth churn?
-
 ### What is still needed
 
 - explicit outbox state
-- auth-expired sync state
-- better UI/debug evidence
+- blocked-by-auth operation state
+- clearer retry and recovery semantics
 
-## 8. Update/delete race across devices
+## 10. Update/delete race across devices
 
 ### Goal
 
@@ -226,27 +309,23 @@ Study what happens when one device deletes a task while another device updates i
 
 ### What is still needed
 
-- explicit conflict state
-- either versioning or richer reconciliation rules
+- conflict capture
 - deterministic experiment setup tools
+- user-visible conflict handling
 
-## 9. Concurrent edit conflict across devices
+## 11. Concurrent edit conflict across devices
 
 ### Goal
 
 Study whether concurrent edits converge correctly and visibly.
 
-### Current limitation
-
-The app currently has only a simple timestamp-based remote-wins rule and no explicit user-visible conflict resolution.
-
 ### What is still needed
 
-- conflict capture
-- conflict display
-- decision or merge strategy
+- explicit conflict state
+- merge or resolution policy
+- conflict evidence in the shell
 
-## 10. Network drop during mutation replay
+## 12. Network drop during partial replay
 
 ### Goal
 
@@ -254,88 +333,25 @@ Study how the client behaves when a sync pass partially succeeds and then loses 
 
 ### What is still needed
 
-- explicit retry policy
-- partial-success recording
-- local operation queue
+- partial replay accounting
+- retry and backoff policy
+- durable operation queue
 
-## 11. Missed worker run and delayed notification recovery
-
-### Goal
-
-Study whether missed schedules are recovered correctly on the next worker execution.
-
-### What is still needed
-
-- worker heartbeat or last-run record
-- notification attempt history
-- scenario controls for intentionally skipped runs
-
-## 12. Notification provider degradation
+## 13. Controlled fault injection from the operator shell
 
 ### Goal
 
-Study the difference between temporary provider failure, permanent endpoint loss, and delayed acceptance.
+Turn the lab from a passive observer into an active experiment harness.
 
 ### What is still needed
 
-- retry policy for notification sends
-- dead-letter or failed-attempt persistence
-- outcome classification
+- real operator-rail toggles for connectivity loss, delayed sync, expired auth, duplicate replay, and conflict simulation
+- runtime state capable of representing injected failures clearly
+- documentation for expected evidence per injected scenario
 
-## 13. Large reconnect burst
+## Practical reading of the current state
 
-### Goal
+The repository can already demonstrate a meaningful slice of SaaS reliability behavior, but only for the parts it can currently model explicitly.
 
-Study how the system behaves when a user returns online with many queued local changes.
-
-### What is still needed
-
-- durable outbox
-- batching semantics
-- rate limiting and backoff
-- sync metrics
-
-## 14. Session divergence across devices
-
-### Goal
-
-Study whether one device signing out, expiring, or reauthenticating leaves other devices in a consistent or confusing state.
-
-### What is still needed
-
-- device identity tracking
-- session-event visibility
-- test harness for multi-device auth scenarios
-
-## Experiment Readiness Checklist
-
-An experiment should only be considered truly implemented when all of the following are true:
-
-- [ ] the scenario can be triggered intentionally
-- [ ] the expected behavior is documented
-- [ ] the actual behavior is observable in logs, UI, or stored evidence
-- [ ] the scenario has at least one automated test where practical
-- [ ] the repository explains known limitations of the scenario clearly
-
-## Immediate Next Experiments To Stabilize
-
-These are the best next candidates because they align with the current codebase and improve the lab fastest:
-
-1. duplicate replay after reconnect
-2. auth expiry during sync replay
-3. update/delete race across devices
-4. missed worker run and delayed recovery
-5. large reconnect burst
-
-## Final Goal
-
-The point of these experiments is not to prove that the system never fails.
-
-The point is to make failure:
-
-- intentional
-- repeatable
-- explainable
-- testable
-
-Once that is true, the repository becomes a real reliability lab instead of a reliability-themed app.
+The shell transformation means future experiments now have a stable place to live.
+The next major step is to make the sync contract explicit enough that queued, failed, and conflicted work can be observed rather than inferred.

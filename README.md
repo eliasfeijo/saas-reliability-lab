@@ -1,252 +1,167 @@
 # SaaS Reliability Lab
 
-A practical exploration of what actually breaks when an early-stage SaaS starts getting real users.
+A web-first reliability lab built around a small task domain so sync, auth, push, and offline behavior can be observed directly in the product UI.
 
-This repository is not a productivity app and not a UI project.
+This repository is in the middle of a deliberate structural transformation:
 
-It is a reliability and synchronization experiment simulating a small SaaS product where users:
+- from a centered task-list app
+- to a reliability-lab workspace with a durable operator shell and live runtime diagnostics
 
-* go offline and reconnect hours later
-* log in from multiple devices
-* receive scheduled notifications
-* perform background actions
-* create concurrent data changes
+The task domain is still useful, but it is no longer the point.
+The point is to study what breaks, what recovers, and what remains visible when a small SaaS starts operating under imperfect conditions.
 
-The goal is to study **failure modes, recovery strategies and system behavior under imperfect conditions** — the situations that typically appear right after a startup launches publicly.
+## What exists today
 
----
+- Flutter Web PWA with a three-pane lab shell:
+  - Operator Rail
+  - Task Workspace
+  - Runtime Diagnostics
+- Local-first task CRUD with SharedPreferences persistence
+- Supabase authentication and per-user task sync
+- Runtime diagnostics state for connectivity, auth, sync, push, and local task counts
+- Browser push registration for signed-in profiles
+- Scheduled notification dispatch through a Cloudflare Worker
+- Anonymous-to-authenticated task adoption or discard flow
+
+## What this repository is trying to achieve
+
+The current shell transformation is the foundation, not the finish line.
+
+The next major goals are:
+
+- replace task-level dirty-object sync with an explicit operation outbox
+- surface conflict and blocked-sync states as first-class UI states
+- add fault-injection controls to the operator shell
+- strengthen observability beyond the in-app runtime panel
+- grow automated coverage for reliability-critical paths
+
+## Current UI shape
+
+The app now opens into a lab-style workspace rather than a single centered task screen.
+
+```mermaid
+flowchart LR
+    Left[Operator Rail]
+    Center[Task Workspace]
+    Right[Runtime Diagnostics]
+
+    Left --> Center
+    Center --> Right
+```
+
+### Operator Rail
+
+- session and auth actions
+- manual sync trigger
+- persistent task filters
+- anonymous-task review controls
+- reserved space for future fault injection and experiment toggles
+
+### Task Workspace
+
+- canonical task list and search surface
+- create, edit, delete, and complete task interactions
+- selected-task actions
+- the main workflow for direct task manipulation
+
+### Runtime Diagnostics
+
+- connectivity and sync lifecycle state
+- explicit last success, skip, partial, and failure outcomes
+- session truth versus cached identity
+- local dirty, deleted, and anonymous counts
+- push permission and subscription state
+- recent runtime event timeline
+- reserved placeholders for future queued, sending, acknowledged, failed, and conflict operation states
+
+On narrow screens, the rails move into drawers so observability remains accessible without reintroducing the old centered layout as the primary model.
+
+## Current system model
+
+```text
+Browser user
+  -> LabShell
+     -> LabLeftRail
+     -> TaskWorkspace
+     -> SyncDebugPanel
+  -> AgendaProvider + RuntimeDebugProvider
+  -> SharedPreferences local task store
+  -> TaskSyncService task-based reconciliation
+  -> Supabase Auth + Postgres + Edge Functions
+  -> Cloudflare scheduled worker
+  -> Web Push provider + browser service worker
+```
+
+Important current constraint:
+
+The sync engine is still task-based, not operation-based.
+The UI is intentionally reserving space for an explicit outbox and conflict model that does not exist yet in the backend contract.
+
+## Current status
+
+### Implemented now
+
+- the new lab shell is the active root UI
+- `TaskWorkspace` is the canonical center pane
+- `TaskList` remains only as a compatibility wrapper
+- runtime state is modeled explicitly through `RuntimeDebugProvider` and `RuntimeDebugState`
+- sync, auth, connectivity, local counts, and push state are visible in the UI
+- push notifications work end to end for signed-in browser profiles
+
+### Still missing
+
+- durable outbox semantics
+- per-operation acknowledgement and retry state
+- explicit conflict capture and resolution
+- fault-injection controls
+- stronger structured logging and metrics
+- broad automated coverage across multi-device and failure scenarios
 
 ## Why this exists
 
-Many startups launch with a simple architecture:
+Small SaaS systems usually do not fail first because of raw traffic volume.
+They fail because state stops lining up cleanly across clients, auth sessions, background jobs, and notifications.
 
-* a frontend
-* a database
-* an authentication provider
-* some background tasks
+This repository exists to explore those situations before they show up in production:
 
-It works perfectly… until users behave like real users.
+- users creating work offline and reconnecting later
+- cached identity diverging from actual auth state
+- delayed or skipped sync attempts
+- multiple browser profiles receiving the same notification
+- scheduled backend behavior operating independently from the client
 
-From my experience, the first serious problems rarely come from traffic volume.
-They come from **state inconsistency**.
+The goal is not to build a broad productivity product.
+The goal is to make reliability behavior inspectable.
 
-Examples:
+## Repository guide
 
-* users performing actions offline
-* duplicated writes after reconnection
-* missed background jobs
-* push notifications not delivered
-* auth sessions diverging across devices
-* silent data conflicts
+- `README.md`: current project overview and transformation status
+- `ARCHITECTURE.md`: implemented topology, state ownership, and evolution path
+- `EXPERIMENTS.md`: runnable and planned reliability scenarios
+- `reliability_lab_checklist.md`: milestone checklist for turning the prototype into a stronger lab
+- `project_analysis.md`: current-state analysis of the codebase after the shell transformation
+- `.tmp/ui_lab_redesign_plan.md`: local execution tracker for the UI redesign work
 
-This project was created to simulate and understand those situations before they happen in production.
-
----
-
-## System Overview
-
-The system models a small task-management SaaS with:
+## Tech stack
 
 Client:
 
-* Offline-first local storage
-* Sync queue
-* Auth session persistence
-* Retry logic
+- Flutter
+- Dart
+- SharedPreferences local persistence
+- Provider state management
 
-Backend:
+Backend and delivery:
 
-* Authentication provider
-* Database
-* Background job scheduler
-* Notification dispatcher
+- Supabase Auth
+- Supabase Postgres
+- Supabase Edge Functions
+- Cloudflare Worker for scheduled notification dispatch
+- Web Push + browser service worker runtime
 
-### Simplified Architecture
+## Current framing
 
-```
-Client (PWA / Flutter Web)
-      |
-Local storage (offline changes)
-      |
-Sync Queue → Retry / Backoff
-      |
-Supabase (Auth + Database)
-      |
-Scheduled jobs / notification service
-      |
-Push notifications to client
-```
+This project should now be read as a reliability lab with a task domain, not as a task app with reliability-themed notes.
 
-Key idea:
-**The client is allowed to be wrong temporarily.
-The system must still converge to a consistent state.**
-
----
-
-## Key Engineering Decisions
-
-### 1) Offline-First Local State
-
-The client stores changes locally before the network request.
-
-Why:
-Network reliability cannot be assumed, especially on mobile devices.
-Users must be able to interact with the system even without connectivity.
-
-Consequence:
-The backend must handle delayed writes and replayed actions.
-
----
-
-### 2) Sync Queue Instead of Immediate Writes
-
-Instead of writing directly to the API, operations are queued.
-
-This allows:
-
-* retry after reconnection
-* batching
-* recovery from transient failures
-
-But introduces a new class of problems:
-**duplicate operations and ordering issues.**
-
----
-
-### 3) Idempotent Operations
-
-Every write operation must be safe to execute multiple times.
-
-Without idempotency, reconnection events create:
-
-* duplicated records
-* inconsistent state
-* corrupted timelines
-
----
-
-### 4) Conflict Scenarios
-
-Multiple devices may edit the same entity.
-
-The system needs a strategy:
-
-* last-write-wins?
-* timestamp reconciliation?
-* merge?
-
-This project experiments with basic reconciliation and highlights where a real SaaS would need stronger guarantees.
-
----
-
-### 5) Background Jobs & Notifications
-
-Notifications cannot be triggered directly by the client.
-
-They require:
-
-* a trusted server
-* scheduling
-* retry policies
-
-The project includes a live scheduled notification workflow to demonstrate:
-
-* missed schedules
-* server downtime
-* delayed execution
-
----
-
-## Failure Scenarios Simulated
-
-The interesting part of a system is not when it works — but when it partially works.
-
-This project explores situations like:
-
-* user creates 15 tasks offline and reconnects
-* two devices update the same record
-* network drops during sync
-* expired auth token during queued operations
-* scheduled notification while server unavailable
-* duplicated retries after timeout
-
----
-
-## What Would Be Required in a Real Company
-
-If this were production software, I would add:
-
-Observability:
-
-* centralized logging
-* distributed tracing
-* error tracking
-
-Reliability:
-
-* background queues (SQS / RabbitMQ / BullMQ)
-* idempotency keys
-* retry policies with exponential backoff
-* dead-letter queues
-
-Security:
-
-* refresh token rotation
-* session invalidation
-* rate limiting
-
-Scalability:
-
-* API boundaries
-* queue-based workers
-* cache layer
-* circuit breakers
-
----
-
-## Tech Stack
-
-Client:
-
-* Flutter (Web PWA)
-* Dart
-* Local storage persistence
-
-Backend services:
-
-* Supabase (Auth + Postgres)
-* Web Push notifications
-
-Infrastructure concepts explored:
-
-* offline-first synchronization
-* eventual consistency
-* retry strategies
-* failure recovery
-
----
-
-## Current Status
-
-The live demo now includes working end-to-end scheduled notifications.
-
-Current production behavior:
-
-* signed-in browsers can register a push subscription for the current device/profile
-* the scheduled worker dispatches due task notifications live
-* stale subscriptions are cleaned up when push providers reject them
-* multiple browser profiles can receive the same notification if they are all still subscribed for the same account
-
-Anonymous users can still explore the task flow locally, but push notifications require signing in on the current device.
-
----
-
-## What this repository is meant to demonstrate
-
-This project is meant to answer a practical question:
-
-> How should a backend behave when users and networks are unreliable?
-
-The code matters less than the reasoning.
-
-The real goal is to document the architectural thinking required to keep a small SaaS stable as it grows from its first users to real usage.
+That distinction matters because the next engineering steps are not more CRUD polish.
+They are explicit sync semantics, conflict visibility, and controlled experiment execution.

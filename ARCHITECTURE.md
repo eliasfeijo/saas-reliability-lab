@@ -2,18 +2,12 @@
 
 ## Purpose
 
-This repository is a web-first reliability lab for studying what happens when a small SaaS system must recover from unreliable clients, delayed synchronization, authentication changes, and background notification delivery.
+This repository is a web-first reliability lab for studying how a small SaaS behaves when local state, remote state, identity, background work, and push delivery stop lining up perfectly.
 
-The project is intentionally not optimized around feature breadth.
+The project is no longer organized around a centered task list as its primary artifact.
+The active structural direction is a reliability-lab workspace with persistent operator controls and persistent runtime evidence.
 
-The architectural goal is to explore one narrow but realistic operating model:
-
-- users can act while offline
-- local state can diverge from remote state temporarily
-- identity can appear after local work already exists
-- notifications are dispatched by trusted backend infrastructure rather than directly by the client
-
-## Current Architectural Principles
+## Architectural principles
 
 ### 1. Local-first interaction
 
@@ -21,66 +15,87 @@ The client accepts task writes locally before cloud reconciliation.
 
 Why:
 
-- offline browsing and local experimentation must remain possible
+- offline usage must remain possible
 - reliability scenarios begin with temporary divergence, not perfect connectivity
 
-### 2. Remote state must be able to win safely
+### 2. Supabase auth is the source of truth for cloud eligibility
 
-The system now prefers the remote copy whenever the local copy is not provably newer.
-
-Why:
-
-- silent stale-local overwrite is more dangerous than explicit remote preference
-- a reliability lab needs deterministic reconciliation rules before it can study conflict handling more deeply
-
-### 3. Authentication is the source of truth for cloud behavior
-
-The client does not treat a cached local `userId` as authoritative.
+Cached identity exists only as comparison context.
 
 Why:
 
-- cached identity is only a convenience for UI and local persistence
-- session truth belongs to Supabase auth state
+- local `userId` is convenient for persistence and startup behavior
+- cloud behavior must follow the real authenticated session, not the cache
 
-### 4. Notification delivery is server-owned
+### 3. The sync engine is intentionally transitional
 
-Reminder dispatch runs through backend components.
-
-Why:
-
-- push delivery should not depend on an interactive client session
-- the lab needs a background execution path that can fail independently
-
-### 5. Web-first scope
-
-The lab is currently a Flutter Web PWA first.
+The current sync service is task-based reconciliation, not a durable outbox.
 
 Why:
 
-- browser service workers and web push are the most mature runtime path in the current repository
-- mobile and desktop scaffolding exists, but the reliability-specific behavior is not yet implemented there
+- the shell needed runtime evidence before a true operation model could be rendered responsibly
+- the next backend and data-model step is explicit outbox semantics, not more UI churn
 
-## High-Level System Topology
+### 4. Runtime evidence must be visible in the product UI
+
+The lab now treats sync, auth, push, and local-state visibility as part of the system, not as optional debug logging.
+
+Why:
+
+- a reliability lab that requires reading console logs is not yet operationally useful
+- future experiments need stable UI ownership for diagnostics and controls
+
+### 5. Notification delivery is server-owned
+
+Reminder dispatch runs through backend components rather than interactive client code.
+
+Why:
+
+- scheduled behavior must survive the absence of an active client session
+- delivery failure needs its own execution path and lifecycle
+
+### 6. Web-first scope
+
+The lab is currently Flutter Web PWA first.
+
+Why:
+
+- browser service workers and web push are the most mature runtime path in the repository
+- the operator-shell redesign is optimized for desktop and wide web layouts first
+
+## High-level topology
 
 ```mermaid
 flowchart LR
     User[User in Browser]
-    UI[Flutter Web UI]
+    Shell[LabShell]
+    Left[Operator Rail]
+    Center[Task Workspace]
+    Right[Runtime Diagnostics]
+    Agenda[AgendaProvider]
+    Runtime[RuntimeDebugProvider]
     LocalState[SharedPreferences Local Store]
     Sync[TaskSyncService]
     Auth[Supabase Auth]
     DB[(Supabase Postgres)]
     Edge[Supabase Edge Functions]
     Worker[Cloudflare Notify Worker]
-    SW[Browser Service Worker]
     Push[Push Provider]
+    SW[Browser Service Worker]
 
-    User --> UI
-    UI --> LocalState
-    UI --> Sync
+    User --> Shell
+    Shell --> Left
+    Shell --> Center
+    Shell --> Right
+    Center --> Agenda
+    Left --> Agenda
+    Left --> Runtime
+    Right --> Runtime
+    Agenda --> LocalState
+    Agenda --> Sync
     Sync --> Auth
     Sync --> DB
-    UI --> Edge
+    Center --> Edge
     Edge --> DB
     Worker --> DB
     Worker --> Push
@@ -88,74 +103,153 @@ flowchart LR
     SW --> User
 ```
 
-## Component Breakdown
+## Client shell architecture
 
-## 1. Flutter client
+### 1. Application bootstrap
 
 Primary files:
 
 - `lib/main.dart`
-- `lib/screens/task_list.dart`
-- `lib/providers/agenda_provider.dart`
+- `lib/theme/lab_theme.dart`
 
 Responsibilities:
 
-- initialize Supabase and the app dependency graph
-- render the task list and task editing interactions
-- manage authenticated vs anonymous behavior
-- trigger sync and push registration on auth events
+- initialize Supabase
+- construct the shared dependency graph
+- provide both `AgendaProvider` and `RuntimeDebugProvider`
+- launch the lab shell instead of the legacy centered screen
 
-### UI surface currently implemented
+### 2. Root visual shell
 
-- create task
-- edit task
-- delete task
-- toggle completion
-- search tasks
-- filter tasks
-- login / signup / OTP verification
-- anonymous-task adoption or discard after login
+Primary file:
 
-## 2. Local persistence layer
+- `lib/screens/lab_shell.dart`
+
+Responsibilities:
+
+- own the responsive three-pane layout
+- keep the operator rail and diagnostics visible on wide screens
+- degrade rails into drawers on narrow screens without changing the core ownership model
+
+### 3. Operator Rail
+
+Primary file:
+
+- `lib/widgets/lab/lab_left_rail.dart`
+
+Responsibilities:
+
+- session and auth actions
+- manual sync trigger
+- persistent task filters
+- anonymous-task review and reconciliation controls
+- reserved scenario-control surface for future fault injection
+
+Architectural significance:
+
+This rail is the durable home for controls that used to leak into transient dialogs or the workspace header.
+
+### 4. Task Workspace
+
+Primary file:
+
+- `lib/widgets/lab/task_workspace.dart`
+
+Responsibilities:
+
+- canonical task list and selection workflow
+- search and task manipulation
+- create, edit, delete, and completion actions
+- auth-state reaction for startup sync, push registration, and anonymous-task decision flow
+
+Architectural significance:
+
+This is now the active center pane.
+`lib/screens/task_list.dart` remains only as a compatibility wrapper.
+
+### 5. Runtime Diagnostics rail
+
+Primary files:
+
+- `lib/widgets/debug/sync_debug_panel.dart`
+- `lib/widgets/debug/debug_status_card.dart`
+
+Responsibilities:
+
+- render connectivity and sync lifecycle state
+- show explicit last success, skip, partial, and failure outcomes
+- compare session truth with cached identity
+- surface local dirty, deleted, and anonymous counts
+- render push permission and subscription state
+- retain a short runtime event timeline
+- reserve future UI slots for queued, sending, acknowledged, failed, and conflict operation states
+
+### 6. Runtime diagnostics model
+
+Primary files:
+
+- `lib/providers/runtime_debug_provider.dart`
+- `lib/models/runtime_debug_state.dart`
+- `lib/models/runtime_event.dart`
+
+Responsibilities:
+
+- hold the UI-facing diagnostics snapshot
+- normalize connectivity, auth, sync, local state, and push state into one renderable model
+- publish runtime events that can be inspected in the diagnostics rail
+
+Architectural significance:
+
+The debug rail is now backed by explicit state rather than by ad hoc logs.
+
+## Core application layers
+
+### 1. Local persistence layer
 
 Primary file:
 
 - `lib/repositories/tasks_repository.dart`
 
-Storage model:
+Current model:
 
-- SharedPreferences under a single `tasks` key
-- task list serialized as JSON strings
+- SharedPreferences stores the task list under a single key
+- task state is serialized as JSON strings
 
-Current tradeoff:
+Tradeoff:
 
-- simple and good enough for a small offline prototype
-- not yet suitable for a full outbox, event log, or large local dataset
+- simple and workable for the current prototype
+- not strong enough yet for a durable outbox, operation log, or richer local inspection model
 
-## 3. Task model and local metadata
+### 2. Task model and metadata
 
 Primary file:
 
 - `lib/models/task.dart`
 
-Domain data:
+Current role:
 
-- title, start time, duration, completion state, priority, description, tags
+- represent task content and local sync metadata
+- derive runtime status from time and completion state
+- mark local mutations as dirty or deleted for later reconciliation
 
-Sync data:
+Current limitation:
 
-- `syncStatus`
-- `lastModifiedAt`
-- `createdAt`
-- `updatedAt`
-- `userId`
+the model still carries more fidelity than the current sync contract actually transmits, which is one reason the explicit outbox remains the next major structural step
 
-Important current behavior:
+### 3. Provider orchestration
 
-- the model derives `status` dynamically from time and completion state
-- local mutations call `dirty()` or `markAsDeleted()` to participate in sync
+Primary file:
 
-## 4. Sync engine
+- `lib/providers/agenda_provider.dart`
+
+Responsibilities:
+
+- manage task collection, selection, filter, and search state
+- coordinate local persistence and sync triggers
+- mirror user identity locally for convenience
+- publish task counts into the runtime diagnostics model
+
+### 4. Sync engine
 
 Primary file:
 
@@ -163,44 +257,22 @@ Primary file:
 
 Current responsibilities:
 
-- verify connectivity
-- require an authenticated session before cloud sync
-- replay local deletions
-- reconcile local dirty tasks with remote state
-- fetch the remote canonical task set
-- preserve only unsynced local tasks that still need future replay
+- verify connectivity and authenticated session presence
+- replay tombstoned deletions
+- reconcile dirty tasks against remote state
+- fetch remote tasks and write back a merged canonical local list
+- publish sync outcomes into the runtime diagnostics model
 
 Current reconciliation rule:
 
-- local update wins only when `lastModifiedAt` is newer than the remote task timestamp
+- local changes win only when `lastModifiedAt` is newer than the remote timestamp
 - otherwise the remote copy replaces the local one
 
-This is still a lightweight reconciliation pass, not yet a full durable outbox protocol.
+Important constraint:
 
-### Current sync lifecycle
+This is still a task-based reconciliation pass, not a true outbox or per-operation replay protocol.
 
-```mermaid
-sequenceDiagram
-    participant Client
-    participant LocalStore
-    participant Sync as TaskSyncService
-    participant Remote as Supabase tasks table
-
-    Client->>LocalStore: save local mutation
-    Client->>Sync: trigger sync
-    Sync->>Sync: check connectivity + auth session
-    Sync->>Remote: replay deletes
-    Sync->>Remote: fetch task by id for dirty tasks
-    alt local task is newer
-        Sync->>Remote: update task
-    else remote task is newer or equal
-        Sync->>Sync: replace local copy with remote copy
-    end
-    Sync->>Remote: fetch all remote tasks
-    Sync->>LocalStore: save canonical merged state
-```
-
-## 5. Session and identity handling
+### 5. Session and identity handling
 
 Primary files:
 
@@ -210,17 +282,12 @@ Primary files:
 
 Responsibilities:
 
-- derive cloud eligibility from Supabase auth state
-- mirror user id locally for convenience only
-- load existing authenticated sessions on startup
-- clear stale local identity when no active session exists
+- restore and clear cached local identity
+- align UI behavior with Supabase auth state
+- trigger authenticated startup sync and push registration
+- support login, signup, and OTP verification flows
 
-Important current behavior:
-
-- startup sync is explicitly triggered for restored sessions
-- logout clears local tasks and attempts bounded push cleanup
-
-## 6. Push registration and browser runtime
+### 6. Push registration and browser runtime
 
 Primary files:
 
@@ -232,17 +299,13 @@ Primary files:
 
 Responsibilities:
 
-- request notification permission
-- register the browser service worker
-- create and remove web push subscriptions
+- prime notification permission on web
+- register the service worker
+- create and remove browser push subscriptions
 - persist subscriptions through backend functions
-- display notifications inside the browser service worker
+- surface push state in the diagnostics model
 
-Important deployment detail:
-
-- custom push logic is merged into Flutter's generated release service worker during build
-
-## 7. Supabase backend surface
+### 7. Supabase backend surface
 
 Primary files:
 
@@ -254,22 +317,12 @@ Primary files:
 Responsibilities:
 
 - store tasks and push subscriptions
-- enforce per-user access through RLS
-- provide notification-selection RPCs
+- enforce per-user access with RLS
+- expose notification-selection RPCs
 - save and remove browser subscriptions
-- support on-demand push dispatch for the current user
+- support the on-demand push path for the current authenticated user
 
-Current database entities:
-
-- `tasks`
-- `push_subscriptions`
-
-Current RPCs:
-
-- `get_pending_notifications(now)`
-- `get_my_pending_notifications(now)`
-
-## 8. Scheduled notification worker
+### 8. Scheduled notification worker
 
 Primary file:
 
@@ -277,64 +330,37 @@ Primary file:
 
 Responsibilities:
 
-- poll pending notifications every 5 minutes
-- send push payloads to each active subscription
+- poll pending notifications every five minutes
+- send push payloads to all active subscriptions for the relevant user
 - mark tasks as notified after successful provider acceptance
-- remove stale subscriptions on `404` or `410`
+- delete stale subscriptions when providers return `404` or `410`
 
-Current semantics:
-
-- best-effort scheduled delivery
-- stale subscription cleanup is implemented
-- there is no separate delivery-attempt table yet
-
-### Current notification flow
-
-```mermaid
-sequenceDiagram
-    participant App as Flutter App
-    participant DB as Supabase DB
-    participant Worker as Cloudflare Worker
-    participant Push as Push Provider
-    participant Browser as Service Worker
-
-    App->>DB: save task with notify_at
-    App->>DB: save browser subscription
-    Worker->>DB: fetch pending notifications
-    Worker->>Push: send push request
-    alt provider accepts push
-        Worker->>DB: mark notification_sent = true
-        Push-->>Browser: deliver notification
-    else provider returns 404 or 410
-        Worker->>DB: delete stale subscription
-    end
-```
-
-## State Ownership
+## State ownership
 
 | Concern | Current source of truth | Notes |
 | --- | --- | --- |
-| Authenticated session | Supabase auth | Local `userId` is only a mirror |
-| Anonymous task state | Local SharedPreferences | Exists before login |
-| Authenticated canonical task state | Supabase `tasks` table | Pulled back during sync |
-| Local unsynced mutations | SharedPreferences task list | Not yet a separate outbox |
+| Authenticated session | Supabase auth | Cached `userId` is only a mirror |
+| Cached identity | SharedPreferences | UI comparison context only |
+| Local task snapshot | SharedPreferences task list | Includes unsynced local mutations |
+| Authenticated canonical tasks | Supabase `tasks` table | Pulled back during sync |
+| Runtime diagnostics state | `RuntimeDebugProvider` | UI-facing evidence model |
 | Push subscription per browser profile | Supabase `push_subscriptions` | One account can have multiple subscriptions |
 | Notification dispatch timing | Supabase + Cloudflare Worker cron | Current cadence is every 5 minutes |
 
-## Deployment Architecture
+## Deployment architecture
 
-## Frontend
+### Frontend
 
 - GitHub Actions builds Flutter web
 - `--pwa-strategy=offline-first` is used explicitly
-- release build is published to GitHub Pages
+- release output is published to GitHub Pages
 
-## Worker
+### Worker
 
 - GitHub Actions deploys the Cloudflare Worker with Wrangler
-- cron schedule runs every 5 minutes
+- cron schedule runs every five minutes
 
-## Environment model
+### Environment model
 
 Client-facing values:
 
@@ -344,40 +370,36 @@ Client-facing values:
 
 Server-side values:
 
-- `SUPABASE_SERVICE_ROLE_KEY` or worker service-role secret
+- `SUPABASE_SERVICE_ROLE_KEY`
 - `VAPID_PRIVATE_KEY`
 
-## Current Constraints
+## What the shell transformation solved
 
-The architecture is intentionally small, but it still has important gaps.
+- the app now has durable ownership for operator controls
+- runtime evidence is visible without opening logs
+- the center pane is clearly the canonical task workspace
+- the shell already reserves UI structure for future outbox and conflict surfaces
 
-### What it does well today
+## What is still missing
 
-- demonstrates local-first task state
-- demonstrates authenticated sync and backend ownership
-- demonstrates scheduled web-push delivery
-- demonstrates stale subscription cleanup
+- explicit operation outbox semantics
+- per-operation acknowledgement, retry, and failure state
+- user-visible conflict capture and resolution
+- fault-injection controls in the operator rail
+- structured logs and metrics beyond the in-app panel
 
-### What it does not yet do well
+## Planned evolution
 
-- durable operation outbox
-- explicit retry and backoff policy
-- conflict visibility and resolution
-- structured observability
-- repeatable experiment toggles
-- broad automated coverage
-
-## Planned Architectural Evolution
-
-The next meaningful phase is not more UI. It is deeper system control.
+The next meaningful phase is deeper system control, not another shell redesign.
 
 Recommended evolution path:
 
-1. introduce a durable outbox instead of implicit dirty-object sync
-2. add explicit conflict state and conflict visibility
-3. add structured logs, metrics, and a debug surface
-4. add failure injection paths and scenario scripts
-5. add audit tables for sync events and notification attempts
+1. introduce a durable outbox instead of implicit dirty-task replay
+2. define per-operation states such as queued, sending, acknowledged, failed, and conflict
+3. connect those states to the placeholders already reserved in the diagnostics rail
+4. add structured logs, metrics, and richer evidence trails
+5. add failure injection paths and scenario tooling
+6. add audit tables for sync events and notification attempts
 
 ## Why this architecture matters
 
@@ -389,4 +411,5 @@ This repository is valuable because it studies a common SaaS boundary that looks
 - scheduled backend work
 - eventual user-visible convergence
 
-The architecture is intentionally small enough to understand, but rich enough to reproduce the kinds of inconsistencies that appear once real users start behaving like real users.
+The architecture is intentionally small enough to understand and now structured enough to observe.
+The next step is to make its reliability semantics explicit, durable, and testable.
