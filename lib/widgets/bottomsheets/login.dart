@@ -71,13 +71,16 @@ class _LoginBottomSheetState extends State<LoginBottomSheet> {
   }
 
   Future<void> _login() async {
+    final runtimeDebug = context.read<RuntimeDebugProvider>();
+
     if (!await _validateCredentials()) {
       return;
     }
 
+    if (!mounted) return;
+
     final email = _emailController.text.trim();
     final password = _passwordController.text;
-    final runtimeDebug = context.read<RuntimeDebugProvider>();
 
     setState(() {
       _loading = true;
@@ -121,13 +124,16 @@ class _LoginBottomSheetState extends State<LoginBottomSheet> {
   }
 
   Future<void> _signUp() async {
+    final runtimeDebug = context.read<RuntimeDebugProvider>();
+
     if (!await _validateCredentials()) {
       return;
     }
 
+    if (!mounted) return;
+
     final email = _emailController.text.trim();
     final password = _passwordController.text;
-    final runtimeDebug = context.read<RuntimeDebugProvider>();
 
     setState(() {
       _loading = true;
