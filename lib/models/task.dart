@@ -36,10 +36,10 @@ class TaskModel {
     this.completedAt,
     String? id,
     DateTime? beginsAt,
-    DateTime? createdAt,
-    DateTime? updatedAt,
-    DateTime? lastModifiedAt,
-    String? userId,
+    this.createdAt,
+    this.updatedAt,
+    this.lastModifiedAt,
+    this.userId,
   }) : id = id ?? const Uuid().v4(),
        beginsAt = beginsAt ?? DateTime.now();
 
@@ -159,6 +159,11 @@ class TaskModel {
     String? description,
     TaskPriority? priority,
     List<String>? tags,
+    SyncStatus? syncStatus,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    DateTime? lastModifiedAt,
+    String? userId,
   }) {
     return TaskModel(
       id: id ?? this.id,
@@ -170,6 +175,11 @@ class TaskModel {
       description: description ?? this.description,
       priority: priority ?? this.priority,
       tags: tags ?? List.from(this.tags),
+      syncStatus: syncStatus ?? this.syncStatus,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      lastModifiedAt: lastModifiedAt ?? this.lastModifiedAt,
+      userId: userId ?? this.userId,
     );
   }
 
