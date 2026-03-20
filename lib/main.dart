@@ -4,10 +4,12 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:todo_flutter/helpers/app_mode_helper.dart';
 import 'package:todo_flutter/keys.dart';
 import 'package:todo_flutter/providers/agenda_provider.dart';
+import 'package:todo_flutter/providers/runtime_debug_provider.dart';
 import 'package:todo_flutter/repositories/tasks_repository.dart';
-import 'package:todo_flutter/screens/task_list.dart';
+import 'package:todo_flutter/screens/lab_shell.dart';
 import 'package:todo_flutter/services/task_sync_service.dart';
 import 'package:todo_flutter/services/user_session_service.dart';
+import 'package:todo_flutter/theme/lab_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -37,28 +39,62 @@ void main() async {
   runApp(const MyApp());
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
 
-  // This widget is the root of your application.
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  late final TasksRepository _tasksRepository;
+  late final RuntimeDebugProvider _runtimeDebugProvider;
+  late final TaskSyncService _taskSyncService;
+  late final UserSessionService _userSessionService;
+
+  @override
+  void initState() {
+    super.initState();
+    _tasksRepository = TasksSharedPreferencesRepository();
+    _runtimeDebugProvider = RuntimeDebugProvider();
+    _taskSyncService = TaskSyncService(
+      _tasksRepository,
+      Supabase.instance.client,
+      runtimeDebug: _runtimeDebugProvider,
+    );
+    _userSessionService = UserSessionService(
+      runtimeDebug: _runtimeDebugProvider,
+    );
+  }
+
+  @override
+  void dispose() {
+    _runtimeDebugProvider.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Initialize the tasks repository
-    final tasksRepository = TasksSharedPreferencesRepository();
-    return ChangeNotifierProvider(
-      create: (context) => AgendaProvider(
-        tasksRepository,
-        TaskSyncService(tasksRepository, Supabase.instance.client),
-        UserSessionService(),
-      ),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider<RuntimeDebugProvider>.value(
+          value: _runtimeDebugProvider,
+        ),
+        ChangeNotifierProvider(
+          create: (context) => AgendaProvider(
+            _tasksRepository,
+            _taskSyncService,
+            _userSessionService,
+            runtimeDebug: _runtimeDebugProvider,
+          ),
+        ),
+      ],
       child: MaterialApp(
         navigatorKey: navigatorKey,
         debugShowCheckedModeBanner: false,
         title: 'Agenda',
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        ),
-        home: const TaskList(),
+        theme: buildLabTheme(),
+        home: const LabShell(),
       ),
     );
   }

@@ -1,7 +1,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:todo_flutter/helpers/web_push_helper.dart';
+import 'package:todo_flutter/models/runtime_event.dart';
+import 'package:todo_flutter/providers/runtime_debug_provider.dart';
 import 'package:todo_flutter/widgets/forms/otp_verify_form.dart';
 
 enum _AuthAction { login, signUp }
@@ -74,6 +77,7 @@ class _LoginBottomSheetState extends State<LoginBottomSheet> {
 
     final email = _emailController.text.trim();
     final password = _passwordController.text;
+    final runtimeDebug = context.read<RuntimeDebugProvider>();
 
     setState(() {
       _loading = true;
@@ -81,9 +85,14 @@ class _LoginBottomSheetState extends State<LoginBottomSheet> {
       _error = null;
     });
 
+    runtimeDebug.addEvent(
+      category: RuntimeEventCategory.auth,
+      message: 'Attempting password login.',
+    );
+
     try {
       if (kIsWeb) {
-        await primeWebPushPermission();
+        await primeWebPushPermission(runtimeDebug: runtimeDebug);
       }
 
       final response = await Supabase.instance.client.auth.signInWithPassword(
@@ -96,6 +105,12 @@ class _LoginBottomSheetState extends State<LoginBottomSheet> {
       }
       throw AuthException('No user found');
     } catch (error) {
+      runtimeDebug.addEvent(
+        category: RuntimeEventCategory.auth,
+        message: 'Login failed.',
+        detail: _formatAuthError(error),
+        level: RuntimeEventLevel.error,
+      );
       if (!mounted) return;
       setState(() {
         _loading = false;
@@ -112,12 +127,18 @@ class _LoginBottomSheetState extends State<LoginBottomSheet> {
 
     final email = _emailController.text.trim();
     final password = _passwordController.text;
+    final runtimeDebug = context.read<RuntimeDebugProvider>();
 
     setState(() {
       _loading = true;
       _activeAction = _AuthAction.signUp;
       _error = null;
     });
+
+    runtimeDebug.addEvent(
+      category: RuntimeEventCategory.auth,
+      message: 'Attempting sign up.',
+    );
 
     try {
       await Supabase.instance.client.auth.signUp(
@@ -135,6 +156,12 @@ class _LoginBottomSheetState extends State<LoginBottomSheet> {
 
       await _showOtpVerifyDialog();
     } catch (error) {
+      runtimeDebug.addEvent(
+        category: RuntimeEventCategory.auth,
+        message: 'Sign up failed.',
+        detail: _formatAuthError(error),
+        level: RuntimeEventLevel.error,
+      );
       if (!mounted) return;
       setState(() {
         _loading = false;
