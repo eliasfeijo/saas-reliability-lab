@@ -9,6 +9,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.32.4
       - uses: ./.github/actions/build-and-deploy-action
         with:
           baseHref: /saas-reliability-lab/
