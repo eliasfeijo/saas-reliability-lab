@@ -5,7 +5,6 @@ import 'package:todo_flutter/controllers/task_filter_controller.dart';
 import 'package:todo_flutter/controllers/task_selection_controller.dart';
 import 'package:todo_flutter/models/task.dart';
 import 'package:todo_flutter/repositories/tasks_repository.dart';
-import 'package:todo_flutter/services/push_notification_service.dart';
 import 'package:todo_flutter/services/task_sync_service.dart';
 import 'package:todo_flutter/services/user_session_service.dart';
 
@@ -18,8 +17,6 @@ class AgendaProvider extends ChangeNotifier {
 
   // User session service for managing user sessions
   final UserSessionService _userSession;
-
-  final PushNotificationService _pushNotificationService;
 
   // Filter controller for managing task filters
   final _filterController = TaskFilterController();
@@ -38,12 +35,7 @@ class AgendaProvider extends ChangeNotifier {
   bool _isLoading = false;
 
   // Constructor
-  AgendaProvider(
-    this._repository,
-    this._taskSyncService,
-    this._pushNotificationService,
-    this._userSession,
-  );
+  AgendaProvider(this._repository, this._taskSyncService, this._userSession);
 
   // Getters
 
@@ -139,10 +131,7 @@ class AgendaProvider extends ChangeNotifier {
     _tasks.add(task);
     await _repository.saveTasks(_tasks);
     notifyListeners();
-    _triggerSync(
-      task,
-      sendNotifications: true,
-    ); // Trigger sync immediately and send notifications
+    _triggerSync(task); // Trigger sync immediately
   }
 
   Future<void> updateTask(TaskModel updatedTask) async {
@@ -308,7 +297,7 @@ class AgendaProvider extends ChangeNotifier {
   }
 
   // Trigger sync for a specific task
-  void _triggerSync(TaskModel task, {bool sendNotifications = false}) {
+  void _triggerSync(TaskModel task) {
     if (_userId == null) {
       debugPrint('No user ID found. Skipping sync for task');
       return;
@@ -331,9 +320,6 @@ class AgendaProvider extends ChangeNotifier {
         await loadTasks(); // Reload tasks after sync
         _isLoading = false;
         notifyListeners();
-        if (sendNotifications) {
-          await _pushNotificationService.sendPendingNotifications();
-        }
       },
     );
   }

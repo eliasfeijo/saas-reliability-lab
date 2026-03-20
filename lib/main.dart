@@ -6,7 +6,6 @@ import 'package:todo_flutter/keys.dart';
 import 'package:todo_flutter/providers/agenda_provider.dart';
 import 'package:todo_flutter/repositories/tasks_repository.dart';
 import 'package:todo_flutter/screens/task_list.dart';
-import 'package:todo_flutter/services/push_notification_service.dart';
 import 'package:todo_flutter/services/task_sync_service.dart';
 import 'package:todo_flutter/services/user_session_service.dart';
 
@@ -50,7 +49,6 @@ class MyApp extends StatelessWidget {
       create: (context) => AgendaProvider(
         tasksRepository,
         TaskSyncService(tasksRepository, Supabase.instance.client),
-        PushNotificationService(Supabase.instance.client),
         UserSessionService(),
       ),
       child: MaterialApp(

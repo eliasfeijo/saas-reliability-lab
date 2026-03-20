@@ -35,9 +35,7 @@ external JSPromise<PushSubscriptionJSON> _registerPush(JSString vapidPublicKey);
 
 Future<String?> primeWebPushPermission() async {
   try {
-    final permission = await _requestPushPermission().toDart.timeout(
-      _pushRegistrationTimeout,
-    );
+    final permission = await _requestPushPermission().toDart;
     return permission.toDart;
   } catch (e) {
     debugPrint('[Push] Failed to request notification permission: $e');
