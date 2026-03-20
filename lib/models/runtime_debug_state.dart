@@ -47,6 +47,14 @@ class RuntimeDebugState {
     this.lastSyncMessage,
     this.lastSyncStartedAt,
     this.lastSyncCompletedAt,
+    this.lastSuccessfulSyncAt,
+    this.lastSuccessfulSyncMessage,
+    this.lastSkippedSyncAt,
+    this.lastSkippedSyncMessage,
+    this.lastPartialSyncAt,
+    this.lastPartialSyncMessage,
+    this.lastFailedSyncAt,
+    this.lastFailedSyncMessage,
     this.dirtyTaskCount = 0,
     this.deletedTaskCount = 0,
     this.anonymousTaskCount = 0,
@@ -67,6 +75,14 @@ class RuntimeDebugState {
   final String? lastSyncMessage;
   final DateTime? lastSyncStartedAt;
   final DateTime? lastSyncCompletedAt;
+  final DateTime? lastSuccessfulSyncAt;
+  final String? lastSuccessfulSyncMessage;
+  final DateTime? lastSkippedSyncAt;
+  final String? lastSkippedSyncMessage;
+  final DateTime? lastPartialSyncAt;
+  final String? lastPartialSyncMessage;
+  final DateTime? lastFailedSyncAt;
+  final String? lastFailedSyncMessage;
   final int dirtyTaskCount;
   final int deletedTaskCount;
   final int anonymousTaskCount;
@@ -87,6 +103,14 @@ class RuntimeDebugState {
     Object? lastSyncMessage = _runtimeDebugUnset,
     Object? lastSyncStartedAt = _runtimeDebugUnset,
     Object? lastSyncCompletedAt = _runtimeDebugUnset,
+    Object? lastSuccessfulSyncAt = _runtimeDebugUnset,
+    Object? lastSuccessfulSyncMessage = _runtimeDebugUnset,
+    Object? lastSkippedSyncAt = _runtimeDebugUnset,
+    Object? lastSkippedSyncMessage = _runtimeDebugUnset,
+    Object? lastPartialSyncAt = _runtimeDebugUnset,
+    Object? lastPartialSyncMessage = _runtimeDebugUnset,
+    Object? lastFailedSyncAt = _runtimeDebugUnset,
+    Object? lastFailedSyncMessage = _runtimeDebugUnset,
     int? dirtyTaskCount,
     int? deletedTaskCount,
     int? anonymousTaskCount,
@@ -118,6 +142,34 @@ class RuntimeDebugState {
       lastSyncCompletedAt: identical(lastSyncCompletedAt, _runtimeDebugUnset)
           ? this.lastSyncCompletedAt
           : lastSyncCompletedAt as DateTime?,
+      lastSuccessfulSyncAt: identical(lastSuccessfulSyncAt, _runtimeDebugUnset)
+          ? this.lastSuccessfulSyncAt
+          : lastSuccessfulSyncAt as DateTime?,
+      lastSuccessfulSyncMessage:
+          identical(lastSuccessfulSyncMessage, _runtimeDebugUnset)
+          ? this.lastSuccessfulSyncMessage
+          : lastSuccessfulSyncMessage as String?,
+      lastSkippedSyncAt: identical(lastSkippedSyncAt, _runtimeDebugUnset)
+          ? this.lastSkippedSyncAt
+          : lastSkippedSyncAt as DateTime?,
+      lastSkippedSyncMessage:
+          identical(lastSkippedSyncMessage, _runtimeDebugUnset)
+          ? this.lastSkippedSyncMessage
+          : lastSkippedSyncMessage as String?,
+      lastPartialSyncAt: identical(lastPartialSyncAt, _runtimeDebugUnset)
+          ? this.lastPartialSyncAt
+          : lastPartialSyncAt as DateTime?,
+      lastPartialSyncMessage:
+          identical(lastPartialSyncMessage, _runtimeDebugUnset)
+          ? this.lastPartialSyncMessage
+          : lastPartialSyncMessage as String?,
+      lastFailedSyncAt: identical(lastFailedSyncAt, _runtimeDebugUnset)
+          ? this.lastFailedSyncAt
+          : lastFailedSyncAt as DateTime?,
+      lastFailedSyncMessage:
+          identical(lastFailedSyncMessage, _runtimeDebugUnset)
+          ? this.lastFailedSyncMessage
+          : lastFailedSyncMessage as String?,
       dirtyTaskCount: dirtyTaskCount ?? this.dirtyTaskCount,
       deletedTaskCount: deletedTaskCount ?? this.deletedTaskCount,
       anonymousTaskCount: anonymousTaskCount ?? this.anonymousTaskCount,

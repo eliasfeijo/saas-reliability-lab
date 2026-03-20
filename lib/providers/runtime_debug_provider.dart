@@ -171,6 +171,8 @@ class RuntimeDebugProvider extends ChangeNotifier {
         lastSyncResult: RuntimeSyncResult.success,
         lastSyncCompletedAt: DateTime.now(),
         lastSyncMessage: message,
+        lastSuccessfulSyncAt: DateTime.now(),
+        lastSuccessfulSyncMessage: message,
       ),
     );
     addEvent(category: RuntimeEventCategory.sync, message: message);
@@ -186,6 +188,8 @@ class RuntimeDebugProvider extends ChangeNotifier {
         lastSyncResult: RuntimeSyncResult.skipped,
         lastSyncCompletedAt: DateTime.now(),
         lastSyncMessage: message,
+        lastSkippedSyncAt: DateTime.now(),
+        lastSkippedSyncMessage: message,
       ),
     );
     addEvent(
@@ -202,6 +206,8 @@ class RuntimeDebugProvider extends ChangeNotifier {
         lastSyncResult: RuntimeSyncResult.partial,
         lastSyncCompletedAt: DateTime.now(),
         lastSyncMessage: message,
+        lastPartialSyncAt: DateTime.now(),
+        lastPartialSyncMessage: message,
       ),
     );
     addEvent(
@@ -218,6 +224,8 @@ class RuntimeDebugProvider extends ChangeNotifier {
         lastSyncResult: RuntimeSyncResult.failed,
         lastSyncCompletedAt: DateTime.now(),
         lastSyncMessage: message,
+        lastFailedSyncAt: DateTime.now(),
+        lastFailedSyncMessage: message,
       ),
     );
     addEvent(

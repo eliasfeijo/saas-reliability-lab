@@ -47,6 +47,28 @@ class SyncDebugPanel extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _statusBadge(
+                          context,
+                          state.connectivityStatus.label,
+                          _connectivityColor(state.connectivityStatus, theme),
+                        ),
+                        _statusBadge(
+                          context,
+                          state.syncPhase.label,
+                          _syncAccent(state.syncPhase, theme),
+                        ),
+                        _statusBadge(
+                          context,
+                          state.lastSyncResult.label,
+                          _resultColor(state.lastSyncResult, theme),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
                     _statusRow(
                       context,
                       label: 'Connectivity',
@@ -84,6 +106,46 @@ class SyncDebugPanel extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               DebugStatusCard(
+                title: 'Sync Outcomes',
+                subtitle: 'Most recent outcome recorded for each sync path.',
+                leading: const Icon(Icons.fact_check_outlined),
+                accentColor: _resultColor(state.lastSyncResult, theme),
+                child: Column(
+                  children: [
+                    _outcomeTile(
+                      context,
+                      title: 'Successful sync',
+                      timestamp: state.lastSuccessfulSyncAt,
+                      message: state.lastSuccessfulSyncMessage,
+                      accent: theme.colorScheme.primary,
+                    ),
+                    _outcomeTile(
+                      context,
+                      title: 'Skipped sync',
+                      timestamp: state.lastSkippedSyncAt,
+                      message: state.lastSkippedSyncMessage,
+                      accent: theme.colorScheme.secondary,
+                    ),
+                    _outcomeTile(
+                      context,
+                      title: 'Partial sync',
+                      timestamp: state.lastPartialSyncAt,
+                      message: state.lastPartialSyncMessage,
+                      accent: theme.colorScheme.tertiary,
+                    ),
+                    _outcomeTile(
+                      context,
+                      title: 'Failed sync',
+                      timestamp: state.lastFailedSyncAt,
+                      message: state.lastFailedSyncMessage,
+                      accent: theme.colorScheme.error,
+                      isLast: true,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              DebugStatusCard(
                 title: 'Session Truth',
                 subtitle:
                     'Supabase auth state compared with cached local identity.',
@@ -111,8 +173,42 @@ class SyncDebugPanel extends StatelessWidget {
                     ),
                     _statusRow(
                       context,
+                      label: 'Identity check',
+                      value: _identityAlignment(state),
+                    ),
+                    _statusRow(
+                      context,
                       label: 'Initial load',
                       value: state.isInitialLoadRunning ? 'Running' : 'Settled',
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              DebugStatusCard(
+                title: 'Future Operation States',
+                subtitle:
+                    'Reserved space for the explicit outbox and conflict model.',
+                leading: const Icon(Icons.account_tree_outlined),
+                accentColor: theme.colorScheme.outline,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _placeholderStateChip(context, 'Queued'),
+                        _placeholderStateChip(context, 'Sending'),
+                        _placeholderStateChip(context, 'Acknowledged'),
+                        _placeholderStateChip(context, 'Failed'),
+                        _placeholderStateChip(context, 'Conflict'),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'The current sync engine is task-based rather than operation-based. These placeholders deliberately reserve UI real estate so the explicit outbox can land here without another shell redesign.',
+                      style: theme.textTheme.bodyMedium,
                     ),
                   ],
                 ),
@@ -182,8 +278,9 @@ class SyncDebugPanel extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               DebugStatusCard(
-                title: 'Recent Events',
-                subtitle: 'Most recent runtime events retained in memory.',
+                title: 'Event Timeline',
+                subtitle:
+                    'Recent runtime evidence retained in memory for inspection.',
                 leading: const Icon(Icons.history),
                 accentColor: theme.colorScheme.primary,
                 child: state.recentEvents.isEmpty
@@ -247,6 +344,43 @@ class SyncDebugPanel extends StatelessWidget {
     );
   }
 
+  Widget _outcomeTile(
+    BuildContext context, {
+    required String title,
+    required DateTime? timestamp,
+    required String? message,
+    required Color accent,
+    bool isLast = false,
+  }) {
+    final theme = Theme.of(context);
+
+    return Container(
+      margin: EdgeInsets.only(bottom: isLast ? 0 : 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: accent.withValues(alpha: 0.18)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: theme.textTheme.labelLarge?.copyWith(color: accent),
+          ),
+          const SizedBox(height: 4),
+          Text(_formatTimestamp(timestamp), style: theme.textTheme.bodySmall),
+          const SizedBox(height: 6),
+          Text(
+            message ?? 'Not recorded yet.',
+            style: theme.textTheme.bodyMedium,
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _eventTile(BuildContext context, RuntimeEvent event) {
     final theme = Theme.of(context);
 
@@ -260,19 +394,23 @@ class SyncDebugPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
             children: [
-              Text(event.category.label, style: theme.textTheme.labelLarge),
-              const Spacer(),
-              Text(
+              _statusBadge(
+                context,
+                event.category.label,
+                theme.colorScheme.primary,
+              ),
+              _statusBadge(
+                context,
                 event.level.label,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: _eventColor(event.level, theme),
-                ),
+                _eventColor(event.level, theme),
               ),
             ],
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 8),
           Text(event.message, style: theme.textTheme.bodyMedium),
           const SizedBox(height: 4),
           Text(
@@ -285,6 +423,35 @@ class SyncDebugPanel extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+
+  Widget _statusBadge(BuildContext context, String label, Color tone) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: tone.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: tone.withValues(alpha: 0.18)),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelLarge?.copyWith(color: tone),
+      ),
+    );
+  }
+
+  Widget _placeholderStateChip(BuildContext context, String label) {
+    final theme = Theme.of(context);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainer,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Text(label, style: theme.textTheme.labelLarge),
     );
   }
 
@@ -303,6 +470,32 @@ class SyncDebugPanel extends StatelessWidget {
     }
   }
 
+  Color _connectivityColor(ConnectivityStatus status, ThemeData theme) {
+    switch (status) {
+      case ConnectivityStatus.online:
+        return theme.colorScheme.primary;
+      case ConnectivityStatus.offline:
+        return theme.colorScheme.secondary;
+      case ConnectivityStatus.unknown:
+        return theme.colorScheme.outline;
+    }
+  }
+
+  Color _resultColor(RuntimeSyncResult result, ThemeData theme) {
+    switch (result) {
+      case RuntimeSyncResult.success:
+        return theme.colorScheme.primary;
+      case RuntimeSyncResult.skipped:
+        return theme.colorScheme.secondary;
+      case RuntimeSyncResult.partial:
+        return theme.colorScheme.tertiary;
+      case RuntimeSyncResult.failed:
+        return theme.colorScheme.error;
+      case RuntimeSyncResult.none:
+        return theme.colorScheme.outline;
+    }
+  }
+
   Color _eventColor(RuntimeEventLevel level, ThemeData theme) {
     switch (level) {
       case RuntimeEventLevel.info:
@@ -312,6 +505,22 @@ class SyncDebugPanel extends StatelessWidget {
       case RuntimeEventLevel.error:
         return theme.colorScheme.error;
     }
+  }
+
+  String _identityAlignment(RuntimeDebugState state) {
+    if (state.activeUserId == null && state.cachedUserId == null) {
+      return 'No identity loaded';
+    }
+    if (state.activeUserId == state.cachedUserId) {
+      return 'Matched';
+    }
+    if (state.activeUserId == null && state.cachedUserId != null) {
+      return 'Cached only';
+    }
+    if (state.activeUserId != null && state.cachedUserId == null) {
+      return 'Session only';
+    }
+    return 'Mismatch';
   }
 
   String _formatTimestamp(DateTime? timestamp) {
