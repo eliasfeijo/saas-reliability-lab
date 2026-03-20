@@ -4,6 +4,9 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:todo_flutter/controllers/debounce_controller.dart';
+import 'package:todo_flutter/models/runtime_debug_state.dart';
+import 'package:todo_flutter/models/runtime_event.dart';
+import 'package:todo_flutter/providers/runtime_debug_provider.dart';
 
 import '../models/task.dart';
 import '../repositories/tasks_repository.dart';
@@ -73,6 +76,7 @@ class TaskSyncService {
   final ConnectivityCheck _checkConnectivity;
   final SessionCheck _hasActiveSession;
   final DebounceController _debouncedSync;
+  final RuntimeDebugProvider? _runtimeDebug;
 
   TaskSyncService(
     this.repository,
@@ -81,6 +85,7 @@ class TaskSyncService {
     ConnectivityCheck? connectivityCheck,
     SessionCheck? hasActiveSession,
     DebounceController? debounceController,
+    RuntimeDebugProvider? runtimeDebug,
   }) : _remote = remote ?? SupabaseTaskRemoteDataSource(supabase),
        _checkConnectivity =
            connectivityCheck ?? Connectivity().checkConnectivity,
@@ -92,7 +97,8 @@ class TaskSyncService {
            }),
        _debouncedSync =
            debounceController ??
-           DebounceController(debounceDuration: const Duration(seconds: 3));
+           DebounceController(debounceDuration: const Duration(seconds: 3)),
+       _runtimeDebug = runtimeDebug;
 
   TaskSyncService.forTesting(
     this.repository, {
@@ -100,101 +106,152 @@ class TaskSyncService {
     required ConnectivityCheck connectivityCheck,
     required SessionCheck hasActiveSession,
     DebounceController? debounceController,
+    RuntimeDebugProvider? runtimeDebug,
   }) : _remote = remote,
        _checkConnectivity = connectivityCheck,
        _hasActiveSession = hasActiveSession,
        _debouncedSync =
            debounceController ??
-           DebounceController(debounceDuration: const Duration(seconds: 3));
+           DebounceController(debounceDuration: const Duration(seconds: 3)),
+       _runtimeDebug = runtimeDebug;
 
   Future<List<TaskModel>> syncAllTasks(List<TaskModel> tasks) async {
     final connectivityResult = await _checkConnectivity();
+    _runtimeDebug?.setConnectivityResults(connectivityResult, logEvent: false);
+    _runtimeDebug?.updateTaskCounts(tasks);
+
     if (_hasNoConnectivity(connectivityResult)) {
+      _runtimeDebug?.markSyncSkipped(
+        phase: RuntimeSyncPhase.offline,
+        message: 'No internet connection. Skipping sync.',
+      );
       debugPrint('No internet connection. Skipping sync.');
       return [];
     }
 
     if (!_hasActiveSession()) {
+      _runtimeDebug?.markSyncSkipped(
+        phase: RuntimeSyncPhase.blockedNoSession,
+        message: 'No authenticated session. Skipping sync.',
+      );
       debugPrint('No user session. Skipping sync.');
       return [];
     }
 
-    final syncedTasks = <TaskModel>[];
-    final remotelyConfirmedTaskIds = <String>{};
-    final workingTasks = [...tasks];
+    _runtimeDebug?.markSyncStarted(
+      'Synchronizing ${tasks.length} local task(s).',
+    );
 
-    final toDelete = workingTasks
-        .where((t) => t.syncStatus == SyncStatus.deleted)
-        .toList();
-    for (final task in toDelete) {
-      try {
-        await _remote.deleteTask(task.id);
-        workingTasks.removeWhere((t) => t.id == task.id);
-        task.syncStatus = SyncStatus.synced;
-        syncedTasks.add(task);
-      } catch (e) {
-        debugPrint('Delete error: $e');
-      }
-    }
-    await repository.saveTasks(workingTasks);
+    try {
+      final syncedTasks = <TaskModel>[];
+      final remotelyConfirmedTaskIds = <String>{};
+      final workingTasks = [...tasks];
+      var hadRecoverableErrors = false;
 
-    final dirty = workingTasks
-        .where((t) => t.syncStatus == SyncStatus.dirty)
-        .toList();
-    for (final task in dirty) {
-      try {
-        final remoteTask = await _remote.fetchTaskById(task.id);
-
-        if (remoteTask == null) {
-          await _remote.insertTask(task);
+      final toDelete = workingTasks
+          .where((t) => t.syncStatus == SyncStatus.deleted)
+          .toList();
+      for (final task in toDelete) {
+        try {
+          await _remote.deleteTask(task.id);
+          workingTasks.removeWhere((t) => t.id == task.id);
           task.syncStatus = SyncStatus.synced;
-          remotelyConfirmedTaskIds.add(task.id);
           syncedTasks.add(task);
-          continue;
+        } catch (e) {
+          hadRecoverableErrors = true;
+          _runtimeDebug?.addEvent(
+            category: RuntimeEventCategory.sync,
+            message: 'Failed to delete task ${task.title}.',
+            level: RuntimeEventLevel.warning,
+            detail: e.toString(),
+          );
+          debugPrint('Delete error: $e');
         }
+      }
+      await repository.saveTasks(workingTasks);
 
-        if (_isLocalTaskNewer(task, remoteTask)) {
-          await _remote.updateTask(task);
-          task.syncStatus = SyncStatus.synced;
-          remotelyConfirmedTaskIds.add(task.id);
-          syncedTasks.add(task);
-          continue;
+      final dirty = workingTasks
+          .where((t) => t.syncStatus == SyncStatus.dirty)
+          .toList();
+      for (final task in dirty) {
+        try {
+          final remoteTask = await _remote.fetchTaskById(task.id);
+
+          if (remoteTask == null) {
+            await _remote.insertTask(task);
+            task.syncStatus = SyncStatus.synced;
+            remotelyConfirmedTaskIds.add(task.id);
+            syncedTasks.add(task);
+            continue;
+          }
+
+          if (_isLocalTaskNewer(task, remoteTask)) {
+            await _remote.updateTask(task);
+            task.syncStatus = SyncStatus.synced;
+            remotelyConfirmedTaskIds.add(task.id);
+            syncedTasks.add(task);
+            continue;
+          }
+
+          _replaceTask(workingTasks, remoteTask);
+          _runtimeDebug?.addEvent(
+            category: RuntimeEventCategory.sync,
+            message: 'Remote task ${task.title} replaced stale local state.',
+          );
+          debugPrint(
+            'Remote task ${task.id} is newer or equal. Keeping remote version.',
+          );
+        } catch (e) {
+          hadRecoverableErrors = true;
+          _runtimeDebug?.addEvent(
+            category: RuntimeEventCategory.sync,
+            message: 'Failed to sync task ${task.title}.',
+            level: RuntimeEventLevel.warning,
+            detail: e.toString(),
+          );
+          debugPrint('Sync error: $e');
         }
-
-        _replaceTask(workingTasks, remoteTask);
-        debugPrint(
-          'Remote task ${task.id} is newer or equal. Keeping remote version.',
-        );
-      } catch (e) {
-        debugPrint('Sync error: $e');
       }
-    }
-    await repository.saveTasks(workingTasks);
+      await repository.saveTasks(workingTasks);
 
-    final remoteTasks = await _remote.fetchAllTasks();
-    final remoteTaskIds = remoteTasks.map((t) => t.id).toSet();
-    final merged = <String, TaskModel>{
-      for (final task in remoteTasks) task.id: task,
-    };
+      final remoteTasks = await _remote.fetchAllTasks();
+      final remoteTaskIds = remoteTasks.map((t) => t.id).toSet();
+      final merged = <String, TaskModel>{
+        for (final task in remoteTasks) task.id: task,
+      };
 
-    for (final task in workingTasks) {
-      final shouldKeepLocalTask =
-          task.syncStatus != SyncStatus.synced ||
-          remotelyConfirmedTaskIds.contains(task.id) &&
-              !remoteTaskIds.contains(task.id);
+      for (final task in workingTasks) {
+        final shouldKeepLocalTask =
+            task.syncStatus != SyncStatus.synced ||
+            remotelyConfirmedTaskIds.contains(task.id) &&
+                !remoteTaskIds.contains(task.id);
 
-      if (shouldKeepLocalTask) {
-        merged[task.id] = task;
+        if (shouldKeepLocalTask) {
+          merged[task.id] = task;
+        }
       }
+
+      final mergedTasks = merged.values.toList()
+        ..sort((a, b) => a.beginsAt.compareTo(b.beginsAt));
+
+      await repository.saveTasks(mergedTasks);
+      _runtimeDebug?.updateTaskCounts(mergedTasks);
+
+      final summary =
+          'Sync completed. ${syncedTasks.length} task(s) acknowledged.';
+      if (hadRecoverableErrors) {
+        _runtimeDebug?.markSyncPartial('$summary Some operations need review.');
+      } else {
+        _runtimeDebug?.markSyncSuccess(summary);
+      }
+
+      debugPrint('Sync completed. Synced ${syncedTasks.length} tasks.');
+
+      return syncedTasks;
+    } catch (e) {
+      _runtimeDebug?.markSyncFailure('Sync failed: $e');
+      rethrow;
     }
-
-    final mergedTasks = merged.values.toList()
-      ..sort((a, b) => a.beginsAt.compareTo(b.beginsAt));
-
-    await repository.saveTasks(mergedTasks);
-    debugPrint('Sync completed. Synced ${syncedTasks.length} tasks.');
-
-    return syncedTasks;
   }
 
   void debouncedSync(

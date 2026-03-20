@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:todo_flutter/controllers/task_filter_controller.dart';
 import 'package:todo_flutter/controllers/task_selection_controller.dart';
 import 'package:todo_flutter/models/task.dart';
+import 'package:todo_flutter/providers/runtime_debug_provider.dart';
 import 'package:todo_flutter/repositories/tasks_repository.dart';
 import 'package:todo_flutter/services/task_sync_service.dart';
 import 'package:todo_flutter/services/user_session_service.dart';
@@ -17,6 +18,7 @@ class AgendaProvider extends ChangeNotifier {
 
   // User session service for managing user sessions
   final UserSessionService _userSession;
+  final RuntimeDebugProvider? _runtimeDebug;
 
   // Filter controller for managing task filters
   final _filterController = TaskFilterController();
@@ -35,7 +37,12 @@ class AgendaProvider extends ChangeNotifier {
   bool _isLoading = false;
 
   // Constructor
-  AgendaProvider(this._repository, this._taskSyncService, this._userSession);
+  AgendaProvider(
+    this._repository,
+    this._taskSyncService,
+    this._userSession, {
+    RuntimeDebugProvider? runtimeDebug,
+  }) : _runtimeDebug = runtimeDebug;
 
   // Getters
 
@@ -80,6 +87,7 @@ class AgendaProvider extends ChangeNotifier {
   set tasks(List<TaskModel> tasks) {
     _tasks.clear();
     _tasks.addAll(tasks);
+    _publishTaskDebugState();
     notifyListeners();
   }
 
@@ -121,6 +129,7 @@ class AgendaProvider extends ChangeNotifier {
     _tasks
       ..clear()
       ..addAll(storedTasks);
+    _publishTaskDebugState();
     notifyListeners();
   }
 
@@ -130,6 +139,7 @@ class AgendaProvider extends ChangeNotifier {
     task.dirty(); // Mark task as dirty for sync
     _tasks.add(task);
     await _repository.saveTasks(_tasks);
+    _publishTaskDebugState();
     notifyListeners();
     _triggerSync(task); // Trigger sync immediately
   }
@@ -140,6 +150,7 @@ class AgendaProvider extends ChangeNotifier {
     if (index != -1) {
       _tasks[index] = updatedTask;
       await _repository.saveTasks(_tasks);
+      _publishTaskDebugState();
       notifyListeners();
       _triggerSync(updatedTask); // Trigger sync immediately
     }
@@ -159,6 +170,7 @@ class AgendaProvider extends ChangeNotifier {
       _selectionController.clear();
     }
     await _repository.saveTasks(_tasks);
+    _publishTaskDebugState();
     notifyListeners();
     _triggerSync(_tasks[index]); // Trigger sync immediately
   }
@@ -168,6 +180,7 @@ class AgendaProvider extends ChangeNotifier {
     if (index != -1) {
       _tasks[index].toggleCompletion();
       await _repository.saveTasks(_tasks);
+      _publishTaskDebugState();
       notifyListeners();
       _triggerSync(_tasks[index]); // Trigger sync immediately
     }
@@ -176,6 +189,7 @@ class AgendaProvider extends ChangeNotifier {
   Future<void> clearAllTasks() async {
     _tasks.clear();
     await _repository.clearTasks();
+    _publishTaskDebugState();
     notifyListeners();
   }
 
@@ -238,6 +252,7 @@ class AgendaProvider extends ChangeNotifier {
     }
 
     _tasks.removeWhere((task) => task.isCompleted);
+    _publishTaskDebugState();
     notifyListeners();
   }
 
@@ -330,6 +345,7 @@ class AgendaProvider extends ChangeNotifier {
       _tasks.removeWhere((t) => t.id == task.id);
     }
     await _repository.saveTasks(_tasks);
+    _publishTaskDebugState();
     notifyListeners();
   }
 
@@ -337,6 +353,7 @@ class AgendaProvider extends ChangeNotifier {
     // Clear all tasks from local storage
     _tasks.clear();
     await _repository.clearTasks();
+    _publishTaskDebugState();
     notifyListeners();
   }
 
@@ -347,8 +364,13 @@ class AgendaProvider extends ChangeNotifier {
       task.dirty(); // Mark as dirty for sync
     }
     await _repository.saveTasks(_tasks);
+    _publishTaskDebugState();
     notifyListeners();
     // Trigger sync for all tasks after taking ownership
     await syncAllTasks();
+  }
+
+  void _publishTaskDebugState() {
+    _runtimeDebug?.updateTaskCounts(_tasks);
   }
 }
