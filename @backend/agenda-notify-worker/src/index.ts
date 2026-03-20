@@ -33,7 +33,10 @@ interface PendingNotification {
 	auth: string;
 }
 
-async function sendPushNotifications(env: Env): Promise<Response> {
+async function sendPushNotifications(
+	env: Env,
+	trigger: string,
+): Promise<Response> {
 	if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE) {
 		return new Response("Environment variables not set", { status: 500 });
 	}
@@ -44,6 +47,7 @@ async function sendPushNotifications(env: Env): Promise<Response> {
 	const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE);
 
 	const now = new Date().toISOString();
+	console.log(`[notify-worker] Trigger=${trigger} now=${now}`);
 
 	const { data: tasks, error } = await supabase.rpc(
 		"get_pending_notifications",
@@ -59,6 +63,8 @@ async function sendPushNotifications(env: Env): Promise<Response> {
 		console.log("No tasks to notify");
 		return new Response("No tasks to notify", { status: 200 });
 	}
+
+	console.log(`[notify-worker] Found ${tasks.length} pending task(s)`);
 
 	// Log the number of successful notifications
 	let count = 0;
@@ -120,12 +126,20 @@ async function sendPushNotifications(env: Env): Promise<Response> {
 				.update({ notification_sent: true })
 				.eq("id", task.id);
 
+			console.log(
+				`[notify-worker] Sent notification for task ${task.id} (${task.title})`,
+			);
+
 			count++;
 		} catch (err) {
 			failed++;
 			console.error(`Push failed for task ${task.id}`, err);
 		}
 	}
+
+	console.log(
+		`[notify-worker] Run complete: sent=${count} failed=${failed} staleSubscriptionsDeleted=${staleSubscriptionsDeleted}`,
+	);
 
 	return new Response(
 		JSON.stringify({ sent: count, failed, staleSubscriptionsDeleted }),
@@ -142,7 +156,7 @@ export default {
 		env: Env,
 		ctx: ExecutionContext,
 	): Promise<Response> {
-		return sendPushNotifications(env);
+		return sendPushNotifications(env, `fetch ${request.method}`);
 	},
 
 	async scheduled(
@@ -150,6 +164,6 @@ export default {
 		env: Env,
 		ctx: ExecutionContext,
 	) {
-		return sendPushNotifications(env);
+		return sendPushNotifications(env, `cron ${controller.cron}`);
 	},
 };
