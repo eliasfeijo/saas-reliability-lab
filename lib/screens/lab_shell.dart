@@ -7,6 +7,7 @@ class LabShell extends StatelessWidget {
   const LabShell({super.key});
 
   static const double _wideBreakpoint = 1180;
+  static const double _workspaceMaxWidth = 1040;
 
   @override
   Widget build(BuildContext context) {
@@ -57,7 +58,9 @@ class LabShell extends StatelessWidget {
                       children: const [
                         SizedBox(width: 280, child: LabLeftRail()),
                         SizedBox(width: 20),
-                        Expanded(child: TaskWorkspace()),
+                        Expanded(
+                          child: _WorkspaceCanvas(child: TaskWorkspace()),
+                        ),
                         SizedBox(width: 20),
                         SizedBox(width: 360, child: SyncDebugPanel()),
                       ],
@@ -67,6 +70,32 @@ class LabShell extends StatelessWidget {
                     padding: EdgeInsets.fromLTRB(16, 0, 16, 16),
                     child: TaskWorkspace(),
                   ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _WorkspaceCanvas extends StatelessWidget {
+  const _WorkspaceCanvas({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth < LabShell._workspaceMaxWidth
+            ? constraints.maxWidth
+            : LabShell._workspaceMaxWidth;
+
+        return Align(
+          alignment: Alignment.topCenter,
+          child: SizedBox(
+            width: width,
+            height: constraints.maxHeight,
+            child: child,
           ),
         );
       },
