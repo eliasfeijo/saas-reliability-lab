@@ -6,22 +6,47 @@ function getPushServiceWorkerUrl() {
   return `${getBaseHref()}flutter_service_worker.js`;
 }
 
+const pushServiceWorkerActivationTimeoutMs = 5000;
+
+async function waitForActiveServiceWorkerRegistration() {
+  let timeoutId;
+
+  try {
+    const registration = await Promise.race([
+      navigator.serviceWorker.ready,
+      new Promise((_, reject) => {
+        timeoutId = setTimeout(() => {
+          reject(new Error('Timed out waiting for active service worker'));
+        }, pushServiceWorkerActivationTimeoutMs);
+      }),
+    ]);
+
+    if (registration?.active) {
+      return registration;
+    }
+  } finally {
+    clearTimeout(timeoutId);
+  }
+
+  return null;
+}
+
 async function getPushServiceWorkerRegistration() {
-  const existingRegistration = await navigator.serviceWorker.getRegistration();
-  if (existingRegistration) {
-    console.log('Using existing push service worker registration');
+  const readyRegistration = await waitForActiveServiceWorkerRegistration();
+  if (readyRegistration) {
+    console.log('Using active push service worker registration');
+    return readyRegistration;
+  }
+
+  const existingRegistration = await navigator.serviceWorker.getRegistration(
+    getBaseHref(),
+  );
+  if (existingRegistration?.active) {
+    console.log('Using existing active push service worker registration');
     return existingRegistration;
   }
 
-  console.log('Registering push service worker');
-
-  const baseHref = getBaseHref();
-  const registration = await navigator.serviceWorker.register(
-    getPushServiceWorkerUrl(),
-    { scope: baseHref },
-  );
-
-  return registration.active ? registration : await navigator.serviceWorker.ready;
+  return Promise.reject('No active push service worker registration');
 }
 
 async function requestPushPermission() {
