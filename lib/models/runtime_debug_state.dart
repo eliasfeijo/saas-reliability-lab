@@ -10,6 +10,7 @@ enum RuntimeSyncPhase {
   syncing,
   offline,
   blockedNoSession,
+  blockedAnonymousReview,
   error,
 }
 
@@ -213,6 +214,8 @@ extension RuntimeSyncPhaseExtension on RuntimeSyncPhase {
         return 'Waiting for Network';
       case RuntimeSyncPhase.blockedNoSession:
         return 'Waiting for Session';
+      case RuntimeSyncPhase.blockedAnonymousReview:
+        return 'Waiting for Local Review';
       case RuntimeSyncPhase.error:
         return 'Error';
     }

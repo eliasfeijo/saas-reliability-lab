@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:todo_flutter/helpers/web_push_helper.dart';
+import 'package:todo_flutter/models/runtime_event.dart';
 import 'package:todo_flutter/models/task.dart';
 import 'package:todo_flutter/providers/agenda_provider.dart';
 import 'package:todo_flutter/providers/runtime_debug_provider.dart';
@@ -84,7 +85,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
       if (user == null) return;
 
       await provider.saveUser(user.id);
-      await _syncAuthenticatedAgenda(provider);
+      await _completeAuthenticatedSetup(provider);
       return;
     }
 
@@ -104,16 +105,26 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
     }
   }
 
-  Future<void> _syncAuthenticatedAgenda(AgendaProvider agenda) async {
+  Future<void> _completeAuthenticatedSetup(AgendaProvider agenda) async {
     final runtimeDebug = context.read<RuntimeDebugProvider>();
+
+    if (agenda.hasPendingAnonymousReview) {
+      runtimeDebug.addEvent(
+        category: RuntimeEventCategory.storage,
+        message:
+            'Anonymous local tasks are waiting for review before cloud sync can continue.',
+        level: RuntimeEventLevel.warning,
+      );
+
+      await registerWebPushSubscription(runtimeDebug: runtimeDebug);
+
+      if (!mounted) return;
+      _showAnonymousTaskReviewDialog();
+      return;
+    }
+
     await agenda.syncAllTasks();
     await registerWebPushSubscription(runtimeDebug: runtimeDebug);
-
-    if (!mounted) return;
-
-    if (agenda.anonymousTasks.isNotEmpty) {
-      _showDiscardAnonymousTasksDialog(context);
-    }
   }
 
   void _showLoginBottomSheet() {
@@ -257,7 +268,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
       if (_hasAuthenticatedSession &&
           agenda.userId != null &&
           agenda.userId!.isNotEmpty) {
-        await _syncAuthenticatedAgenda(agenda);
+        await _completeAuthenticatedSetup(agenda);
       }
     } catch (error) {
       runtimeDebug.failInitialLoad(
@@ -338,37 +349,6 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
                 label: const Text('Clear selection'),
               );
             },
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showDiscardAnonymousTasksDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Discard Anonymous Tasks'),
-        content: const Text(
-          'Do you want to discard the anonymous tasks that were created before you logged in? This will remove them permanently.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () async {
-              final agenda = context.read<AgendaProvider>();
-              agenda.takeOwnershipOfAnonymousTasks();
-              Navigator.of(context).pop();
-            },
-            child: const Text('Keep'),
-          ),
-          TextButton(
-            onPressed: () async {
-              final agenda = context.read<AgendaProvider>();
-              await agenda.removeFromLocalStorage(agenda.anonymousTasks);
-              if (!context.mounted) return;
-              Navigator.of(context).pop();
-            },
-            child: const Text('Discard', style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -461,15 +441,121 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
     );
   }
 
+  void _showAnonymousTaskReviewDialog() {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Review Local Tasks Before Sync'),
+        content: const Text(
+          'This device still has anonymous local tasks from before sign-in. Keep them to attach and sync them to this account, discard them to load cloud state only, or review them later from the operator rail. Cloud sync will stay paused until you decide.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+            },
+            child: const Text('Review later'),
+          ),
+          TextButton(
+            onPressed: () async {
+              final agenda = context.read<AgendaProvider>();
+              Navigator.of(dialogContext).pop();
+              await agenda.takeOwnershipOfAnonymousTasks();
+
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Anonymous tasks kept and queued for sync.'),
+                ),
+              );
+            },
+            child: const Text('Keep local tasks'),
+          ),
+          TextButton(
+            onPressed: () async {
+              final agenda = context.read<AgendaProvider>();
+              Navigator.of(dialogContext).pop();
+              await agenda.discardAnonymousTasks();
+
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                    'Anonymous tasks discarded. Cloud sync resumed.',
+                  ),
+                ),
+              );
+            },
+            child: const Text(
+              'Discard local tasks',
+              style: TextStyle(color: Colors.red),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildAnonymousNotificationHint() {
     return Consumer<AgendaProvider>(
       builder: (context, agenda, child) {
         final isLoggedIn = agenda.userId != null && agenda.userId!.isNotEmpty;
+        final theme = Theme.of(context);
+
+        if (isLoggedIn && agenda.hasPendingAnonymousReview) {
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.tertiaryContainer,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.sync_problem_outlined,
+                    color: theme.colorScheme.onTertiaryContainer,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Cloud sync is paused until local tasks are reviewed.',
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            color: theme.colorScheme.onTertiaryContainer,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Keep the anonymous tasks to attach them to this account, or discard them to load cloud state only.',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.onTertiaryContainer,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        FilledButton.tonalIcon(
+                          onPressed: _showAnonymousTaskReviewDialog,
+                          icon: const Icon(Icons.person_search_outlined),
+                          label: const Text('Review now'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
         if (isLoggedIn) {
           return const SizedBox.shrink();
         }
-
-        final theme = Theme.of(context);
 
         return Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),

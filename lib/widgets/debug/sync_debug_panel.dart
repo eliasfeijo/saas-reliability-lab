@@ -461,6 +461,7 @@ class SyncDebugPanel extends StatelessWidget {
         return theme.colorScheme.tertiary;
       case RuntimeSyncPhase.offline:
       case RuntimeSyncPhase.blockedNoSession:
+      case RuntimeSyncPhase.blockedAnonymousReview:
         return theme.colorScheme.secondary;
       case RuntimeSyncPhase.error:
         return theme.colorScheme.error;

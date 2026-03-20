@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:todo_flutter/controllers/task_filter_controller.dart';
 import 'package:todo_flutter/controllers/task_selection_controller.dart';
+import 'package:todo_flutter/models/runtime_debug_state.dart';
 import 'package:todo_flutter/models/task.dart';
 import 'package:todo_flutter/providers/runtime_debug_provider.dart';
 import 'package:todo_flutter/repositories/tasks_repository.dart';
@@ -66,6 +67,8 @@ class AgendaProvider extends ChangeNotifier {
   TaskFilter get currentFilter => _filterController.filter;
   bool get isLoading => _isLoading;
   String? get userId => _userId;
+  bool get hasPendingAnonymousReview =>
+      _userId != null && _userId!.isNotEmpty && anonymousTasks.isNotEmpty;
 
   // Getters for task selection
   TaskModel? get selectedTask => _selectionController.selected;
@@ -297,6 +300,11 @@ class AgendaProvider extends ChangeNotifier {
       debugPrint('No user ID found. Skipping task sync on login.');
       return;
     }
+    if (hasPendingAnonymousReview) {
+      _markSyncBlockedForAnonymousReview();
+      debugPrint('Anonymous tasks pending review. Pausing cloud sync.');
+      return;
+    }
     if (_isLoading) {
       debugPrint('Sync already in progress. Skipping task sync.');
       return;
@@ -315,6 +323,11 @@ class AgendaProvider extends ChangeNotifier {
   void _triggerSync(TaskModel task) {
     if (_userId == null) {
       debugPrint('No user ID found. Skipping sync for task');
+      return;
+    }
+    if (hasPendingAnonymousReview) {
+      _markSyncBlockedForAnonymousReview();
+      debugPrint('Anonymous tasks pending review. Skipping sync for task.');
       return;
     }
     if (_isLoading) {
@@ -357,7 +370,24 @@ class AgendaProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> discardAnonymousTasks() async {
+    final tasksToDiscard = List<TaskModel>.from(anonymousTasks);
+    if (tasksToDiscard.isEmpty) {
+      return;
+    }
+
+    await removeFromLocalStorage(tasksToDiscard);
+
+    if (_userId != null && _userId!.isNotEmpty) {
+      await syncAllTasks();
+    }
+  }
+
   Future<void> takeOwnershipOfAnonymousTasks() async {
+    if (_userId == null || _userId!.isEmpty) {
+      debugPrint('No authenticated user available to adopt anonymous tasks.');
+      return;
+    }
     // Take ownership of anonymous tasks by assigning the current user ID
     for (final task in anonymousTasks) {
       task.userId = _userId;
@@ -372,5 +402,13 @@ class AgendaProvider extends ChangeNotifier {
 
   void _publishTaskDebugState() {
     _runtimeDebug?.updateTaskCounts(_tasks);
+  }
+
+  void _markSyncBlockedForAnonymousReview() {
+    _runtimeDebug?.markSyncSkipped(
+      phase: RuntimeSyncPhase.blockedAnonymousReview,
+      message:
+          'Anonymous local tasks are waiting for review. Keep or discard them before cloud sync.',
+    );
   }
 }

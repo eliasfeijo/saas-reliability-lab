@@ -1,8 +1,10 @@
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:todo_flutter/models/task.dart';
+import 'package:todo_flutter/providers/agenda_provider.dart';
 import 'package:todo_flutter/repositories/tasks_repository.dart';
 import 'package:todo_flutter/services/task_sync_service.dart';
+import 'package:todo_flutter/services/user_session_service.dart';
 
 void main() {
   test(
@@ -49,6 +51,74 @@ void main() {
       expect(savedTasks.single.updatedAt, DateTime(2026, 1, 10, 12));
     },
   );
+
+  test(
+    'agenda syncAllTasks does not upload anonymous tasks before review',
+    () async {
+      final anonymousTask = _buildTask(
+        id: 'task-anon',
+        title: 'Anonymous draft',
+        beginsAt: DateTime(2026, 2, 10, 9),
+        estimatedDuration: const Duration(hours: 1),
+        syncStatus: SyncStatus.dirty,
+      );
+
+      final repository = _InMemoryTasksRepository([anonymousTask]);
+      final remote = _FakeTaskRemoteDataSource([]);
+      final service = TaskSyncService.forTesting(
+        repository,
+        remote: remote,
+        connectivityCheck: () async => [ConnectivityResult.wifi],
+        hasActiveSession: () => true,
+      );
+      final agenda = AgendaProvider(repository, service, UserSessionService())
+        ..userId = 'user-1';
+
+      agenda.tasks = [anonymousTask];
+      await agenda.syncAllTasks();
+
+      final savedTasks = await repository.loadTasks();
+
+      expect(remote.insertedTaskIds, isEmpty);
+      expect(savedTasks, hasLength(1));
+      expect(savedTasks.single.userId, isNull);
+      expect(savedTasks.single.syncStatus, SyncStatus.dirty);
+    },
+  );
+
+  test(
+    'takeOwnershipOfAnonymousTasks syncs only after explicit keep',
+    () async {
+      final anonymousTask = _buildTask(
+        id: 'task-adopt',
+        title: 'Local draft',
+        beginsAt: DateTime(2026, 2, 11, 9),
+        estimatedDuration: const Duration(hours: 1),
+        syncStatus: SyncStatus.dirty,
+      );
+
+      final repository = _InMemoryTasksRepository([anonymousTask]);
+      final remote = _FakeTaskRemoteDataSource([]);
+      final service = TaskSyncService.forTesting(
+        repository,
+        remote: remote,
+        connectivityCheck: () async => [ConnectivityResult.wifi],
+        hasActiveSession: () => true,
+      );
+      final agenda = AgendaProvider(repository, service, UserSessionService())
+        ..userId = 'user-1';
+
+      agenda.tasks = [anonymousTask];
+      await agenda.takeOwnershipOfAnonymousTasks();
+
+      final savedTasks = await repository.loadTasks();
+
+      expect(remote.insertedTaskIds, ['task-adopt']);
+      expect(savedTasks, hasLength(1));
+      expect(savedTasks.single.userId, 'user-1');
+      expect(savedTasks.single.syncStatus, SyncStatus.synced);
+    },
+  );
 }
 
 class _InMemoryTasksRepository implements TasksRepository {
@@ -75,6 +145,7 @@ class _InMemoryTasksRepository implements TasksRepository {
 
 class _FakeTaskRemoteDataSource implements TaskRemoteDataSource {
   final Map<String, TaskModel> _tasksById;
+  final List<String> insertedTaskIds = [];
   final List<String> updatedTaskIds = [];
 
   _FakeTaskRemoteDataSource(List<TaskModel> tasks)
@@ -102,6 +173,7 @@ class _FakeTaskRemoteDataSource implements TaskRemoteDataSource {
 
   @override
   Future<void> insertTask(TaskModel task) async {
+    insertedTaskIds.add(task.id);
     _tasksById[task.id] = _cloneTask(
       task,
       syncStatus: SyncStatus.synced,

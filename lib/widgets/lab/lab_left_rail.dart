@@ -48,6 +48,21 @@ class _LabLeftRailState extends State<LabLeftRail> {
       return;
     }
 
+    if (agenda.hasPendingAnonymousReview) {
+      runtimeDebug.markSyncSkipped(
+        phase: RuntimeSyncPhase.blockedAnonymousReview,
+        message:
+            'Anonymous local tasks are waiting for review. Keep or discard them before cloud sync.',
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Review anonymous tasks before running cloud sync.'),
+        ),
+      );
+      return;
+    }
+
     runtimeDebug.addEvent(
       category: RuntimeEventCategory.sync,
       message: 'Manual sync requested from the operator rail.',
@@ -191,9 +206,7 @@ class _LabLeftRailState extends State<LabLeftRail> {
     });
 
     try {
-      await agenda.removeFromLocalStorage(
-        List<TaskModel>.from(agenda.anonymousTasks),
-      );
+      await agenda.discardAnonymousTasks();
       runtimeDebug.addEvent(
         category: RuntimeEventCategory.storage,
         message: 'Anonymous local tasks were discarded from local storage.',
@@ -528,6 +541,7 @@ class _LabLeftRailState extends State<LabLeftRail> {
         return theme.colorScheme.tertiary;
       case RuntimeSyncPhase.offline:
       case RuntimeSyncPhase.blockedNoSession:
+      case RuntimeSyncPhase.blockedAnonymousReview:
         return theme.colorScheme.secondary;
       case RuntimeSyncPhase.error:
         return theme.colorScheme.error;
