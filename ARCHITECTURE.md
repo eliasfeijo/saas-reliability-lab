@@ -236,7 +236,8 @@ Current role:
 
 - represent task content and local sync metadata
 - derive runtime status from time and completion state
-- mark local mutations as dirty or deleted for later reconciliation
+- mark account-backed local mutations as dirty or deleted for later reconciliation
+- distinguish between anonymous local-only deletes that can be purged immediately and authenticated deletes that must remain tombstoned until sync confirms them
 
 Current limitation:
 
@@ -254,6 +255,8 @@ Responsibilities:
 - coordinate local persistence and sync triggers
 - mirror user identity locally for convenience
 - publish task counts into the runtime diagnostics model
+- keep all user-facing queue and review counts scoped to active tasks rather than raw tombstones
+- prune legacy anonymous deleted tombstones during load so stale local state does not survive upgrades
 
 ### 4. Sync engine
 
@@ -264,7 +267,7 @@ Primary file:
 Current responsibilities:
 
 - verify connectivity and authenticated session presence
-- replay tombstoned deletions
+- replay tombstoned deletions for authenticated tasks
 - reconcile dirty tasks against remote state
 - fetch remote tasks and write back a merged canonical local list
 - publish sync outcomes into the runtime diagnostics model
@@ -277,6 +280,7 @@ Current reconciliation rule:
 Important constraint:
 
 This is still a task-based reconciliation pass, not a true outbox or per-operation replay protocol.
+Because of that, a future archive or trash workflow needs explicit backend lifecycle support instead of a local-only hidden state.
 
 ### 5. Session and identity handling
 

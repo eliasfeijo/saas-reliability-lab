@@ -71,6 +71,7 @@ Verify that a user can create tasks locally without authentication and later dec
 - the app offers an explicit decision path
 - choosing `Keep` assigns the current user id to those tasks and syncs them
 - choosing `Discard` removes them from local storage and resumes authenticated cloud sync
+- deleting an anonymous task before login removes it immediately from the queue and all visible counters because there is no remote tombstone to preserve
 
 ### Expected evidence
 
@@ -79,6 +80,7 @@ Verify that a user can create tasks locally without authentication and later dec
 - the login-time decision flow appears when needed
 - the event timeline records the related auth and storage activity
 - the resulting task state is visible in the queue and inspector after the choice
+- automated coverage verifies anonymous create -> delete returns queue, scope, and anonymous-review counters to zero
 
 ### Current gaps
 

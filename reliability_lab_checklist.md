@@ -162,6 +162,7 @@ Goal: make the lab trustworthy and regression-resistant.
 - [x] Replace the default Flutter counter test with repository-specific coverage
 - [x] Add at least one real sync regression test
 - [x] Add at least one real worker regression test
+- [x] Add regression coverage for anonymous create -> delete cleanup across the workspace and operator rail
 - [ ] Add unit tests for `TaskModel`
 - [ ] Add unit tests for `UserSessionService`
 - [ ] Add targeted widget tests for `TaskWorkspace` desktop and narrow inspector layouts

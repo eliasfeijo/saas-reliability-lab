@@ -22,6 +22,7 @@ The point is to study what breaks, what recovers, and what remains visible when 
 - Browser push registration for signed-in profiles
 - Scheduled notification dispatch through a Cloudflare Worker
 - Anonymous-to-authenticated task adoption or discard flow
+- Deletion lifecycle fix: local-only anonymous deletes are purged immediately, while account-backed deletes stay tombstoned only until sync confirms the remote delete
 
 ## What this repository is trying to achieve
 
@@ -98,6 +99,7 @@ Important current constraint:
 
 The sync engine is still task-based, not operation-based.
 The UI is intentionally reserving space for an explicit outbox and conflict model that does not exist yet in the backend contract.
+That is also why a true archive or trash workflow is documented as the next safe evolution rather than implemented as a local-only patch today.
 
 ## Current status
 
@@ -140,6 +142,7 @@ The goal is to make reliability behavior inspectable.
 - `README.md`: current project overview and transformation status
 - `ARCHITECTURE.md`: implemented topology, state ownership, and evolution path
 - `EXPERIMENTS.md`: runnable and planned reliability scenarios
+- `TASK_DELETION_LIFECYCLE.md`: current delete semantics, bug-fix rationale, and the recommended future archive model
 - `reliability_lab_checklist.md`: milestone checklist for turning the prototype into a stronger lab
 - `project_analysis.md`: current-state analysis of the codebase after the shell transformation
 - `.tmp/ui_lab_redesign_plan.md`: local execution tracker for the UI redesign work
