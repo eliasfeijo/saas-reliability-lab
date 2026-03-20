@@ -149,7 +149,7 @@ They require:
 * scheduling
 * retry policies
 
-The project includes a simulated notification workflow to demonstrate:
+The project includes a live scheduled notification workflow to demonstrate:
 
 * missed schedules
 * server downtime
@@ -228,10 +228,16 @@ Infrastructure concepts explored:
 
 ## Current Status
 
-The notification server is intentionally not running continuously.
+The live demo now includes working end-to-end scheduled notifications.
 
-This is deliberate:
-some failure scenarios described above depend on service interruption and recovery behavior.
+Current production behavior:
+
+* signed-in browsers can register a push subscription for the current device/profile
+* the scheduled worker dispatches due task notifications live
+* stale subscriptions are cleaned up when push providers reject them
+* multiple browser profiles can receive the same notification if they are all still subscribed for the same account
+
+Anonymous users can still explore the task flow locally, but push notifications require signing in on the current device.
 
 ---
 

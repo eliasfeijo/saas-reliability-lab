@@ -171,6 +171,14 @@ class _TaskListState extends State<TaskList> {
     );
   }
 
+  void _showLoginBottomSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => const LoginBottomSheet(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -213,11 +221,7 @@ class _TaskListState extends State<TaskList> {
                 return Padding(
                   padding: const EdgeInsets.only(right: 16),
                   child: TextButton(
-                    onPressed: () => showModalBottomSheet(
-                      context: context,
-                      isScrollControlled: true,
-                      builder: (_) => const LoginBottomSheet(),
-                    ),
+                    onPressed: _showLoginBottomSheet,
                     child: Text(
                       'Login',
                       style: TextStyle(
@@ -286,8 +290,10 @@ class _TaskListState extends State<TaskList> {
                               child: _buildSearchBar(),
                             ),
 
+                            _buildAnonymousNotificationHint(),
+
                             // Selected task banner
-                            SizedBox(height: 8),
+                            const SizedBox(height: 8),
 
                             // Task list
                             Expanded(
@@ -528,6 +534,66 @@ class _TaskListState extends State<TaskList> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildAnonymousNotificationHint() {
+    return Consumer<AgendaProvider>(
+      builder: (context, agenda, child) {
+        final isLoggedIn = agenda.userId != null && agenda.userId!.isNotEmpty;
+        if (isLoggedIn) {
+          return const SizedBox.shrink();
+        }
+
+        final theme = Theme.of(context);
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.secondaryContainer,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.notifications_active_outlined,
+                  color: theme.colorScheme.onSecondaryContainer,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Sign in to receive notifications on this device.',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSecondaryContainer,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      TextButton(
+                        onPressed: _showLoginBottomSheet,
+                        style: TextButton.styleFrom(
+                          padding: EdgeInsets.zero,
+                          minimumSize: const Size(0, 36),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          foregroundColor:
+                              theme.colorScheme.onSecondaryContainer,
+                        ),
+                        child: const Text('Sign in'),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
