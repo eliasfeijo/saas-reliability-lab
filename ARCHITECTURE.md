@@ -6,6 +6,7 @@ This repository is a web-first reliability lab for studying how a small SaaS beh
 
 The project is no longer organized around a centered task list as its primary artifact.
 The active structural direction is a reliability-lab workspace with persistent operator controls and persistent runtime evidence.
+The center pane is now a bounded task-workspace canvas with explicit queue and inspector regions on wide screens.
 
 ## Architectural principles
 
@@ -127,6 +128,7 @@ Primary file:
 
 Responsibilities:
 
+- cap and center the task workspace within the remaining wide-screen shell space
 - own the responsive three-pane layout
 - keep the operator rail and diagnostics visible on wide screens
 - degrade rails into drawers on narrow screens without changing the core ownership model
@@ -157,14 +159,18 @@ Primary file:
 
 Responsibilities:
 
-- canonical task list and selection workflow
-- search and task manipulation
-- create, edit, delete, and completion actions
+- bounded desktop workspace canvas on large screens
+- queue controls for search, filter scope, counts, and local session notices
+- canonical task queue and selection workflow
+- persistent task inspector on desktop and inline inspector on narrower layouts
+- create, edit, delete, and completion actions inside the workspace
 - auth-state reaction for startup sync, push registration, and anonymous-task decision flow
 
 Architectural significance:
 
 This is now the active center pane.
+It is an explicit master/detail workspace rather than a stretched single-column task card.
+Browsing stays anchored to the queue while selected-task actions live in the inspector, which removes pressure from the workspace header.
 `lib/screens/task_list.dart` remains only as a compatibility wrapper.
 
 ### 5. Runtime Diagnostics rail
@@ -378,6 +384,8 @@ Server-side values:
 - the app now has durable ownership for operator controls
 - runtime evidence is visible without opening logs
 - the center pane is clearly the canonical task workspace
+- the center pane no longer stretches to absorb all remaining desktop width
+- selected-task actions now have a persistent inspector surface instead of crowding the workspace header
 - the shell already reserves UI structure for future outbox and conflict surfaces
 
 ## What is still missing

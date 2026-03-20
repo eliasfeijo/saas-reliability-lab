@@ -22,6 +22,7 @@ Already present today:
 - [x] Supabase authentication integration
 - [x] Per-user database isolation through RLS
 - [x] Anonymous-to-authenticated task adoption and discard flow
+- [x] Desktop-first `TaskWorkspace` with bounded canvas, queue controls, task queue, and task inspector
 - [x] Browser push subscription save and remove flow
 - [x] Scheduled notification dispatch through Cloudflare Worker
 - [x] Reliability-lab shell with operator rail, task workspace, and diagnostics rail
@@ -62,6 +63,8 @@ Goal: make the current shell the permanent home of reliability interactions.
 
 - [x] Replace the centered task-screen ownership model with `LabShell`
 - [x] Keep `TaskWorkspace` as the canonical center pane
+- [x] Constrain the center workspace on large screens instead of stretching it edge to edge
+- [x] Turn `TaskWorkspace` into a bounded master/detail surface with queue and inspector regions
 - [x] Move durable auth, filter, and session controls into the operator rail
 - [x] Add a diagnostics rail backed by explicit runtime state
 - [x] Reserve diagnostics slots for future queued, failed, and conflict operation states
@@ -161,6 +164,7 @@ Goal: make the lab trustworthy and regression-resistant.
 - [x] Add at least one real worker regression test
 - [ ] Add unit tests for `TaskModel`
 - [ ] Add unit tests for `UserSessionService`
+- [ ] Add targeted widget tests for `TaskWorkspace` desktop and narrow inspector layouts
 - [ ] Add targeted widget tests for `LabLeftRail`
 - [ ] Add targeted widget tests for `SyncDebugPanel`
 - [ ] Add integration tests for offline create -> reconnect -> sync

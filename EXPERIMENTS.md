@@ -9,7 +9,7 @@ Experiments are no longer expected to hide behind dialogs or console output alon
 They should be inspectable through the operator shell:
 
 - `LabLeftRail` for durable controls and session context
-- `TaskWorkspace` for direct task interactions
+- `TaskWorkspace` for direct task interactions, queue visibility, and selected-task inspection
 - `SyncDebugPanel` for runtime evidence
 
 ## Current experiment surface
@@ -21,6 +21,7 @@ What the UI can already expose today:
 - manual sync initiation from the operator rail
 - sync lifecycle and last outcome summaries
 - local dirty, deleted, and anonymous task counts
+- selected-task details through a persistent inspector on wide screens and an inline inspector on narrower layouts
 - push permission and subscription state
 - recent runtime events in memory
 
@@ -66,17 +67,18 @@ Verify that a user can create tasks locally without authentication and later dec
 ### Expected behavior
 
 - the app restores the authenticated user id
-- the app runs a full sync pass for the authenticated account
-- if anonymous tasks still exist, the app offers an explicit decision path
+- if anonymous tasks still exist, cloud sync stays paused until the user makes an explicit decision
+- the app offers an explicit decision path
 - choosing `Keep` assigns the current user id to those tasks and syncs them
-- choosing `Discard` removes them from local storage
+- choosing `Discard` removes them from local storage and resumes authenticated cloud sync
 
 ### Expected evidence
 
 - anonymous-task count is visible in the operator rail
+- the workspace control deck shows the local-review notice while sync is paused
 - the login-time decision flow appears when needed
 - the event timeline records the related auth and storage activity
-- the resulting task state is visible in the workspace after the choice
+- the resulting task state is visible in the queue and inspector after the choice
 
 ### Current gaps
 

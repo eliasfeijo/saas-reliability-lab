@@ -28,7 +28,7 @@ What changed materially:
 - the app no longer opens into a centered task-list shell
 - the active root UI is now `LabShell`
 - operator controls moved into a durable left rail
-- task work moved into a canonical center workspace
+- task work moved into a canonical bounded center workspace with queue and inspector regions
 - runtime evidence moved into a durable right rail backed by explicit state
 
 What that means:
@@ -72,7 +72,7 @@ The most important recent change in the repository is structural, not cosmetic.
 | Area | Previous shape | Current shape | Why it matters |
 | --- | --- | --- | --- |
 | Root UI | Centered task list screen | `LabShell` | Reliability behavior now has durable screen real estate |
-| Task UI ownership | Mixed with shell controls | `TaskWorkspace` | Task interactions are now isolated from shell concerns |
+| Task UI ownership | Mixed with shell controls | `TaskWorkspace` with control deck, task queue, and inspector | Task interactions are now isolated from shell concerns and selected-task actions no longer overload the header |
 | Session, filter, and sync controls | Header actions and dialogs | `LabLeftRail` | Durable operator controls no longer crowd the task workspace |
 | Runtime visibility | Mostly implicit or log-based | `SyncDebugPanel` + `RuntimeDebugProvider` | Auth, sync, push, and local state are inspectable in-product |
 | Legacy entry point | `TaskList` owned the experience | `TaskList` is a wrapper | Structural drift back to the old layout is less likely |
@@ -151,7 +151,10 @@ Primary files:
 Current state:
 
 - wide screens show all three panes at once
+- the center pane is width-constrained on desktop instead of stretching across all remaining space
+- the workspace itself is split into queue controls, task queue, and a persistent task inspector
 - narrow screens move both rails into drawers
+- narrow workspace layouts keep selection visible through an inline inspector above the queue
 - the left rail owns durable controls
 - the center workspace owns task interactions
 - the right rail owns runtime evidence
@@ -160,6 +163,7 @@ Assessment:
 
 This is the strongest area of recent progress.
 The UI now reinforces the intended mental model of the project: operate, observe, and experiment.
+The center pane also behaves more honestly as a desktop surface instead of a stretched mobile-derived list.
 
 Remaining gap:
 
@@ -290,6 +294,7 @@ Remaining gap:
 
 - the UI now matches the project's stated purpose
 - state ownership is clearer than before
+- the center workspace now separates browsing from inspection cleanly on desktop
 - auth truth, local state, sync, and push are visible in one place
 - the repo has a real end-to-end scheduled notification slice
 - the shell is structurally ready for future reliability features

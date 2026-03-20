@@ -38,6 +38,7 @@ The next major goals are:
 ## Current UI shape
 
 The app now opens into a lab-style workspace rather than a single centered task screen.
+On wide layouts, the center pane is intentionally width-limited and organized as a desktop task canvas rather than a full-width stretched list.
 
 ```mermaid
 flowchart LR
@@ -59,10 +60,11 @@ flowchart LR
 
 ### Task Workspace
 
-- canonical task list and search surface
-- create, edit, delete, and complete task interactions
-- selected-task actions
-- the main workflow for direct task manipulation
+- bounded desktop-first canvas instead of a full-width stretched task list
+- queue controls for search, scope, counts, and local session notices
+- dedicated task queue for browsing and selecting tasks
+- persistent task inspector for selected-task details and actions
+- inline inspector fallback on narrower widths
 
 ### Runtime Diagnostics
 
@@ -102,7 +104,7 @@ The UI is intentionally reserving space for an explicit outbox and conflict mode
 ### Implemented now
 
 - the new lab shell is the active root UI
-- `TaskWorkspace` is the canonical center pane
+- `TaskWorkspace` is the canonical center pane and now uses a bounded master/detail layout
 - `TaskList` remains only as a compatibility wrapper
 - runtime state is modeled explicitly through `RuntimeDebugProvider` and `RuntimeDebugState`
 - sync, auth, connectivity, local counts, and push state are visible in the UI
