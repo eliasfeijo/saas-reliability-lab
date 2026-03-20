@@ -8,7 +8,7 @@ branding:
 
 inputs:
   webRenderer:
-    description: "Which web renderer to be used, default is auto"
+    description: "Legacy web renderer input kept for backward compatibility; ignored on modern Flutter versions"
     required: false
     default: auto
   workingDir:
@@ -35,31 +35,27 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - run: echo "flutter_version=$(flutter --version | awk '{print $2}' | tr -dc '0-9')" >> $GITHUB_ENV
-      shell: bash
     - run: flutter config --enable-web
       shell: bash
       working-directory: ${{inputs.workingDir}}
     - run: |
         if [ "${{ inputs.compileToWasm }}" == "true" ]; then
-          flutter build web --release --wasm --pwa-strategy=offline-first --base-href ${{inputs.baseHref}} ${{inputs.customArgs}}
-        elif [ ${{ env.flutter_version }} -lt 3290 ]; then
-          flutter build web --release --web-renderer=${{inputs.webRenderer}} --pwa-strategy=offline-first --base-href ${{inputs.baseHref}} ${{inputs.customArgs}}
+          flutter build web --release --wasm --base-href "${{inputs.baseHref}}" ${{inputs.customArgs}}
         else
-          flutter build web --release --pwa-strategy=offline-first --base-href ${{inputs.baseHref}} ${{inputs.customArgs}}
+          flutter build web --release --base-href "${{inputs.baseHref}}" ${{inputs.customArgs}}
         fi
       shell: bash
       working-directory: ${{inputs.workingDir}}
     - run: ./scripts/merge_sw.sh
       shell: bash
       working-directory: ${{inputs.workingDir}}
-    - run: rm build/web/push-sw.js
+    - run: rm -f build/web/push-sw.js
       shell: bash
       working-directory: ${{inputs.workingDir}}
-    - run: git config user.name github-actions
+    - run: git config user.name github-actions[bot]
       shell: bash
       working-directory: ${{inputs.workingDir}}
-    - run: git config user.email github-actions@github.com
+    - run: git config user.email 41898282+github-actions[bot]@users.noreply.github.com
       shell: bash
       working-directory: ${{inputs.workingDir}}
     - run: git --work-tree build/web add --all

@@ -9,6 +9,10 @@ on:
       - '@backend/agenda-notify-worker/**'
       - '.github/workflows/deploy-notify-worker.yaml'
 
+concurrency:
+  group: deploy-notify-worker
+  cancel-in-progress: true
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
