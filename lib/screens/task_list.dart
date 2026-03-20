@@ -301,9 +301,7 @@ class _TaskListState extends State<TaskList> {
                                 builder: (context, agenda, child) {
                                   final tasks = agenda.filteredTasks;
                                   if (tasks.isEmpty) {
-                                    return const Center(
-                                      child: Text('No tasks found'),
-                                    );
+                                    return _buildEmptyState(agenda);
                                   }
 
                                   return ListView.builder(
@@ -569,22 +567,24 @@ class _TaskListState extends State<TaskList> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
+                        'Notifications are available on signed-in devices.',
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          color: theme.colorScheme.onSecondaryContainer,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
                         'Sign in to receive notifications on this device.',
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: theme.colorScheme.onSecondaryContainer,
                         ),
                       ),
-                      const SizedBox(height: 4),
-                      TextButton(
+                      const SizedBox(height: 8),
+                      FilledButton.tonalIcon(
                         onPressed: _showLoginBottomSheet,
-                        style: TextButton.styleFrom(
-                          padding: EdgeInsets.zero,
-                          minimumSize: const Size(0, 36),
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          foregroundColor:
-                              theme.colorScheme.onSecondaryContainer,
-                        ),
-                        child: const Text('Sign in'),
+                        icon: const Icon(Icons.login),
+                        label: const Text('Sign in'),
                       ),
                     ],
                   ),
@@ -594,6 +594,49 @@ class _TaskListState extends State<TaskList> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildEmptyState(AgendaProvider agenda) {
+    final isLoggedIn = agenda.userId != null && agenda.userId!.isNotEmpty;
+    if (isLoggedIn) {
+      return const Center(child: Text('No tasks found'));
+    }
+
+    final theme = Theme.of(context);
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.notifications_active_outlined,
+              size: 36,
+              color: theme.colorScheme.primary,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'No tasks found',
+              style: theme.textTheme.titleMedium,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Sign in to receive notifications on this device.',
+              style: theme.textTheme.bodyMedium,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            FilledButton.tonalIcon(
+              onPressed: _showLoginBottomSheet,
+              icon: const Icon(Icons.login),
+              label: const Text('Sign in'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
