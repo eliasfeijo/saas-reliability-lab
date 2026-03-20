@@ -6,7 +6,7 @@ import 'package:todo_flutter/widgets/lab/task_workspace.dart';
 class LabShell extends StatelessWidget {
   const LabShell({super.key});
 
-  static const double _wideBreakpoint = 1180;
+  static const double _wideBreakpoint = 1500;
   static const double _workspaceMaxWidth = 1040;
 
   @override

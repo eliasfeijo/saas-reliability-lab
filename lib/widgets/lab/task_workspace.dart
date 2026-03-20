@@ -158,8 +158,10 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
                             _syncSearchController(agenda.searchQuery);
 
                             final isSplitLayout = constraints.maxWidth >= 920;
+                            final isDenseLayout = constraints.maxHeight < 820;
+                            final contentPadding = isDenseLayout ? 14.0 : 18.0;
                             return Padding(
-                              padding: const EdgeInsets.all(18),
+                              padding: EdgeInsets.all(contentPadding),
                               child: isSplitLayout
                                   ? Row(
                                       crossAxisAlignment:
@@ -170,15 +172,19 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
                                             agenda: agenda,
                                             selectedTask: selectedTask,
                                             compact: false,
+                                            dense: isDenseLayout,
                                           ),
                                         ),
-                                        const SizedBox(width: 18),
                                         SizedBox(
-                                          width: 320,
+                                          width: isDenseLayout ? 14 : 18,
+                                        ),
+                                        SizedBox(
+                                          width: isDenseLayout ? 300 : 320,
                                           child: _buildInspectorPane(
                                             agenda: agenda,
                                             selectedTask: selectedTask,
                                             compact: false,
+                                            dense: isDenseLayout,
                                           ),
                                         ),
                                       ],
@@ -187,6 +193,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
                                       agenda: agenda,
                                       selectedTask: selectedTask,
                                       compact: true,
+                                      dense: isDenseLayout,
                                     ),
                             );
                           },
@@ -250,9 +257,12 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
 
   Widget _buildWorkspaceHeader() {
     final theme = Theme.of(context);
+    final isTightScreen = MediaQuery.sizeOf(context).height < 820;
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(24, 18, 24, 16),
+      padding: isTightScreen
+          ? const EdgeInsets.fromLTRB(20, 14, 20, 12)
+          : const EdgeInsets.fromLTRB(24, 18, 24, 16),
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         border: Border(
@@ -269,11 +279,20 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Task Workspace', style: theme.textTheme.titleLarge),
+                    Text(
+                      'Task Workspace',
+                      style: isTightScreen
+                          ? theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            )
+                          : theme.textTheme.titleLarge,
+                    ),
                     const SizedBox(height: 4),
                     Text(
                       _buildWorkspaceSubtitle(agenda, selectedTask),
                       style: theme.textTheme.bodyMedium,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
@@ -281,8 +300,17 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
               const SizedBox(width: 16),
               FilledButton.icon(
                 onPressed: () => _showCreateTaskDialog(context),
+                style: isTightScreen
+                    ? FilledButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 10,
+                        ),
+                      )
+                    : null,
                 icon: const Icon(Icons.add_task_outlined),
-                label: const Text('New task'),
+                label: Text(isTightScreen ? 'New' : 'New task'),
               ),
             ],
           );
@@ -312,28 +340,33 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
     required AgendaProvider agenda,
     required TaskModel? selectedTask,
     required bool compact,
+    required bool dense,
   }) {
+    final spacing = dense ? 12.0 : 16.0;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _buildControlDeck(agenda: agenda, compact: compact),
+        _buildControlDeck(agenda: agenda, compact: compact, dense: dense),
         if (compact && selectedTask != null) ...[
-          const SizedBox(height: 16),
+          SizedBox(height: spacing),
           SizedBox(
-            height: 280,
+            height: dense ? 220 : 280,
             child: _buildInspectorPane(
               agenda: agenda,
               selectedTask: selectedTask,
               compact: true,
+              dense: dense,
             ),
           ),
         ],
-        const SizedBox(height: 16),
+        SizedBox(height: spacing),
         Expanded(
           child: _buildTaskListPane(
             agenda: agenda,
             selectedTask: selectedTask,
             compact: compact,
+            dense: dense,
           ),
         ),
       ],
@@ -343,11 +376,12 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
   Widget _buildControlDeck({
     required AgendaProvider agenda,
     required bool compact,
+    required bool dense,
   }) {
     final theme = Theme.of(context);
 
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: EdgeInsets.all(dense ? 14 : 18),
       decoration: _panelDecoration(theme),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -360,11 +394,13 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('Queue Controls', style: theme.textTheme.titleMedium),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Search, scope, and local session context stay attached to the task queue.',
-                      style: theme.textTheme.bodySmall,
-                    ),
+                    if (!dense) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'Search, scope, and local session context stay attached to the task queue.',
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -377,67 +413,95 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
                 ),
             ],
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: dense ? 12 : 16),
           _buildSearchBar(agenda),
-          const SizedBox(height: 14),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: TaskFilter.values.map((filter) {
-              final count = _taskCountForFilter(agenda.tasks, filter);
-              return ChoiceChip(
-                label: Text('${_shortFilterLabel(filter)} $count'),
-                selected: agenda.currentFilter == filter,
-                onSelected: (_) => agenda.setFilter(filter),
-              );
-            }).toList(),
-          ),
-          const SizedBox(height: 14),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              _WorkspaceMetricChip(
-                label: 'In view',
-                value: '${agenda.filteredTasks.length}',
-                tone: theme.colorScheme.primaryContainer,
-                foreground: theme.colorScheme.onPrimaryContainer,
-              ),
-              _WorkspaceMetricChip(
-                label: 'Pending',
-                value: '${agenda.pendingTasksCount}',
-                tone: theme.colorScheme.secondaryContainer,
-                foreground: theme.colorScheme.onSecondaryContainer,
-              ),
-              _WorkspaceMetricChip(
-                label: 'Overdue',
-                value: '${agenda.overdueTasksCount}',
-                tone: theme.colorScheme.errorContainer,
-                foreground: theme.colorScheme.onErrorContainer,
-              ),
-              _WorkspaceMetricChip(
-                label: agenda.hasPendingAnonymousReview
-                    ? 'Needs review'
-                    : 'Completed',
-                value: agenda.hasPendingAnonymousReview
-                    ? '${agenda.anonymousTasks.length}'
-                    : '${agenda.completedTasksCount}',
-                tone: agenda.hasPendingAnonymousReview
-                    ? theme.colorScheme.tertiaryContainer
-                    : theme.colorScheme.surfaceContainerHigh,
-                foreground: agenda.hasPendingAnonymousReview
-                    ? theme.colorScheme.onTertiaryContainer
-                    : theme.colorScheme.onSurface,
-              ),
-            ],
-          ),
+          SizedBox(height: dense ? 10 : 14),
+          _buildFilterStrip(agenda: agenda, dense: dense),
+          SizedBox(height: dense ? 10 : 14),
+          _buildMetricStrip(agenda: agenda, dense: dense),
           if (agenda.hasPendingAnonymousReview ||
               !_hasAuthenticatedSession) ...[
-            const SizedBox(height: 14),
-            _buildSessionNotice(agenda: agenda, compact: compact),
+            SizedBox(height: dense ? 10 : 14),
+            _buildSessionNotice(agenda: agenda, compact: compact, dense: dense),
           ],
         ],
       ),
+    );
+  }
+
+  Widget _buildFilterStrip({
+    required AgendaProvider agenda,
+    required bool dense,
+  }) {
+    final chips = TaskFilter.values.map((filter) {
+      final count = _taskCountForFilter(agenda.tasks, filter);
+      return ChoiceChip(
+        label: Text('${_shortFilterLabel(filter)} $count'),
+        selected: agenda.currentFilter == filter,
+        onSelected: (_) => agenda.setFilter(filter),
+        visualDensity: dense ? VisualDensity.compact : null,
+      );
+    }).toList();
+
+    if (!dense) {
+      return Wrap(spacing: 10, runSpacing: 10, children: chips);
+    }
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(children: _withHorizontalSpacing(chips, 10)),
+    );
+  }
+
+  Widget _buildMetricStrip({
+    required AgendaProvider agenda,
+    required bool dense,
+  }) {
+    final theme = Theme.of(context);
+    final metrics = [
+      _WorkspaceMetricChip(
+        label: 'In view',
+        value: '${agenda.filteredTasks.length}',
+        tone: theme.colorScheme.primaryContainer,
+        foreground: theme.colorScheme.onPrimaryContainer,
+        dense: dense,
+      ),
+      _WorkspaceMetricChip(
+        label: 'Pending',
+        value: '${agenda.pendingTasksCount}',
+        tone: theme.colorScheme.secondaryContainer,
+        foreground: theme.colorScheme.onSecondaryContainer,
+        dense: dense,
+      ),
+      _WorkspaceMetricChip(
+        label: 'Overdue',
+        value: '${agenda.overdueTasksCount}',
+        tone: theme.colorScheme.errorContainer,
+        foreground: theme.colorScheme.onErrorContainer,
+        dense: dense,
+      ),
+      _WorkspaceMetricChip(
+        label: agenda.hasPendingAnonymousReview ? 'Needs review' : 'Completed',
+        value: agenda.hasPendingAnonymousReview
+            ? '${agenda.anonymousTasks.length}'
+            : '${agenda.completedTasksCount}',
+        tone: agenda.hasPendingAnonymousReview
+            ? theme.colorScheme.tertiaryContainer
+            : theme.colorScheme.surfaceContainerHigh,
+        foreground: agenda.hasPendingAnonymousReview
+            ? theme.colorScheme.onTertiaryContainer
+            : theme.colorScheme.onSurface,
+        dense: dense,
+      ),
+    ];
+
+    if (!dense) {
+      return Wrap(spacing: 10, runSpacing: 10, children: metrics);
+    }
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(children: _withHorizontalSpacing(metrics, 10)),
     );
   }
 
@@ -463,10 +527,23 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
   Widget _buildSessionNotice({
     required AgendaProvider agenda,
     required bool compact,
+    required bool dense,
   }) {
     final theme = Theme.of(context);
 
     if (agenda.hasPendingAnonymousReview) {
+      if (dense) {
+        return _buildDenseSessionNotice(
+          icon: Icons.sync_problem_outlined,
+          title: 'Local review required',
+          message: 'Sync is paused until local tasks are reviewed.',
+          actionLabel: 'Review',
+          onAction: _showAnonymousTaskReviewDialog,
+          backgroundColor: theme.colorScheme.tertiaryContainer,
+          foregroundColor: theme.colorScheme.onTertiaryContainer,
+        );
+      }
+
       return Container(
         width: double.infinity,
         padding: const EdgeInsets.all(16),
@@ -535,6 +612,18 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
                   ),
                 ],
               ),
+      );
+    }
+
+    if (dense) {
+      return _buildDenseSessionNotice(
+        icon: Icons.cloud_off_outlined,
+        title: 'Anonymous mode',
+        message: 'Local tasks stay on this device until you sign in.',
+        actionLabel: 'Sign in',
+        onAction: _showLoginBottomSheet,
+        backgroundColor: theme.colorScheme.secondaryContainer,
+        foregroundColor: theme.colorScheme.onSecondaryContainer,
       );
     }
 
@@ -609,6 +698,53 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
     );
   }
 
+  Widget _buildDenseSessionNotice({
+    required IconData icon,
+    required String title,
+    required String message,
+    required String actionLabel,
+    required VoidCallback onAction,
+    required Color backgroundColor,
+    required Color foregroundColor,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: foregroundColor),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              '$title • $message',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: foregroundColor,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          TextButton(
+            onPressed: onAction,
+            style: TextButton.styleFrom(
+              foregroundColor: foregroundColor,
+              visualDensity: VisualDensity.compact,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            ),
+            child: Text(actionLabel),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildNoticeHeader({
     required IconData icon,
     required String title,
@@ -633,6 +769,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
     required AgendaProvider agenda,
     required TaskModel? selectedTask,
     required bool compact,
+    required bool dense,
   }) {
     final theme = Theme.of(context);
     final tasks = agenda.filteredTasks;
@@ -642,7 +779,12 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(18, 18, 18, 12),
+            padding: EdgeInsets.fromLTRB(
+              dense ? 14 : 18,
+              dense ? 14 : 18,
+              dense ? 14 : 18,
+              dense ? 10 : 12,
+            ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -651,7 +793,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text('Task Queue', style: theme.textTheme.titleMedium),
-                      const SizedBox(height: 4),
+                      SizedBox(height: dense ? 2 : 4),
                       Text(
                         tasks.isEmpty
                             ? 'Nothing is visible in the current scope.'
@@ -659,6 +801,8 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
                             ? 'Select a row to open the inline inspector.'
                             : 'Select a row to inspect and act without leaving the queue.',
                         style: theme.textTheme.bodySmall,
+                        maxLines: dense ? 1 : null,
+                        overflow: dense ? TextOverflow.ellipsis : null,
                       ),
                     ],
                   ),
@@ -677,16 +821,22 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
             child: tasks.isEmpty
                 ? _buildEmptyState(agenda)
                 : ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(18, 14, 18, 18),
+                    padding: EdgeInsets.fromLTRB(
+                      dense ? 14 : 18,
+                      dense ? 10 : 14,
+                      dense ? 14 : 18,
+                      dense ? 14 : 18,
+                    ),
                     itemCount: tasks.length,
                     separatorBuilder: (context, index) =>
-                        const SizedBox(height: 10),
+                        SizedBox(height: dense ? 8 : 10),
                     itemBuilder: (context, index) {
                       final task = tasks[index];
                       final isSelected = selectedTask?.id == task.id;
                       return _WorkspaceTaskCard(
                         task: task,
                         isSelected: isSelected,
+                        dense: dense,
                         onTap: () => agenda.selectTask(task),
                         onToggleComplete: () =>
                             agenda.toggleTaskCompletion(task.id),
@@ -794,6 +944,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
     required AgendaProvider agenda,
     required TaskModel? selectedTask,
     required bool compact,
+    required bool dense,
   }) {
     final theme = Theme.of(context);
 
@@ -805,9 +956,9 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
             : theme.colorScheme.surfaceContainerLowest,
       ),
       child: selectedTask == null
-          ? _buildInspectorPlaceholder(compact: compact)
+          ? _buildInspectorPlaceholder(compact: compact, dense: dense)
           : SingleChildScrollView(
-              padding: const EdgeInsets.all(18),
+              padding: EdgeInsets.all(dense ? 14 : 18),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -954,12 +1105,15 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
     );
   }
 
-  Widget _buildInspectorPlaceholder({required bool compact}) {
+  Widget _buildInspectorPlaceholder({
+    required bool compact,
+    required bool dense,
+  }) {
     final theme = Theme.of(context);
 
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: EdgeInsets.all(dense ? 18 : 24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1126,6 +1280,21 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
       border: Border.all(color: theme.colorScheme.outlineVariant),
     );
   }
+
+  List<Widget> _withHorizontalSpacing(List<Widget> children, double spacing) {
+    if (children.isEmpty) {
+      return const [];
+    }
+
+    final spacedChildren = <Widget>[];
+    for (var index = 0; index < children.length; index++) {
+      if (index > 0) {
+        spacedChildren.add(SizedBox(width: spacing));
+      }
+      spacedChildren.add(children[index]);
+    }
+    return spacedChildren;
+  }
 }
 
 class _WorkspaceMetricChip extends StatelessWidget {
@@ -1134,41 +1303,66 @@ class _WorkspaceMetricChip extends StatelessWidget {
     required this.value,
     required this.tone,
     required this.foreground,
+    this.dense = false,
   });
 
   final String label;
   final String value;
   final Color tone;
   final Color foreground;
+  final bool dense;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      padding: EdgeInsets.symmetric(
+        horizontal: dense ? 12 : 14,
+        vertical: dense ? 8 : 12,
+      ),
       decoration: BoxDecoration(
         color: tone,
         borderRadius: BorderRadius.circular(18),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            value,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: foreground,
-              fontWeight: FontWeight.w700,
+      child: dense
+          ? Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  value,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: foreground,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: foreground.withValues(alpha: 0.84),
+                  ),
+                ),
+              ],
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  value,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: foreground,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  label,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: foreground.withValues(alpha: 0.84),
+                  ),
+                ),
+              ],
             ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: foreground.withValues(alpha: 0.84),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -1177,12 +1371,14 @@ class _WorkspaceTaskCard extends StatelessWidget {
   const _WorkspaceTaskCard({
     required this.task,
     required this.isSelected,
+    required this.dense,
     required this.onTap,
     required this.onToggleComplete,
   });
 
   final TaskModel task;
   final bool isSelected;
+  final bool dense;
   final VoidCallback onTap;
   final VoidCallback onToggleComplete;
 
@@ -1196,14 +1392,14 @@ class _WorkspaceTaskCard extends StatelessWidget {
       color: isSelected
           ? theme.colorScheme.primaryContainer.withValues(alpha: 0.56)
           : theme.colorScheme.surface,
-      borderRadius: BorderRadius.circular(22),
+      borderRadius: BorderRadius.circular(dense ? 18 : 22),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(dense ? 18 : 22),
         child: Container(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.all(dense ? 14 : 16),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(22),
+            borderRadius: BorderRadius.circular(dense ? 18 : 22),
             border: Border.all(
               color: isSelected
                   ? theme.colorScheme.primary
@@ -1259,26 +1455,32 @@ class _WorkspaceTaskCard extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
+              SizedBox(height: dense ? 10 : 12),
               Text(
                 task.title,
-                style: theme.textTheme.titleMedium?.copyWith(
-                  decoration: task.isCompleted
-                      ? TextDecoration.lineThrough
-                      : null,
-                  color: task.isCompleted
-                      ? theme.colorScheme.onSurface.withValues(alpha: 0.6)
-                      : theme.colorScheme.onSurface,
-                ),
+                style:
+                    (dense
+                            ? theme.textTheme.titleSmall
+                            : theme.textTheme.titleMedium)
+                        ?.copyWith(
+                          decoration: task.isCompleted
+                              ? TextDecoration.lineThrough
+                              : null,
+                          color: task.isCompleted
+                              ? theme.colorScheme.onSurface.withValues(
+                                  alpha: 0.6,
+                                )
+                              : theme.colorScheme.onSurface,
+                        ),
               ),
-              const SizedBox(height: 6),
+              SizedBox(height: dense ? 4 : 6),
               Text(
                 hasDescription ? task.description!.trim() : _taskSummary(task),
-                maxLines: 2,
+                maxLines: dense ? 1 : 2,
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.bodyMedium,
               ),
-              const SizedBox(height: 12),
+              SizedBox(height: dense ? 10 : 12),
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
