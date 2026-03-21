@@ -92,7 +92,7 @@ class _MyAppState extends State<MyApp> {
       child: MaterialApp(
         navigatorKey: navigatorKey,
         debugShowCheckedModeBanner: false,
-        title: 'Agenda',
+        title: 'SaaS Reliability Lab',
         theme: buildLabTheme(),
         home: const LabShell(),
       ),
