@@ -1,12 +1,16 @@
 {
-    "name": "Flutter Agenda App",
-    "short_name": "Agenda",
+    "name": "SaaS Reliability Lab",
+    "short_name": "SaaS Reliability Lab",
+    "description": "Web-first lab for observing sync, auth, push, and offline recovery in small SaaS systems.",
+    "lang": "en-US",
+    "dir": "ltr",
     "start_url": ".",
+    "scope": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A simple cross-platform Agenda application made with Flutter.",
+    "background_color": "#F4EEE4",
+    "theme_color": "#0F766E",
     "orientation": "portrait-primary",
+    "categories": ["productivity", "utilities"],
     "prefer_related_applications": false,
     "icons": [
         {
