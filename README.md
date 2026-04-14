@@ -84,6 +84,7 @@ This repo now uses a monorepo-style structure:
 | [`docs/AI_ASSISTED_DEVELOPMENT.md`](docs/AI_ASSISTED_DEVELOPMENT.md) | The intended human-and-agent development loop, Copilot workflow, and low-friction delivery model for this repo. |
 | [`docs/TESTING_STRATEGY.md`](docs/TESTING_STRATEGY.md) | Repo-wide testing contract, current test inventory, and the planned structure for reliability-focused automation. |
 | [`docs/EXPERIMENTS.md`](docs/EXPERIMENTS.md) | Runnable and planned reliability scenarios, expected behavior, and visible evidence. |
+| [`ROADMAP.md`](ROADMAP.md) | Recommended short-, medium-, and long-term implementation direction grounded in the current repository state. |
 | [`docs/project_analysis.md`](docs/project_analysis.md) | Current system assessment, structural strengths, and the main gaps still left to close. |
 | [`docs/TASK_DELETION_LIFECYCLE.md`](docs/TASK_DELETION_LIFECYCLE.md) | Current deletion semantics, the anonymous-task bug rationale, and the recommended future archive path. |
 | [`docs/reliability_lab_checklist.md`](docs/reliability_lab_checklist.md) | Milestones for turning the current prototype into a stronger reliability lab. |
