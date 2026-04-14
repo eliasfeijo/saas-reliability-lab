@@ -91,13 +91,18 @@ Future<bool> _waitForAuthenticatedSession({
   return false;
 }
 
-Future<Map<String, dynamic>?> _registerWebPush(String vapidPublicKey) async {
+Future<({Map<String, dynamic>? subscription, String? errorDetail})>
+_registerWebPush(String vapidPublicKey) async {
   try {
     final result = await _registerPush(vapidPublicKey.toJS).toDart;
-    return {'endpoint': result.endpoint, 'keys': result.keys?.toMap()};
+    return (
+      subscription: {'endpoint': result.endpoint, 'keys': result.keys?.toMap()},
+      errorDetail: null,
+    );
   } catch (e) {
-    debugPrint('Error registering web push: $e');
-    return null;
+    final errorDetail = e.toString();
+    debugPrint('Error registering web push: $errorDetail');
+    return (subscription: null, errorDetail: errorDetail);
   }
 }
 
@@ -132,14 +137,26 @@ Future<void> registerWebPushSubscription({
   }
 
   try {
-    final subscription = await _registerWebPush(vapidPublicKey);
+    final registrationResult = await _registerWebPush(vapidPublicKey);
+    final subscription = registrationResult.subscription;
     if (subscription == null) {
+      final errorDetail = registrationResult.errorDetail;
       runtimeDebug?.setPushSubscriptionState(
         PushSubscriptionState.failed,
-        message: 'Browser did not return a push subscription.',
+        message: errorDetail == null || errorDetail.isEmpty
+            ? 'Browser did not return a push subscription.'
+            : 'Browser rejected the push subscription request.',
         level: RuntimeEventLevel.error,
       );
-      debugPrint('[Push] Browser did not return a push subscription');
+      runtimeDebug?.addEvent(
+        category: RuntimeEventCategory.push,
+        message: 'Browser push subscription was not created.',
+        detail: errorDetail,
+        level: RuntimeEventLevel.error,
+      );
+      debugPrint(
+        '[Push] Browser did not return a push subscription${errorDetail == null || errorDetail.isEmpty ? '' : ': $errorDetail'}',
+      );
       return;
     }
 
