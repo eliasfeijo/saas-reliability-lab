@@ -307,6 +307,63 @@ void main() {
       expect(agenda.isBatchMode, isFalse);
     },
   );
+
+  test('setSort reorders filtered tasks by the selected queue sort', () async {
+    final urgentTask = _buildTask(
+      id: 'task-urgent',
+      title: 'Urgent task',
+      beginsAt: DateTime(2026, 2, 18, 11),
+      estimatedDuration: const Duration(hours: 1),
+    )..priority = TaskPriority.urgent;
+    final laterTask = _buildTask(
+      id: 'task-later',
+      title: 'Later task',
+      beginsAt: DateTime(2026, 2, 18, 15),
+      estimatedDuration: const Duration(hours: 1),
+    );
+    final earlierTask = _buildTask(
+      id: 'task-earlier',
+      title: 'Earlier task',
+      beginsAt: DateTime(2026, 2, 18, 9),
+      estimatedDuration: const Duration(hours: 1),
+      updatedAt: DateTime(2026, 2, 18, 8),
+    )..lastModifiedAt = DateTime(2026, 2, 18, 8);
+    laterTask.lastModifiedAt = DateTime(2026, 2, 18, 18);
+
+    final repository = _InMemoryTasksRepository([
+      urgentTask,
+      laterTask,
+      earlierTask,
+    ]);
+    final remote = _FakeTaskRemoteDataSource([]);
+    final service = TaskSyncService.forTesting(
+      repository,
+      remote: remote,
+      connectivityCheck: () async => [ConnectivityResult.wifi],
+      hasActiveSession: () => false,
+    );
+    final agenda = AgendaProvider(repository, service, UserSessionService());
+
+    agenda.tasks = [urgentTask, laterTask, earlierTask];
+    expect(agenda.filteredTasks.map((task) => task.id).toList(), [
+      'task-earlier',
+      'task-urgent',
+      'task-later',
+    ]);
+
+    agenda.setSort(TaskSort.latestFirst);
+    expect(agenda.filteredTasks.map((task) => task.id).toList(), [
+      'task-later',
+      'task-urgent',
+      'task-earlier',
+    ]);
+
+    agenda.setSort(TaskSort.priorityHighToLow);
+    expect(agenda.filteredTasks.first.id, 'task-urgent');
+
+    agenda.setSort(TaskSort.recentlyUpdated);
+    expect(agenda.filteredTasks.first.id, 'task-later');
+  });
 }
 
 class _InMemoryTasksRepository implements TasksRepository {

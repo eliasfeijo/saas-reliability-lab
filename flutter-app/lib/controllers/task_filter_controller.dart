@@ -3,9 +3,11 @@ import 'package:todo_flutter/models/task.dart';
 class TaskFilterController {
   String _searchQuery = '';
   TaskFilter _filter = TaskFilter.all;
+  TaskSort _sort = TaskSort.soonestFirst;
 
   String get searchQuery => _searchQuery;
   TaskFilter get filter => _filter;
+  TaskSort get sort => _sort;
 
   void updateSearch(String query) {
     _searchQuery = query;
@@ -21,6 +23,10 @@ class TaskFilterController {
 
   void clearFilter() {
     _filter = TaskFilter.all;
+  }
+
+  void setSort(TaskSort newSort) {
+    _sort = newSort;
   }
 
   List<TaskModel> apply(List<TaskModel> tasks) {
@@ -46,6 +52,47 @@ class TaskFilterController {
         case TaskFilter.all:
           return true;
       }
-    }).toList()..sort((a, b) => a.beginsAt.compareTo(b.beginsAt));
+    }).toList()..sort(_compareTasks);
+  }
+
+  int _compareTasks(TaskModel a, TaskModel b) {
+    switch (_sort) {
+      case TaskSort.soonestFirst:
+        return _compareWithTieBreaker(a.beginsAt.compareTo(b.beginsAt), a, b);
+      case TaskSort.latestFirst:
+        return _compareWithTieBreaker(b.beginsAt.compareTo(a.beginsAt), a, b);
+      case TaskSort.recentlyUpdated:
+        return _compareWithTieBreaker(
+          _taskSortTimestamp(b).compareTo(_taskSortTimestamp(a)),
+          a,
+          b,
+        );
+      case TaskSort.priorityHighToLow:
+        return _compareWithTieBreaker(
+          b.priority.value.compareTo(a.priority.value),
+          a,
+          b,
+        );
+    }
+  }
+
+  int _compareWithTieBreaker(int primary, TaskModel a, TaskModel b) {
+    if (primary != 0) {
+      return primary;
+    }
+
+    final scheduleCompare = a.beginsAt.compareTo(b.beginsAt);
+    if (scheduleCompare != 0) {
+      return scheduleCompare;
+    }
+
+    return a.title.toLowerCase().compareTo(b.title.toLowerCase());
+  }
+
+  DateTime _taskSortTimestamp(TaskModel task) {
+    return task.lastModifiedAt ??
+        task.updatedAt ??
+        task.createdAt ??
+        task.beginsAt;
   }
 }

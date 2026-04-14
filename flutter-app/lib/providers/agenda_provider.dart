@@ -69,6 +69,7 @@ class AgendaProvider extends ChangeNotifier {
   List<TaskModel> get filteredTasks => _filterController.apply(_activeTasks);
   String get searchQuery => _filterController.searchQuery;
   TaskFilter get currentFilter => _filterController.filter;
+  TaskSort get currentSort => _filterController.sort;
   bool get isLoading => _isLoading;
   String? get userId => _userId;
   bool get hasPendingAnonymousReview =>
@@ -337,6 +338,16 @@ class AgendaProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setSort(TaskSort sort) {
+    if (_filterController.sort == sort) {
+      return;
+    }
+
+    _filterController.setSort(sort);
+    _pruneInteractionState();
+    notifyListeners();
+  }
+
   // Bulk Operations
   void markAllAsCompleted() {
     for (var task in _tasks) {
@@ -377,6 +388,7 @@ class AgendaProvider extends ChangeNotifier {
     debugPrint('Total tasks: ${_tasks.length}');
     debugPrint('Selected task: ${selectedTask?.title ?? 'None'}');
     debugPrint('Current filter: $currentFilter');
+    debugPrint('Current sort: $currentSort');
     debugPrint('Search query: "$searchQuery"');
     debugPrint('Filtered tasks: ${filteredTasks.length}');
     for (var task in _tasks) {
@@ -615,10 +627,11 @@ class AgendaProvider extends ChangeNotifier {
       return;
     }
 
+    final syncTaskToTrigger = syncTask;
     await _saveTasks();
 
-    if (syncTask != null) {
-      _triggerSync(syncTask!);
+    if (syncTaskToTrigger != null) {
+      _triggerSync(syncTaskToTrigger);
     }
   }
 

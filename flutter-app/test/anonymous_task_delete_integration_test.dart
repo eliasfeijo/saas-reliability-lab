@@ -192,11 +192,194 @@ void main() {
       expect(find.text('Done selecting'), findsOneWidget);
     },
   );
+
+  testWidgets(
+    'queue sort control reorders tasks and notebook widths use an overlay inspector',
+    (tester) async {
+      tester.view.devicePixelRatio = 1.0;
+      tester.view.physicalSize = const Size(1100, 900);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final laterTask = TaskModel(
+        id: 'task-later',
+        title: 'Later task',
+        beginsAt: DateTime(2026, 2, 21, 15),
+        estimatedDuration: const Duration(hours: 1),
+        syncStatus: SyncStatus.dirty,
+      );
+      final earlierTask = TaskModel(
+        id: 'task-earlier',
+        title: 'Earlier task',
+        beginsAt: DateTime(2026, 2, 21, 9),
+        estimatedDuration: const Duration(hours: 1),
+        syncStatus: SyncStatus.dirty,
+      );
+
+      final repository = _InMemoryTasksRepository([laterTask, earlierTask]);
+      final runtimeDebug = RuntimeDebugProvider();
+      addTearDown(runtimeDebug.dispose);
+
+      final syncService = TaskSyncService.forTesting(
+        repository,
+        remote: _FakeTaskRemoteDataSource([]),
+        connectivityCheck: () async => [ConnectivityResult.wifi],
+        hasActiveSession: () => false,
+        runtimeDebug: runtimeDebug,
+      );
+
+      final agenda = AgendaProvider(
+        repository,
+        syncService,
+        _InMemoryUserSessionService(runtimeDebug: runtimeDebug),
+        runtimeDebug: runtimeDebug,
+      );
+      addTearDown(agenda.dispose);
+
+      await tester.pumpWidget(
+        _NotebookWorkspaceHarness(agenda: agenda, runtimeDebug: runtimeDebug),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        _top(tester, 'Earlier task'),
+        lessThan(_top(tester, 'Later task')),
+      );
+      expect(find.text('Sort: Soonest'), findsOneWidget);
+
+      await tester.tap(find.text('Sort: Soonest'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Latest first').last);
+      await tester.pumpAndSettle();
+
+      expect(
+        _top(tester, 'Later task'),
+        lessThan(_top(tester, 'Earlier task')),
+      );
+
+      await tester.tap(find.text('Select'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Batch actions are ready'), findsNothing);
+      expect(find.text('Task Queue'), findsOneWidget);
+
+      await tester.tap(find.text('Done'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Earlier task'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Task Inspector'), findsOneWidget);
+      expect(find.text('Inline Inspector'), findsNothing);
+      expect(find.text('Task Queue'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'compact queue header stacks actions without losing the heading',
+    (tester) async {
+      tester.view.devicePixelRatio = 1.0;
+      tester.view.physicalSize = const Size(540, 900);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final seededTask = TaskModel(
+        id: 'task-compact',
+        title: 'Compact queue task',
+        beginsAt: DateTime(2026, 2, 22, 9),
+        estimatedDuration: const Duration(hours: 1),
+        syncStatus: SyncStatus.dirty,
+      );
+
+      final repository = _InMemoryTasksRepository([seededTask]);
+      final runtimeDebug = RuntimeDebugProvider();
+      addTearDown(runtimeDebug.dispose);
+
+      final syncService = TaskSyncService.forTesting(
+        repository,
+        remote: _FakeTaskRemoteDataSource([]),
+        connectivityCheck: () async => [ConnectivityResult.wifi],
+        hasActiveSession: () => false,
+        runtimeDebug: runtimeDebug,
+      );
+
+      final agenda = AgendaProvider(
+        repository,
+        syncService,
+        _InMemoryUserSessionService(runtimeDebug: runtimeDebug),
+        runtimeDebug: runtimeDebug,
+      );
+      addTearDown(agenda.dispose);
+
+      await tester.pumpWidget(
+        _CompactWorkspaceHarness(agenda: agenda, runtimeDebug: runtimeDebug),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Task Queue'), findsOneWidget);
+      expect(find.text('Select'), findsOneWidget);
+      expect(find.textContaining('Select a row'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'small screens use an overlay panel instead of inline inspector space',
+    (tester) async {
+      tester.view.devicePixelRatio = 1.0;
+      tester.view.physicalSize = const Size(540, 900);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final seededTask = TaskModel(
+        id: 'task-mobile-overlay',
+        title: 'Mobile overlay task',
+        beginsAt: DateTime(2026, 2, 23, 9),
+        estimatedDuration: const Duration(hours: 1),
+        syncStatus: SyncStatus.dirty,
+      );
+
+      final repository = _InMemoryTasksRepository([seededTask]);
+      final runtimeDebug = RuntimeDebugProvider();
+      addTearDown(runtimeDebug.dispose);
+
+      final syncService = TaskSyncService.forTesting(
+        repository,
+        remote: _FakeTaskRemoteDataSource([]),
+        connectivityCheck: () async => [ConnectivityResult.wifi],
+        hasActiveSession: () => false,
+        runtimeDebug: runtimeDebug,
+      );
+
+      final agenda = AgendaProvider(
+        repository,
+        syncService,
+        _InMemoryUserSessionService(runtimeDebug: runtimeDebug),
+        runtimeDebug: runtimeDebug,
+      );
+      addTearDown(agenda.dispose);
+
+      await tester.pumpWidget(
+        _CompactWorkspaceHarness(agenda: agenda, runtimeDebug: runtimeDebug),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Mobile overlay task'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Task Inspector'), findsOneWidget);
+      expect(find.text('Inline Inspector'), findsNothing);
+      expect(find.text('Task Queue'), findsOneWidget);
+    },
+  );
 }
 
 String _textValue(WidgetTester tester, String keyValue) {
   final widget = tester.widget<Text>(find.byKey(ValueKey(keyValue)));
   return widget.data ?? '';
+}
+
+double _top(WidgetTester tester, String text) {
+  return tester.getTopLeft(find.text(text).first).dy;
 }
 
 Future<void> _ensureSupabaseInitialized() async {
@@ -239,6 +422,60 @@ class _LabWorkspaceHarness extends StatelessWidget {
               Expanded(child: TaskWorkspace()),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _NotebookWorkspaceHarness extends StatelessWidget {
+  const _NotebookWorkspaceHarness({
+    required this.agenda,
+    required this.runtimeDebug,
+  });
+
+  final AgendaProvider agenda;
+  final RuntimeDebugProvider runtimeDebug;
+
+  @override
+  Widget build(BuildContext context) {
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider<RuntimeDebugProvider>.value(value: runtimeDebug),
+        ChangeNotifierProvider<AgendaProvider>.value(value: agenda),
+      ],
+      child: MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: buildLabTheme(),
+        home: Scaffold(
+          body: Center(child: SizedBox(width: 780, child: TaskWorkspace())),
+        ),
+      ),
+    );
+  }
+}
+
+class _CompactWorkspaceHarness extends StatelessWidget {
+  const _CompactWorkspaceHarness({
+    required this.agenda,
+    required this.runtimeDebug,
+  });
+
+  final AgendaProvider agenda;
+  final RuntimeDebugProvider runtimeDebug;
+
+  @override
+  Widget build(BuildContext context) {
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider<RuntimeDebugProvider>.value(value: runtimeDebug),
+        ChangeNotifierProvider<AgendaProvider>.value(value: agenda),
+      ],
+      child: MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: buildLabTheme(),
+        home: Scaffold(
+          body: Center(child: SizedBox(width: 360, child: TaskWorkspace())),
         ),
       ),
     );
