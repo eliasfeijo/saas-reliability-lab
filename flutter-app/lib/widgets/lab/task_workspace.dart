@@ -23,6 +23,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
   late final StreamSubscription<AuthState> _authStateSubscription;
 
   final TextEditingController _searchController = TextEditingController();
+  bool _isCompactPanelMinimized = false;
 
   @override
   void initState() {
@@ -158,7 +159,6 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
                             _syncSearchController(agenda.searchQuery);
 
                             final isSplitLayout = constraints.maxWidth >= 920;
-                            final useOverlayInspector = !isSplitLayout;
                             final isDenseLayout = constraints.maxHeight < 820;
                             final contentPadding = isDenseLayout ? 14.0 : 18.0;
                             return Padding(
@@ -170,13 +170,12 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
                                       children: [
                                         Expanded(
                                           child: _buildTaskFlowPane(
-                                            agenda: agenda,
-                                            selectedTask: selectedTask,
-                                            compact: false,
-                                            dense: isDenseLayout,
-                                            useOverlayInspector: false,
-                                          ),
-                                        ),
+                                             agenda: agenda,
+                                             selectedTask: selectedTask,
+                                             compact: false,
+                                             dense: isDenseLayout,
+                                           ),
+                                         ),
                                         SizedBox(
                                           width: isDenseLayout ? 14 : 18,
                                         ),
@@ -191,13 +190,12 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
                                         ),
                                       ],
                                     )
-                                  : _buildTaskFlowPane(
-                                      agenda: agenda,
-                                      selectedTask: selectedTask,
-                                      compact: true,
-                                      dense: isDenseLayout,
-                                      useOverlayInspector: useOverlayInspector,
-                                    ),
+                                    : _buildCompactTaskWorkspace(
+                                       agenda: agenda,
+                                       selectedTask: selectedTask,
+                                       dense: isDenseLayout,
+                                       viewportHeight: constraints.maxHeight,
+                                     ),
                             );
                           },
                         );
@@ -352,7 +350,6 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
     required TaskModel? selectedTask,
     required bool compact,
     required bool dense,
-    required bool useOverlayInspector,
   }) {
     final spacing = dense ? 12.0 : 16.0;
 
@@ -367,10 +364,61 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
             selectedTask: selectedTask,
             compact: compact,
             dense: dense,
-            useOverlayInspector: useOverlayInspector,
+            scrollInternally: true,
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildCompactTaskWorkspace({
+    required AgendaProvider agenda,
+    required TaskModel? selectedTask,
+    required bool dense,
+    required double viewportHeight,
+  }) {
+    final spacing = dense ? 12.0 : 16.0;
+    final hasAttachedPanel = _hasCompactAttachedPanel(agenda, selectedTask);
+    final queueMinHeight = viewportHeight < 780 ? 340.0 : 420.0;
+
+    return SingleChildScrollView(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(minHeight: viewportHeight),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _buildControlDeck(agenda: agenda, compact: true, dense: dense),
+            if (hasAttachedPanel) ...[
+              SizedBox(height: spacing),
+              _isCompactPanelMinimized
+                  ? _buildCompactPanelHandle(
+                      agenda: agenda,
+                      selectedTask: selectedTask,
+                    )
+                  : ConstrainedBox(
+                      constraints: BoxConstraints(minHeight: dense ? 220 : 260),
+                      child: _buildInspectorPane(
+                        agenda: agenda,
+                        selectedTask: selectedTask,
+                        compact: true,
+                        dense: dense,
+                        onMinimize: _minimizeCompactPanel,
+                        onClose: () => _dismissAttachedPanel(agenda),
+                      ),
+                    ),
+            ],
+            SizedBox(height: spacing),
+            _buildTaskListPane(
+              agenda: agenda,
+              selectedTask: selectedTask,
+              compact: true,
+              dense: dense,
+              scrollInternally: false,
+              minBodyHeight: queueMinHeight,
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -837,14 +885,12 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
     required TaskModel? selectedTask,
     required bool compact,
     required bool dense,
-    required bool useOverlayInspector,
+    required bool scrollInternally,
+    double? minBodyHeight,
   }) {
     final theme = Theme.of(context);
     final tasks = agenda.filteredTasks;
     final isBatchMode = agenda.isBatchMode;
-    final showOverlayInspector =
-        useOverlayInspector &&
-        (selectedTask != null || (isBatchMode && agenda.hasBatchSelection));
     final queueActions = tasks.isNotEmpty
         ? Wrap(
             spacing: 8,
@@ -853,7 +899,10 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
             children: [
               if (isBatchMode) ...[
                 TextButton.icon(
-                  onPressed: agenda.selectAllVisibleTasks,
+                  onPressed: () {
+                    _expandCompactPanel();
+                    agenda.selectAllVisibleTasks();
+                  },
                   icon: const Icon(Icons.select_all),
                   label: const Text('Select all'),
                 ),
@@ -864,19 +913,22 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
                     label: const Text('Clear'),
                   ),
                 TextButton.icon(
-                  onPressed: agenda.exitBatchMode,
+                  onPressed: () => _dismissAttachedPanel(agenda),
                   icon: const Icon(Icons.done_all),
                   label: Text(compact ? 'Done' : 'Done selecting'),
                 ),
               ] else ...[
                 TextButton.icon(
-                  onPressed: agenda.enterBatchMode,
+                  onPressed: () {
+                    _expandCompactPanel();
+                    agenda.enterBatchMode();
+                  },
                   icon: const Icon(Icons.checklist_outlined),
                   label: const Text('Select'),
                 ),
                 if (selectedTask != null)
                   TextButton.icon(
-                    onPressed: agenda.clearSelection,
+                    onPressed: () => _dismissAttachedPanel(agenda),
                     icon: const Icon(Icons.clear),
                     label: const Text('Clear selection'),
                   ),
@@ -909,9 +961,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
                             ? agenda.hasBatchSelection
                                   ? '${agenda.batchSelectedCount} task(s) selected for batch actions.'
                                   : 'Select tasks to mark done, reopen, or delete them together.'
-                            : useOverlayInspector
-                            ? 'Select a row to inspect it in an overlay without shrinking the queue.'
-                            : 'Select a row to open the inline inspector.',
+                            : 'Select a row to review its details in the attached panel.',
                         style: theme.textTheme.bodySmall,
                         maxLines: dense ? 2 : null,
                         overflow: dense ? TextOverflow.ellipsis : null,
@@ -941,8 +991,6 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
                                   ? agenda.hasBatchSelection
                                         ? '${agenda.batchSelectedCount} task(s) selected for batch actions.'
                                         : 'Select tasks to mark done, reopen, or delete them together.'
-                                  : useOverlayInspector
-                                  ? 'Select a row to inspect it in an overlay without shrinking the queue.'
                                   : 'Select a row to inspect and act without leaving the queue.',
                               style: theme.textTheme.bodySmall,
                               maxLines: dense ? 1 : null,
@@ -956,61 +1004,160 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
                   ),
           ),
           Divider(height: 1, color: theme.colorScheme.outlineVariant),
-          Expanded(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final queueBody = tasks.isEmpty
-                    ? _buildEmptyState(agenda)
-                    : ListView.separated(
-                        padding: EdgeInsets.fromLTRB(
-                          dense ? 14 : 18,
-                          dense ? 10 : 14,
-                          dense ? 14 : 18,
-                          dense ? 14 : 18,
-                        ),
-                        itemCount: tasks.length,
-                        separatorBuilder: (context, index) =>
-                            SizedBox(height: dense ? 8 : 10),
-                        itemBuilder: (context, index) {
-                          final task = tasks[index];
-                          final isSelected = selectedTask?.id == task.id;
-                          return _WorkspaceTaskCard(
-                            task: task,
-                            isBatchMode: isBatchMode,
-                            isBatchSelected: agenda.isTaskBatchSelected(
-                              task.id,
-                            ),
-                            isSelected: isSelected,
-                            dense: dense,
-                            onTap: () => isBatchMode
-                                ? agenda.toggleTaskInBatchSelection(task.id)
-                                : agenda.selectTask(task),
-                            onMarkDone: task.isCompleted
-                                ? null
-                                : () => agenda.markTaskCompleted(task.id),
-                            onToggleBatchSelection: isBatchMode
-                                ? () =>
-                                      agenda.toggleTaskInBatchSelection(task.id)
-                                : null,
-                          );
-                        },
-                      );
-
-                return Stack(
-                  children: [
-                    Positioned.fill(child: queueBody),
-                    if (showOverlayInspector)
-                      _buildCompactInspectorOverlay(
-                        agenda: agenda,
-                        selectedTask: selectedTask,
-                        dense: dense,
-                        availableWidth: constraints.maxWidth,
-                        availableHeight: constraints.maxHeight,
-                      ),
-                  ],
-                );
-              },
+          if (scrollInternally)
+            Expanded(child: _buildTaskQueueBody(agenda, selectedTask, dense))
+          else
+            ConstrainedBox(
+              constraints: BoxConstraints(minHeight: minBodyHeight ?? 320),
+              child: _buildTaskQueueBody(
+                agenda,
+                selectedTask,
+                dense,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+              ),
             ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTaskQueueBody(
+    AgendaProvider agenda,
+    TaskModel? selectedTask,
+    bool dense, {
+    bool shrinkWrap = false,
+    ScrollPhysics? physics,
+  }) {
+    final tasks = agenda.filteredTasks;
+
+    if (tasks.isEmpty) {
+      return _buildEmptyState(agenda);
+    }
+
+    return ListView.separated(
+      shrinkWrap: shrinkWrap,
+      physics: physics,
+      padding: EdgeInsets.fromLTRB(
+        dense ? 14 : 18,
+        dense ? 10 : 14,
+        dense ? 14 : 18,
+        dense ? 14 : 18,
+      ),
+      itemCount: tasks.length,
+      separatorBuilder: (context, index) => SizedBox(height: dense ? 8 : 10),
+      itemBuilder: (context, index) {
+        final task = tasks[index];
+        final isSelected = selectedTask?.id == task.id;
+        return _WorkspaceTaskCard(
+          task: task,
+          isBatchMode: agenda.isBatchMode,
+          isBatchSelected: agenda.isTaskBatchSelected(task.id),
+          isSelected: isSelected,
+          dense: dense,
+          onTap: () => _handleTaskCardTap(agenda, task),
+          onMarkDone: task.isCompleted
+              ? null
+              : () => agenda.markTaskCompleted(task.id),
+          onToggleBatchSelection: agenda.isBatchMode
+              ? () => _handleTaskCardTap(agenda, task)
+              : null,
+        );
+      },
+    );
+  }
+
+  bool _hasCompactAttachedPanel(AgendaProvider agenda, TaskModel? selectedTask) {
+    return selectedTask != null || (agenda.isBatchMode && agenda.hasBatchSelection);
+  }
+
+  void _handleTaskCardTap(AgendaProvider agenda, TaskModel task) {
+    _expandCompactPanel();
+    if (agenda.isBatchMode) {
+      agenda.toggleTaskInBatchSelection(task.id);
+      return;
+    }
+
+    agenda.selectTask(task);
+  }
+
+  void _expandCompactPanel() {
+    if (!_isCompactPanelMinimized) {
+      return;
+    }
+
+    setState(() {
+      _isCompactPanelMinimized = false;
+    });
+  }
+
+  void _minimizeCompactPanel() {
+    if (_isCompactPanelMinimized) {
+      return;
+    }
+
+    setState(() {
+      _isCompactPanelMinimized = true;
+    });
+  }
+
+  void _dismissAttachedPanel(AgendaProvider agenda) {
+    if (_isCompactPanelMinimized) {
+      setState(() {
+        _isCompactPanelMinimized = false;
+      });
+    }
+
+    if (agenda.isBatchMode) {
+      agenda.exitBatchMode();
+      return;
+    }
+
+    agenda.clearSelection();
+  }
+
+  Widget _buildCompactPanelHandle({
+    required AgendaProvider agenda,
+    required TaskModel? selectedTask,
+  }) {
+    final theme = Theme.of(context);
+    final label = agenda.isBatchMode
+        ? '${agenda.batchSelectedCount} selected for batch actions'
+        : selectedTask?.title ?? 'Task details';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: _panelDecoration(
+        theme,
+        color: theme.colorScheme.surfaceContainerLow,
+      ),
+      child: Row(
+        children: [
+          Icon(
+            agenda.isBatchMode
+                ? Icons.checklist_rtl_outlined
+                : Icons.notes_outlined,
+            color: theme.colorScheme.primary,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.titleSmall,
+            ),
+          ),
+          const SizedBox(width: 12),
+          TextButton.icon(
+            onPressed: _expandCompactPanel,
+            icon: const Icon(Icons.expand_less),
+            label: const Text('Open'),
+          ),
+          IconButton(
+            onPressed: () => _dismissAttachedPanel(agenda),
+            icon: const Icon(Icons.close),
+            tooltip: 'Close panel',
           ),
         ],
       ),
@@ -1108,89 +1255,13 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
     );
   }
 
-  Widget _buildCompactInspectorOverlay({
-    required AgendaProvider agenda,
-    required TaskModel? selectedTask,
-    required bool dense,
-    required double availableWidth,
-    required double availableHeight,
-  }) {
-    final theme = Theme.of(context);
-    final useBottomSheetStyle = availableWidth < 680;
-    final maxPanelWidth = useBottomSheetStyle
-        ? availableWidth - 12
-        : availableWidth >= 760
-        ? 430.0
-        : availableWidth - 28;
-    final maxPanelHeight = useBottomSheetStyle
-        ? (availableHeight * 0.62).clamp(260.0, 420.0)
-        : availableHeight - (dense ? 24 : 32);
-
-    return Positioned.fill(
-      child: Stack(
-        children: [
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () => _dismissCompactInspectorOverlay(agenda),
-            child: ColoredBox(
-              color: theme.colorScheme.scrim.withValues(alpha: 0.08),
-            ),
-          ),
-          Align(
-            alignment: useBottomSheetStyle
-                ? Alignment.bottomCenter
-                : Alignment.topRight,
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(
-                dense ? 8 : 12,
-                dense ? 8 : 12,
-                dense ? 8 : 12,
-                useBottomSheetStyle ? (dense ? 8 : 12) : (dense ? 12 : 16),
-              ),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxWidth: maxPanelWidth,
-                  maxHeight: maxPanelHeight,
-                  minWidth: useBottomSheetStyle ? 0 : 320,
-                ),
-                child: Material(
-                  color: Colors.transparent,
-                  elevation: 10,
-                  shadowColor: theme.colorScheme.shadow.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(
-                    useBottomSheetStyle ? 28 : 24,
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: _buildInspectorPane(
-                    agenda: agenda,
-                    selectedTask: selectedTask,
-                    compact: false,
-                    dense: dense,
-                    translucentBackground: true,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _dismissCompactInspectorOverlay(AgendaProvider agenda) {
-    if (agenda.isBatchMode) {
-      agenda.exitBatchMode();
-      return;
-    }
-
-    agenda.clearSelection();
-  }
-
   Widget _buildInspectorPane({
     required AgendaProvider agenda,
     required TaskModel? selectedTask,
     required bool compact,
     required bool dense,
+    VoidCallback? onMinimize,
+    VoidCallback? onClose,
     bool translucentBackground = false,
   }) {
     final theme = Theme.of(context);
@@ -1207,6 +1278,8 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
               agenda: agenda,
               compact: compact,
               dense: dense,
+              onMinimize: onMinimize,
+              onClose: onClose,
             )
           : selectedTask == null
           ? _buildInspectorPlaceholder(compact: compact, dense: dense)
@@ -1223,23 +1296,34 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              compact ? 'Inline Inspector' : 'Task Inspector',
+                              compact ? 'Task details' : 'Task Inspector',
                               style: theme.textTheme.titleMedium,
                             ),
                             const SizedBox(height: 4),
                             Text(
                               compact
-                                  ? 'Selection details stay available above the queue on narrow widths.'
+                                  ? 'Attached details for the active task.'
                                   : 'Desktop detail surface for the active task.',
                               style: theme.textTheme.bodySmall,
                             ),
                           ],
                         ),
                       ),
-                      IconButton(
-                        onPressed: agenda.clearSelection,
-                        icon: const Icon(Icons.close),
-                        tooltip: 'Clear selection',
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (onMinimize != null)
+                            IconButton(
+                              onPressed: onMinimize,
+                              icon: const Icon(Icons.expand_more),
+                              tooltip: 'Minimize panel',
+                            ),
+                          IconButton(
+                            onPressed: onClose ?? agenda.clearSelection,
+                            icon: const Icon(Icons.close),
+                            tooltip: 'Clear selection',
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -1363,6 +1447,8 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
     required AgendaProvider agenda,
     required bool compact,
     required bool dense,
+    VoidCallback? onMinimize,
+    VoidCallback? onClose,
   }) {
     final theme = Theme.of(context);
     final selectedTasks = agenda.selectedBatchTasks;
@@ -1414,7 +1500,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      compact ? 'Batch Summary' : 'Batch Actions',
+                      compact ? 'Batch actions' : 'Batch Actions',
                       style: theme.textTheme.titleMedium,
                     ),
                     const SizedBox(height: 4),
@@ -1425,10 +1511,21 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
                   ],
                 ),
               ),
-              IconButton(
-                onPressed: agenda.exitBatchMode,
-                icon: const Icon(Icons.close),
-                tooltip: 'Exit batch mode',
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (onMinimize != null)
+                    IconButton(
+                      onPressed: onMinimize,
+                      icon: const Icon(Icons.expand_more),
+                      tooltip: 'Minimize panel',
+                    ),
+                  IconButton(
+                    onPressed: onClose ?? agenda.exitBatchMode,
+                    icon: const Icon(Icons.close),
+                    tooltip: 'Exit batch mode',
+                  ),
+                ],
               ),
             ],
           ),

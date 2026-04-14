@@ -194,7 +194,7 @@ void main() {
   );
 
   testWidgets(
-    'queue sort control reorders tasks and notebook widths use an overlay inspector',
+    'queue sort control reorders tasks and notebook widths use attached details',
     (tester) async {
       tester.view.devicePixelRatio = 1.0;
       tester.view.physicalSize = const Size(1100, 900);
@@ -257,20 +257,10 @@ void main() {
         lessThan(_top(tester, 'Earlier task')),
       );
 
-      await tester.tap(find.text('Select'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Batch actions are ready'), findsNothing);
-      expect(find.text('Task Queue'), findsOneWidget);
-
-      await tester.tap(find.text('Done'));
-      await tester.pumpAndSettle();
-
       await tester.tap(find.text('Earlier task'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Task Inspector'), findsOneWidget);
-      expect(find.text('Inline Inspector'), findsNothing);
+      expect(find.text('Task details'), findsOneWidget);
       expect(find.text('Task Queue'), findsOneWidget);
     },
   );
@@ -323,7 +313,7 @@ void main() {
   );
 
   testWidgets(
-    'small screens use an overlay panel instead of inline inspector space',
+    'small screens use attached details instead of inline inspector space',
     (tester) async {
       tester.view.devicePixelRatio = 1.0;
       tester.view.physicalSize = const Size(540, 900);
@@ -366,9 +356,62 @@ void main() {
       await tester.tap(find.text('Mobile overlay task'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Task Inspector'), findsOneWidget);
-      expect(find.text('Inline Inspector'), findsNothing);
+      expect(find.text('Task details'), findsOneWidget);
       expect(find.text('Task Queue'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'compact task details can be minimized into a persistent handle',
+    (tester) async {
+      tester.view.devicePixelRatio = 1.0;
+      tester.view.physicalSize = const Size(540, 900);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final seededTask = TaskModel(
+        id: 'task-minimize',
+        title: 'Minimize me',
+        beginsAt: DateTime(2026, 2, 24, 9),
+        estimatedDuration: const Duration(hours: 1),
+        syncStatus: SyncStatus.dirty,
+      );
+
+      final repository = _InMemoryTasksRepository([seededTask]);
+      final runtimeDebug = RuntimeDebugProvider();
+      addTearDown(runtimeDebug.dispose);
+
+      final syncService = TaskSyncService.forTesting(
+        repository,
+        remote: _FakeTaskRemoteDataSource([]),
+        connectivityCheck: () async => [ConnectivityResult.wifi],
+        hasActiveSession: () => false,
+        runtimeDebug: runtimeDebug,
+      );
+
+      final agenda = AgendaProvider(
+        repository,
+        syncService,
+        _InMemoryUserSessionService(runtimeDebug: runtimeDebug),
+        runtimeDebug: runtimeDebug,
+      );
+      addTearDown(agenda.dispose);
+
+      await tester.pumpWidget(
+        _CompactWorkspaceHarness(agenda: agenda, runtimeDebug: runtimeDebug),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Minimize me'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Task details'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Minimize panel'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Task details'), findsNothing);
+      expect(find.text('Open'), findsOneWidget);
     },
   );
 }
