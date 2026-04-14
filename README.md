@@ -66,11 +66,11 @@ This repo now uses a monorepo-style structure:
 
 | Path | Purpose |
 | --- | --- |
-| `flutter-app\` | Flutter web app and platform projects |
-| `notify-worker\` | Cloudflare Worker for scheduled notifications |
-| `supabase\` | Supabase config, functions, migrations, and local backend tooling |
-| `docs\` | Architecture, local development, deployment, experiments, and project analysis |
-| `.github\` | CI/CD workflows and shared GitHub Action logic |
+| [`flutter-app\`](flutter-app/README.md) | Flutter web app and platform projects |
+| [`notify-worker\`](notify-worker/README.md) | Cloudflare Worker for scheduled notifications |
+| [`supabase\`](supabase/README.md) | Supabase config, functions, migrations, and local backend tooling |
+| [`docs\`](docs/README.md) | Architecture, local development, deployment, experiments, and project analysis |
+| [`.github\`](.github/README.md) | CI/CD workflows and shared GitHub Action logic |
 
 ## Documentation Summary
 
@@ -87,6 +87,8 @@ This repo now uses a monorepo-style structure:
 | [`docs/reliability_lab_checklist.md`](docs/reliability_lab_checklist.md) | Milestones for turning the current prototype into a stronger reliability lab. |
 
 To jump straight into the client, start with [`flutter-app/lib/main.dart`](flutter-app/lib/main.dart).
+
+Each immediate top-level project directory now also has its own `README.md` with local workflow notes and project-specific guidance.
 
 ## Current status
 

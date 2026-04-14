@@ -140,6 +140,10 @@ The goal is to make reliability behavior inspectable.
 ## Repository guide
 
 - [`../README.md`](../README.md): root visitor-facing overview and monorepo entry point
+- [`../.github/README.md`](../.github/README.md): repository automation surface, workflows, and deployment-related GitHub Actions context
+- [`../flutter-app/README.md`](../flutter-app/README.md): Flutter client overview, local run commands, runtime config, and app-specific concerns
+- [`../notify-worker/README.md`](../notify-worker/README.md): Cloudflare Worker purpose, local commands, runtime expectations, and delivery concerns
+- [`../supabase/README.md`](../supabase/README.md): backend surface, local Supabase workflow, functions, migrations, and backend-specific concerns
 - [`ARCHITECTURE.md`](ARCHITECTURE.md): implemented topology, state ownership, and evolution path
 - [`DEPLOYMENT.md`](DEPLOYMENT.md): GitHub Actions workflows, GitHub Pages integration, worker deployment, and environment matrix
 - [`LOCAL_DEVELOPMENT.md`](LOCAL_DEVELOPMENT.md): repository-root workflow, local commands, and developer setup for running the projects locally
@@ -152,6 +156,17 @@ The goal is to make reliability behavior inspectable.
 - [`reliability_lab_checklist.md`](reliability_lab_checklist.md): milestone checklist for turning the prototype into a stronger lab
 - [`project_analysis.md`](project_analysis.md): current-state analysis of the codebase after the shell transformation
 - `.tmp/ui_lab_redesign_plan.md`: local execution tracker for the UI redesign work
+
+## Working with this folder
+
+This directory is the long-form explanation layer for the repository.
+Use the root README and subproject READMEs as entry points, then use the documents here when you need deeper product, architecture, deployment, or testing context.
+
+When code changes affect behavior, the docs here should stay aligned with:
+
+- the actual runtime behavior in `flutter-app\`, `notify-worker\`, and `supabase\`
+- the repository-root local workflow in `LOCAL_DEVELOPMENT.md`
+- the operator framing of the project as a reliability lab rather than a generic task app
 
 ## Tech stack
 

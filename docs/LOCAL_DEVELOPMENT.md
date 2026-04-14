@@ -10,6 +10,13 @@ It keeps the day-to-day developer workflow out of the main `README.md` while sti
 This VS Code workspace stays rooted at the repository top level.
 The checked-in launch and task configs point into the nested projects for you.
 
+For folder-specific setup and caveats, each immediate top-level project directory now has its own README:
+
+- [`..\flutter-app\README.md`](../flutter-app/README.md)
+- [`..\notify-worker\README.md`](../notify-worker/README.md)
+- [`..\supabase\README.md`](../supabase/README.md)
+- [`..\.github\README.md`](../.github/README.md)
+
 ## Local prerequisites
 
 - Flutter SDK for the web app workflow
