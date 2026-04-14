@@ -1,6 +1,6 @@
 ---
 name: repo-task-loop
-description: Run the full local AI-assisted workflow for this repo: plan first, then either implement immediately or stop for review based on ambiguity, risk, and scope.
+description: "Run the full local AI-assisted workflow for this repo: plan first, then either implement immediately or stop for review based on ambiguity, risk, and scope."
 ---
 
 Use this skill for the repository's default end-to-end working loop:
