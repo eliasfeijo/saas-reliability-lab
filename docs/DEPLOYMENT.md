@@ -94,6 +94,22 @@ Operational expectations:
 
 On pushes to `master`, the repository currently uses **parallel workflow triggering**, not a gated deploy chain.
 
+```mermaid
+flowchart TD
+    PR["Pull request"] --> Verify["verify.yaml"]
+    Push["Push to master"] --> Verify
+    Push --> Frontend["deploy.yaml"]
+    Push --> WorkerPaths{"notify-worker/** or worker workflow changed?"}
+    WorkerPaths -->|Yes| Worker["deploy-notify-worker.yaml"]
+    WorkerPaths -->|No| Skip["No worker deploy"]
+```
+
+Manual trigger behavior is narrower than the push path:
+
+- `verify.yaml` can also be started with `workflow_dispatch`
+- `deploy-notify-worker.yaml` can also be started with `workflow_dispatch`
+- `deploy.yaml` does **not** currently expose a manual trigger
+
 What that means in practice:
 
 - `verify.yaml` starts on every push to `master`
@@ -133,6 +149,20 @@ For a reliability-lab repository, that tradeoff is understandable in the short t
 ## GitHub Pages integration
 
 ### Branch and publish model
+
+```mermaid
+flowchart TD
+    Master["master"]
+    Deploy["deploy.yaml"]
+    Build["Flutter web release build"]
+    Pages["gh-pages"]
+    Site["GitHub Pages site"]
+
+    Master --> Deploy
+    Deploy --> Build
+    Build --> Pages
+    Pages --> Site
+```
 
 - source branch: `master`
 - deploy branch: `gh-pages`

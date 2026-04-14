@@ -66,42 +66,54 @@ Why:
 
 ## High-level topology
 
+Read the implemented system as three linked surfaces: the browser runtime, the Supabase-backed cloud surface, and the separately deployable scheduled worker.
+
 ```mermaid
-flowchart LR
-    User[User in Browser]
-    Shell[LabShell]
-    Left[Operator Rail]
-    Center[Task Workspace]
-    Right[Runtime Diagnostics]
-    Agenda[AgendaProvider]
-    Runtime[RuntimeDebugProvider]
-    LocalState[SharedPreferences Local Store]
-    Sync[TaskSyncService]
-    Auth[Supabase Auth]
-    DB[(Supabase Postgres)]
-    Edge[Supabase Edge Functions]
-    Worker[Cloudflare Notify Worker]
-    Push[Push Provider]
-    SW[Browser Service Worker]
+flowchart TD
+    User["Browser user"]
+
+    subgraph Browser["Flutter web runtime"]
+        Shell["LabShell"]
+        Left["Operator Rail"]
+        Workspace["Task Workspace"]
+        Diagnostics["Runtime Diagnostics"]
+        Agenda["AgendaProvider"]
+        Runtime["RuntimeDebugProvider"]
+        Local["SharedPreferences task store"]
+        Sync["TaskSyncService"]
+
+        Shell --> Left
+        Shell --> Workspace
+        Shell --> Diagnostics
+        Left --> Agenda
+        Left --> Runtime
+        Workspace --> Agenda
+        Diagnostics --> Runtime
+        Agenda --> Local
+        Agenda --> Sync
+    end
+
+    subgraph Cloud["Supabase surface"]
+        Auth["Supabase Auth"]
+        DB[("Postgres + RLS tables")]
+        Edge["Edge Functions"]
+    end
+
+    subgraph Delivery["Scheduled delivery surface"]
+        Worker["Cloudflare notify worker"]
+        Push["Web Push provider"]
+        PushSW["Browser push service worker"]
+    end
 
     User --> Shell
-    Shell --> Left
-    Shell --> Center
-    Shell --> Right
-    Center --> Agenda
-    Left --> Agenda
-    Left --> Runtime
-    Right --> Runtime
-    Agenda --> LocalState
-    Agenda --> Sync
     Sync --> Auth
     Sync --> DB
-    Center --> Edge
+    Workspace --> Edge
     Edge --> DB
     Worker --> DB
     Worker --> Push
-    Push --> SW
-    SW --> User
+    Push --> PushSW
+    PushSW --> User
 ```
 
 ## Client shell architecture
@@ -282,6 +294,36 @@ Important constraint:
 This is still a task-based reconciliation pass, not a true outbox or per-operation replay protocol.
 Because of that, a future archive or trash workflow needs explicit backend lifecycle support instead of a local-only hidden state.
 
+Current implemented sync pass:
+
+```mermaid
+flowchart TD
+    LocalChange["Local task change"]
+    Agenda["AgendaProvider"]
+    Persist["Write local snapshot"]
+    SyncGate{"Authenticated session<br/>and sync allowed?"}
+    Wait["Keep local state visible<br/>until sync can run"]
+    Sync["TaskSyncService"]
+    Checks["Check connectivity<br/>and live auth session"]
+    DeleteReplay["Replay authenticated deletes"]
+    Reconcile["Reconcile dirty local tasks<br/>against remote timestamps"]
+    Fetch["Fetch remote tasks"]
+    Merge["Write merged canonical<br/>local snapshot"]
+    Outcome["Publish sync outcome<br/>to runtime diagnostics"]
+
+    LocalChange --> Agenda
+    Agenda --> Persist
+    Persist --> SyncGate
+    SyncGate -->|No| Wait
+    SyncGate -->|Yes| Sync
+    Sync --> Checks
+    Checks --> DeleteReplay
+    DeleteReplay --> Reconcile
+    Reconcile --> Fetch
+    Fetch --> Merge
+    Merge --> Outcome
+```
+
 ### 5. Session and identity handling
 
 Primary files:
@@ -351,6 +393,36 @@ Responsibilities:
 - send push payloads to all active subscriptions for the relevant user
 - mark tasks as notified after successful provider acceptance
 - delete stale subscriptions when providers return `404` or `410`
+
+Current notification path:
+
+```mermaid
+flowchart TD
+    Browser["Signed-in browser"]
+    Save["save_subscription edge function"]
+    Subs[("push_subscriptions")]
+    Cron["Cloudflare cron<br/>*/5 * * * *"]
+    Worker["notify-worker"]
+    Pending["Read due notifications"]
+    Push["Web Push provider"]
+    Result{"Provider accepted?"}
+    Mark["Mark task notified"]
+    Cleanup["Delete stale subscription<br/>on 404 or 410"]
+    PushSW["Browser push service worker"]
+    User["Visible notification"]
+
+    Browser --> Save
+    Save --> Subs
+    Cron --> Worker
+    Worker --> Pending
+    Pending --> Subs
+    Worker --> Push
+    Push --> Result
+    Result -->|Yes| Mark
+    Result -->|404 or 410| Cleanup
+    Push --> PushSW
+    PushSW --> User
+```
 
 ## State ownership
 

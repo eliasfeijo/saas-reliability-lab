@@ -10,6 +10,20 @@ It keeps the day-to-day developer workflow out of the main `README.md` while sti
 This VS Code workspace stays rooted at the repository top level.
 The checked-in launch and task configs point into the nested projects for you.
 
+```mermaid
+flowchart TD
+    Root["Repository root"]
+    Root --> Pick{"What are you changing?"}
+    Pick --> Flutter["flutter-app"]
+    Pick --> Worker["notify-worker"]
+    Pick --> Supabase["supabase"]
+    Pick --> Docs["docs or .github"]
+    Flutter --> FlutterCmd["flutter run or flutter test"]
+    Worker --> WorkerCmd["yarn test or yarn deploy"]
+    Supabase --> SupabaseCmd["supabase start or db reset"]
+    Docs --> DocsRefs["check docs, workflows, and repo guidance"]
+```
+
 The same assumption applies to local AI-assisted development:
 
 - start `copilot` from the repository root

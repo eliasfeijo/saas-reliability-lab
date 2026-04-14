@@ -42,13 +42,14 @@ The app now opens into a lab-style workspace rather than a single centered task 
 On wide layouts, the center pane is intentionally width-limited and organized as a desktop task canvas rather than a full-width stretched list.
 
 ```mermaid
-flowchart LR
-    Left[Operator Rail]
-    Center[Task Workspace]
-    Right[Runtime Diagnostics]
-
-    Left --> Center
-    Center --> Right
+flowchart TD
+    Shell["Lab shell"]
+    Shell --> Left["Operator Rail"]
+    Shell --> Center["Task Workspace"]
+    Shell --> Right["Runtime Diagnostics"]
+    Shell --> Narrow["Narrow screens"]
+    Narrow --> LeftDrawer["Operator drawer"]
+    Narrow --> RightDrawer["Diagnostics drawer"]
 ```
 
 ### Operator Rail

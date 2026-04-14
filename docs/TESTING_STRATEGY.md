@@ -130,6 +130,16 @@ After that, adding deeper coverage becomes safer and faster.
 
 ## Test taxonomy for this repo
 
+```mermaid
+flowchart TD
+    Contract["Implemented reliability behavior"]
+    Contract --> Unit["Unit<br/>models and reconciliation rules"]
+    Contract --> Widget["Widget<br/>shell, rails, workspace, diagnostics"]
+    Contract --> Integration["Integration<br/>auth, sync, and local/remote flows"]
+    Contract --> Worker["Worker<br/>notification dispatch and cleanup"]
+    Contract --> EndToEnd["End-to-end or manual<br/>browser push and scheduled runtime"]
+```
+
 | Layer | Primary concern | Examples in this repo |
 | --- | --- | --- |
 | Unit | pure logic, model behavior, reconciliation rules | `TaskModel`, task ordering, sync merge rules, session helpers |
