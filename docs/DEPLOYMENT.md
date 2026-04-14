@@ -90,6 +90,46 @@ Operational expectations:
 - test failures should block trust in the current branch even when deploy workflows have not run
 - new reliability-critical suites should be added here as they become part of the repo contract
 
+## Current workflow orchestration
+
+On pushes to `master`, the repository currently uses **parallel workflow triggering**, not a gated deploy chain.
+
+What that means in practice:
+
+- `verify.yaml` starts on every push to `master`
+- `deploy.yaml` also starts on every push to `master`
+- `deploy-notify-worker.yaml` starts on the same push when its path filters match
+- none of those workflows currently wait for one another
+
+So yes: the current setup allows deploy jobs to run in parallel with repository verification.
+That is not accidental in the workflow files.
+It is the result of keeping:
+
+- repository verification as its own workflow
+- frontend deployment as its own workflow
+- worker deployment as its own workflow
+
+### Why the repo is currently set up this way
+
+For the current shape of this project, the split has some real advantages:
+
+- the public GitHub Pages demo updates quickly after a merge to `master`
+- the Cloudflare worker can remain deployable on its own instead of being coupled to every frontend change
+- repository trust and deployment behavior are documented as separate concerns, which fits the reliability-lab framing
+
+This is a reasonable **transitional** setup for a small monorepo with one public demo surface and one separately deployable scheduled worker.
+It keeps automation simple while the product, tests, and backend contract are still evolving.
+
+### Tradeoffs of the current parallel model
+
+This setup also has an important cost:
+
+- a deploy can finish before `verify.yaml` reports a failure
+- `master` is acting as both the integration branch and the deployment trigger
+- a broken post-merge state can become public briefly even though verification later reports that the commit should not be trusted
+
+For a reliability-lab repository, that tradeoff is understandable in the short term, but it should be read as a speed-vs-safety compromise, not as the ideal long-term CI/CD model.
+
 ## GitHub Pages integration
 
 ### Branch and publish model
@@ -215,6 +255,14 @@ Symptoms:
 - successful Actions run but no visible production update
 - stale `gh-pages` output still served publicly
 
+### 5. Deploy completed before verification failed
+
+Symptoms:
+
+- GitHub Pages or the worker updates successfully
+- `verify.yaml` later reports failing Flutter or worker tests for the same commit
+- the public demo reflects a commit that the repository itself does not currently trust
+
 ## Recommended operator checks after deploy changes
 
 When changing deployment or push runtime behavior, verify all of the following against the public site:
@@ -225,9 +273,66 @@ When changing deployment or push runtime behavior, verify all of the following a
 4. a signed-in browser profile can create and save a push subscription.
 5. a due task still reaches the Cloudflare worker delivery path.
 
+## Recommended CI/CD direction for this project
+
+The recommendation for this repository is:
+
+1. **Short term:** keep the frontend and worker as separately deployable surfaces, but protect `master` with pull requests and required `verify.yaml` success before merge.
+2. **Medium term:** stop letting deploy workflows race verification on `master`; make deploy jobs depend on successful verification of the same commit.
+3. **Long term:** promote builds through explicit environments instead of treating a direct push to `master` as both merge and production release.
+
+### Short-term recommendation
+
+For the current maturity of the repo, the best near-term setup is:
+
+- keep `verify.yaml` as the repository trust workflow
+- keep frontend and worker deployment logically separate from each other
+- require pull requests into `master`
+- require successful verification before merge
+- avoid direct pushes to `master`
+
+Why this fits the project now:
+
+- the repo is still a reliability-lab prototype rather than a multi-environment product platform
+- the worker really is operationally independent from the frontend
+- the current verification surface is still growing, so preserving a clearly owned verification workflow is useful
+
+If `master` is protected this way, the risk of post-merge parallel deploys becomes much smaller because most bad commits should already be stopped before merge.
+
+### Medium-term recommendation
+
+As soon as CI trust matters more than fastest-possible demo updates, the deploy model should change to **verified-then-deploy**, while still preserving component independence.
+
+Recommended target shape:
+
+- frontend deploy waits for successful verification relevant to the frontend
+- worker deploy waits for successful verification relevant to the worker
+- schema or backend validation joins verification once it becomes part of the repository contract
+
+There are two good ways to do that:
+
+| Option | Shape | Why it fits |
+| --- | --- | --- |
+| Single workflow with dependent jobs | verify jobs run first, deploy jobs use `needs:` | simplest way to make ordering explicit and keep all status in one run |
+| Reusable workflows with an orchestrating pipeline | shared verify and deploy logic stays modular, orchestration enforces order | better if the repo keeps growing and wants modular workflow ownership |
+
+For this repo, the first option is the cleaner medium-term choice unless workflow complexity grows substantially.
+
+### Long-term recommendation
+
+If the project evolves beyond a public lab demo into a more production-like system, CI/CD should become environment-based:
+
+- preview or ephemeral validation for pull requests when practical
+- a staging environment for end-to-end checks across frontend, backend, and worker behavior
+- production promotion from a verified artifact or release candidate, not from an arbitrary branch push
+- manual approval or release-driven promotion for the public environment
+
+At that stage, `master` should represent integrated source, not an implicit production deploy command.
+
 ## Related files
 
 - `README.md`
+- `docs/AI_ASSISTED_DEVELOPMENT.md`
 - `docs/ARCHITECTURE.md`
 - `.github/workflows/deploy.yaml`
 - `.github/workflows/deploy-notify-worker.yaml`

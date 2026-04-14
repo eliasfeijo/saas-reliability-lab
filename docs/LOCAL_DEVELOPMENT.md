@@ -10,6 +10,13 @@ It keeps the day-to-day developer workflow out of the main `README.md` while sti
 This VS Code workspace stays rooted at the repository top level.
 The checked-in launch and task configs point into the nested projects for you.
 
+The same assumption applies to local AI-assisted development:
+
+- start `copilot` from the repository root
+- keep the repository root as the active VS Code workspace
+- reference files in Copilot CLI and VS Code chat with repo-relative paths such as `docs\AI_ASSISTED_DEVELOPMENT.md` or `flutter-app\lib\main.dart`
+- treat `.github\agents\`, `.github\skills\`, and `.github\prompts\` as part of the same root-scoped workflow surface
+
 For folder-specific setup and caveats, each immediate top-level project directory now has its own README:
 
 - [`..\flutter-app\README.md`](../flutter-app/README.md)
@@ -69,6 +76,7 @@ See `TESTING_STRATEGY.md` for:
 
 ## Related docs
 
+- [`AI_ASSISTED_DEVELOPMENT.md`](AI_ASSISTED_DEVELOPMENT.md) for the intended human-and-agent engineering loop
 - [`DEPLOYMENT.md`](DEPLOYMENT.md) for the deployed environment model and CI/CD contract
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) for system ownership and runtime topology
 - [`TESTING_STRATEGY.md`](TESTING_STRATEGY.md) for the repository-wide testing contract

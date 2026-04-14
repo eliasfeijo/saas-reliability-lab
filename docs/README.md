@@ -147,6 +147,7 @@ The goal is to make reliability behavior inspectable.
 - [`ARCHITECTURE.md`](ARCHITECTURE.md): implemented topology, state ownership, and evolution path
 - [`DEPLOYMENT.md`](DEPLOYMENT.md): GitHub Actions workflows, GitHub Pages integration, worker deployment, and environment matrix
 - [`LOCAL_DEVELOPMENT.md`](LOCAL_DEVELOPMENT.md): repository-root workflow, local commands, and developer setup for running the projects locally
+- [`AI_ASSISTED_DEVELOPMENT.md`](AI_ASSISTED_DEVELOPMENT.md): intended human-and-agent development loop, Copilot workflow, and low-friction lifecycle expectations
 - [`TESTING_STRATEGY.md`](TESTING_STRATEGY.md): repo-wide testing contract, current suite inventory, target test taxonomy, and the direction for CI verification and refactoring
 - [`EXPERIMENTS.md`](EXPERIMENTS.md): runnable and planned reliability scenarios
 - [`LAB_SHELL_RESPONSIVE_SPEC.md`](LAB_SHELL_RESPONSIVE_SPEC.md): shell-wide responsive contract for the lab layout, including live resize expectations across desktop, notebook, tablet, and phone widths
