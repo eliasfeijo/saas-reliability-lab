@@ -3,7 +3,7 @@ import 'package:todo_flutter/models/task.dart';
 class TaskFilterController {
   String _searchQuery = '';
   TaskFilter _filter = TaskFilter.all;
-  TaskSort _sort = TaskSort.soonestFirst;
+  TaskSort _sort = TaskSort.closestToNow;
 
   String get searchQuery => _searchQuery;
   TaskFilter get filter => _filter;
@@ -30,7 +30,7 @@ class TaskFilterController {
   }
 
   List<TaskModel> apply(List<TaskModel> tasks) {
-    return tasks.where((task) {
+    final filteredTasks = tasks.where((task) {
       if (task.syncStatus == SyncStatus.deleted) return false;
 
       if (_searchQuery.isNotEmpty &&
@@ -52,12 +52,18 @@ class TaskFilterController {
         case TaskFilter.all:
           return true;
       }
-    }).toList()..sort(_compareTasks);
+    }).toList();
+
+    final referenceNow = DateTime.now();
+    filteredTasks.sort((a, b) => _compareTasks(a, b, referenceNow));
+    return filteredTasks;
   }
 
-  int _compareTasks(TaskModel a, TaskModel b) {
+  int _compareTasks(TaskModel a, TaskModel b, DateTime referenceNow) {
     switch (_sort) {
-      case TaskSort.soonestFirst:
+      case TaskSort.closestToNow:
+        return _compareByClosestToNow(a, b, referenceNow);
+      case TaskSort.earliestFirst:
         return _compareWithTieBreaker(a.beginsAt.compareTo(b.beginsAt), a, b);
       case TaskSort.latestFirst:
         return _compareWithTieBreaker(b.beginsAt.compareTo(a.beginsAt), a, b);
@@ -74,6 +80,27 @@ class TaskFilterController {
           b,
         );
     }
+  }
+
+  int _compareByClosestToNow(
+    TaskModel a,
+    TaskModel b,
+    DateTime referenceNow,
+  ) {
+    final aDistance = a.beginsAt.difference(referenceNow).inMilliseconds.abs();
+    final bDistance = b.beginsAt.difference(referenceNow).inMilliseconds.abs();
+    final distanceCompare = aDistance.compareTo(bDistance);
+    if (distanceCompare != 0) {
+      return distanceCompare;
+    }
+
+    final aIsUpcoming = !a.beginsAt.isBefore(referenceNow);
+    final bIsUpcoming = !b.beginsAt.isBefore(referenceNow);
+    if (aIsUpcoming != bIsUpcoming) {
+      return aIsUpcoming ? -1 : 1;
+    }
+
+    return _compareWithTieBreaker(a.beginsAt.compareTo(b.beginsAt), a, b);
   }
 
   int _compareWithTieBreaker(int primary, TaskModel a, TaskModel b) {

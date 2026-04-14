@@ -201,17 +201,18 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
       addTearDown(tester.view.resetPhysicalSize);
 
+      final now = DateTime.now();
       final laterTask = TaskModel(
         id: 'task-later',
         title: 'Later task',
-        beginsAt: DateTime(2026, 2, 21, 15),
+        beginsAt: now.add(const Duration(days: 2)),
         estimatedDuration: const Duration(hours: 1),
         syncStatus: SyncStatus.dirty,
       );
       final earlierTask = TaskModel(
         id: 'task-earlier',
         title: 'Earlier task',
-        beginsAt: DateTime(2026, 2, 21, 9),
+        beginsAt: now.subtract(const Duration(hours: 1)),
         estimatedDuration: const Duration(hours: 1),
         syncStatus: SyncStatus.dirty,
       );
@@ -245,9 +246,9 @@ void main() {
         _top(tester, 'Earlier task'),
         lessThan(_top(tester, 'Later task')),
       );
-      expect(find.text('Sort: Soonest'), findsOneWidget);
+      expect(find.text('Sort: Closest'), findsOneWidget);
 
-      await tester.tap(find.text('Sort: Soonest'));
+      await tester.tap(find.text('Sort: Closest'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Latest first').last);
       await tester.pumpAndSettle();
@@ -255,6 +256,10 @@ void main() {
       expect(
         _top(tester, 'Later task'),
         lessThan(_top(tester, 'Earlier task')),
+      );
+      expect(
+        (_left(tester, 'Task Queue') - _left(tester, 'Queue Controls')).abs(),
+        lessThan(1),
       );
 
       await tester.tap(find.text('Earlier task'));
@@ -423,6 +428,10 @@ String _textValue(WidgetTester tester, String keyValue) {
 
 double _top(WidgetTester tester, String text) {
   return tester.getTopLeft(find.text(text).first).dy;
+}
+
+double _left(WidgetTester tester, String text) {
+  return tester.getTopLeft(find.text(text).first).dx;
 }
 
 Future<void> _ensureSupabaseInitialized() async {

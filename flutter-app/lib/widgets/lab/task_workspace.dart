@@ -940,6 +940,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
     return Container(
       decoration: _panelDecoration(theme),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
             padding: EdgeInsets.fromLTRB(

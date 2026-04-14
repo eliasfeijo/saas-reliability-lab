@@ -301,7 +301,13 @@ enum TaskStatus { pending, upcoming, inProgress, completed, overdue }
 
 enum TaskFilter { all, completed, pending, today, upcoming, overdue }
 
-enum TaskSort { soonestFirst, latestFirst, recentlyUpdated, priorityHighToLow }
+enum TaskSort {
+  closestToNow,
+  earliestFirst,
+  latestFirst,
+  recentlyUpdated,
+  priorityHighToLow,
+}
 
 extension TaskPriorityExtension on TaskPriority {
   String get displayName {
@@ -417,8 +423,10 @@ extension TaskFilterExtension on TaskFilter {
 extension TaskSortExtension on TaskSort {
   String get label {
     switch (this) {
-      case TaskSort.soonestFirst:
-        return 'Soonest first';
+      case TaskSort.closestToNow:
+        return 'Closest to now';
+      case TaskSort.earliestFirst:
+        return 'Earliest first';
       case TaskSort.latestFirst:
         return 'Latest first';
       case TaskSort.recentlyUpdated:
@@ -430,8 +438,10 @@ extension TaskSortExtension on TaskSort {
 
   String get shortLabel {
     switch (this) {
-      case TaskSort.soonestFirst:
-        return 'Soonest';
+      case TaskSort.closestToNow:
+        return 'Closest';
+      case TaskSort.earliestFirst:
+        return 'Earliest';
       case TaskSort.latestFirst:
         return 'Latest';
       case TaskSort.recentlyUpdated:
