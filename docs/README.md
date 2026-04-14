@@ -143,7 +143,9 @@ The goal is to make reliability behavior inspectable.
 - [`ARCHITECTURE.md`](ARCHITECTURE.md): implemented topology, state ownership, and evolution path
 - [`DEPLOYMENT.md`](DEPLOYMENT.md): GitHub Actions workflows, GitHub Pages integration, worker deployment, and environment matrix
 - [`LOCAL_DEVELOPMENT.md`](LOCAL_DEVELOPMENT.md): repository-root workflow, local commands, and developer setup for running the projects locally
+- [`TESTING_STRATEGY.md`](TESTING_STRATEGY.md): repo-wide testing contract, current suite inventory, target test taxonomy, and the direction for CI verification and refactoring
 - [`EXPERIMENTS.md`](EXPERIMENTS.md): runnable and planned reliability scenarios
+- [`LAB_SHELL_RESPONSIVE_SPEC.md`](LAB_SHELL_RESPONSIVE_SPEC.md): shell-wide responsive contract for the lab layout, including live resize expectations across desktop, notebook, tablet, and phone widths
 - [`TASK_QUEUE_ACTIONS_PLAN.md`](TASK_QUEUE_ACTIONS_PLAN.md): recommended fix for the misleading completion control in Task Queue, plus the phased plan for explicit batch actions
 - [`TASK_WORKSPACE_RESPONSIVE_UX.md`](TASK_WORKSPACE_RESPONSIVE_UX.md): responsive Task Workspace strategy that preserves the desktop split layout while using attached compact panels on notebook and mobile widths
 - [`TASK_DELETION_LIFECYCLE.md`](TASK_DELETION_LIFECYCLE.md): current delete semantics, bug-fix rationale, and the recommended future archive model

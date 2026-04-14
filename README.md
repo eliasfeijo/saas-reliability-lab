@@ -80,6 +80,7 @@ This repo now uses a monorepo-style structure:
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Implemented topology, state ownership, and the current evolution path. |
 | [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | GitHub Actions workflows, GitHub Pages, Cloudflare Worker deployment, and environment expectations. |
 | [`docs/LOCAL_DEVELOPMENT.md`](docs/LOCAL_DEVELOPMENT.md) | Repository-root workflow, local run commands, and the day-to-day setup for working on the app locally. |
+| [`docs/TESTING_STRATEGY.md`](docs/TESTING_STRATEGY.md) | Repo-wide testing contract, current test inventory, and the planned structure for reliability-focused automation. |
 | [`docs/EXPERIMENTS.md`](docs/EXPERIMENTS.md) | Runnable and planned reliability scenarios, expected behavior, and visible evidence. |
 | [`docs/project_analysis.md`](docs/project_analysis.md) | Current system assessment, structural strengths, and the main gaps still left to close. |
 | [`docs/TASK_DELETION_LIFECYCLE.md`](docs/TASK_DELETION_LIFECYCLE.md) | Current deletion semantics, the anonymous-task bug rationale, and the recommended future archive path. |

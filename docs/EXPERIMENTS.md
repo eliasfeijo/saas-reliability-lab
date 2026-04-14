@@ -176,7 +176,7 @@ Verify that a stale local dirty task does not overwrite a fresher remote version
 
 ### Expected evidence
 
-- automated Flutter regression coverage in `flutter-app/test/widget_test.dart`
+- automated Flutter regression coverage in the Flutter app test suite for sync and reconciliation behavior
 - a completed sync outcome in the diagnostics rail
 
 ### Current gaps
@@ -241,7 +241,7 @@ Verify that dead push subscriptions are removed when the provider reports them a
 
 ### Expected evidence
 
-- automated worker coverage in `notify-worker/test/index.spec.ts`
+- automated worker coverage in the notify-worker test suite
 - worker logs show stale-subscription cleanup activity
 
 ### Current gaps

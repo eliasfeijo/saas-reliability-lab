@@ -65,6 +65,31 @@ Operational expectations:
 - the worker deployment is independent from the frontend deployment
 - frontend-only pushes do not redeploy the worker
 
+### 3. Repository verification
+
+Primary file:
+
+- `.github/workflows/verify.yaml`
+
+Trigger:
+
+- every pull request
+- every push to `master`
+- manual `workflow_dispatch`
+
+What it does:
+
+- checks out the repository
+- runs Flutter tests from `flutter-app\`
+- runs worker tests from `notify-worker\`
+- verifies repository correctness without deploying anything
+
+Operational expectations:
+
+- verification remains separate from deployment concerns
+- test failures should block trust in the current branch even when deploy workflows have not run
+- new reliability-critical suites should be added here as they become part of the repo contract
+
 ## GitHub Pages integration
 
 ### Branch and publish model

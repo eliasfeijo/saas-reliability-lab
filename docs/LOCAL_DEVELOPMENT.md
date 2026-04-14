@@ -24,6 +24,29 @@ The checked-in launch and task configs point into the nested projects for you.
   - `Push-Location .\flutter-app; flutter pub get; Pop-Location`
   - `Push-Location .\flutter-app; flutter run --dart-define-from-file env.json -d chrome --web-port 3000; Pop-Location`
   - `Push-Location .\flutter-app; flutter test; Pop-Location`
+  - `Push-Location .\flutter-app; flutter test test\task_workspace_responsive_test.dart; Pop-Location`
+
+### Responsive UI verification
+
+Current responsive widget coverage lives in `flutter-app\test\task_workspace_responsive_test.dart`.
+
+Use that targeted command when working on:
+
+- shell breakpoints
+- workspace split vs compact behavior
+- dense-height behavior
+- attached details and batch-panel behavior
+
+See `LAB_SHELL_RESPONSIVE_SPEC.md` for the shell-wide responsive contract and the required resize-in-place automation strategy.
+
+### Repository testing strategy
+
+See `TESTING_STRATEGY.md` for:
+
+- the current suite inventory
+- the intended test taxonomy for this reliability lab
+- the planned refactor direction for Flutter and worker suites
+- the direction for a dedicated CI verification workflow
 
 ## Notify worker
 
@@ -41,3 +64,4 @@ The checked-in launch and task configs point into the nested projects for you.
 
 - [`DEPLOYMENT.md`](DEPLOYMENT.md) for the deployed environment model and CI/CD contract
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) for system ownership and runtime topology
+- [`TESTING_STRATEGY.md`](TESTING_STRATEGY.md) for the repository-wide testing contract
