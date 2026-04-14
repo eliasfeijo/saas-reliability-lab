@@ -141,6 +141,7 @@ The goal is to make reliability behavior inspectable.
 
 - `README.md`: current project overview and transformation status
 - `ARCHITECTURE.md`: implemented topology, state ownership, and evolution path
+- `DEPLOYMENT.md`: GitHub Actions workflows, GitHub Pages integration, worker deployment, and environment matrix
 - `EXPERIMENTS.md`: runnable and planned reliability scenarios
 - `TASK_DELETION_LIFECYCLE.md`: current delete semantics, bug-fix rationale, and the recommended future archive model
 - `reliability_lab_checklist.md`: milestone checklist for turning the prototype into a stronger lab
@@ -161,6 +162,8 @@ Backend and delivery:
 - Supabase Auth
 - Supabase Postgres
 - Supabase Edge Functions
+- GitHub Actions for frontend and worker deployment
+- GitHub Pages for the public web build
 - Cloudflare Worker for scheduled notification dispatch
 - Web Push + browser service worker runtime
 

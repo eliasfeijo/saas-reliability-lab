@@ -49,7 +49,7 @@ Goal: make the implemented structure, ownership, and current limitations explici
 - [x] Align `EXPERIMENTS.md` with the current operator and diagnostics surfaces
 - [ ] Add a sync state-machine diagram covering local create, dirty, synced, deleted, conflict, and retry states
 - [ ] Add an auth/session state-machine diagram covering anonymous, signed-in, signed-out, expired-session, and startup-recovery paths
-- [ ] Add an environment matrix for local development, GitHub Pages, Supabase, and Cloudflare Worker
+- [x] Add an environment matrix for local development, GitHub Pages, Supabase, and Cloudflare Worker
 - [ ] Add an explicit "known mismatches between implementation and aspiration" section for the future outbox phase
 
 Exit criteria:

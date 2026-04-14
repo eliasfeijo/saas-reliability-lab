@@ -310,10 +310,17 @@ Primary files:
 Responsibilities:
 
 - prime notification permission on web
-- register the service worker
+- register the dedicated browser push service worker
 - create and remove browser push subscriptions
 - persist subscriptions through backend functions
 - surface push state in the diagnostics model
+
+Current deployment model:
+
+- `web/push.js` registers `web/push-sw.js` under a dedicated `/push/` scope
+- release builds still ship `flutter_service_worker.js` for Flutter web offline behavior
+- `scripts/merge_sw.sh` and `scripts/merge_sw.bat` append the push handler into `flutter_service_worker.js`
+- GitHub Pages deployments must also preserve the standalone `push-sw.js` asset because the browser fetches it directly at runtime
 
 ### 7. Supabase backend surface
 
@@ -363,7 +370,9 @@ Responsibilities:
 
 - GitHub Actions builds Flutter web
 - `--pwa-strategy=offline-first` is used explicitly
-- release output is published to GitHub Pages
+- release output is force-pushed to `gh-pages`
+- GitHub Pages serves the app from `/saas-reliability-lab/`
+- the published artifact includes both `flutter_service_worker.js` and the standalone `push-sw.js`
 
 ### Worker
 
@@ -377,6 +386,8 @@ Client-facing values:
 - `SUPABASE_URL`
 - `SUPABASE_ANON_KEY`
 - `VAPID_PUBLIC_KEY`
+
+See `DEPLOYMENT.md` for the current workflow inventory, GitHub Pages branch model, required secrets, and environment matrix.
 
 Server-side values:
 

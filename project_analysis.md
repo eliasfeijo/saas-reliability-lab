@@ -260,6 +260,7 @@ Primary files:
 Current state:
 
 - signed-in browser profiles can register push subscriptions
+- browser push registration now runs through a dedicated `push-sw.js` scope instead of depending on the root Flutter app service worker alone
 - push permission and subscription state are visible in the diagnostics rail
 - subscriptions are saved and removed through backend functions
 - the Cloudflare Worker dispatches due notifications every five minutes
@@ -280,6 +281,7 @@ Current state:
 - the Flutter suite includes at least one meaningful sync regression test
 - the worker suite includes stale-subscription cleanup coverage
 - the root docs now describe the current shell instead of the old task-list shape
+- deployment behavior is now documented explicitly, including GitHub Pages, the deploy workflows, and the runtime environment matrix
 
 Assessment:
 
