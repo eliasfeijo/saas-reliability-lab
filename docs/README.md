@@ -88,18 +88,56 @@ On narrow screens, the rails move into drawers so observability remains accessib
 
 ## Current system model
 
-```text
-Browser user
-  -> LabShell
-     -> LabLeftRail
-     -> TaskWorkspace
-     -> SyncDebugPanel
-  -> AgendaProvider + RuntimeDebugProvider
-  -> SharedPreferences local task store
-  -> TaskSyncService task-based reconciliation
-  -> Supabase Auth + Postgres + Edge Functions
-  -> Cloudflare scheduled worker
-  -> Web Push provider + browser service worker
+The current system model is easier to read as one browser-runtime view and one external-integration view.
+
+```mermaid
+flowchart TD
+    User["Browser user"]
+    Shell["LabShell"]
+    Order["Wide-screen panel order"]
+    Left["Left panel: Operator Rail"]
+    Workspace["Center panel: Task Workspace"]
+    Diagnostics["Right panel: Runtime Diagnostics"]
+    Agenda["AgendaProvider"]
+    Runtime["RuntimeDebugProvider"]
+    Sync["TaskSyncService"]
+    Local["SharedPreferences task store"]
+
+    User --> Shell
+    Shell --> Order
+    Order --> Left
+    Left --> Workspace
+    Workspace --> Diagnostics
+    Left --> Agenda
+    Workspace --> Agenda
+    Left --> Runtime
+    Diagnostics --> Runtime
+    Agenda --> Sync
+    Agenda --> Local
+```
+
+```mermaid
+flowchart TD
+    subgraph Cloud["Supabase surface"]
+        Auth["Supabase Auth"]
+        DB[("Postgres + RLS tables")]
+        Edge["Edge Functions"]
+    end
+
+    subgraph Delivery["Scheduled delivery surface"]
+        Worker["Cloudflare scheduled worker"]
+        Push["Web Push provider"]
+        PushSW["Browser service worker"]
+    end
+
+    Sync["TaskSyncService"] --> Auth
+    Sync --> DB
+    Workspace["Task Workspace"] --> Edge
+    Edge --> DB
+    Worker --> DB
+    Worker --> Push
+    Push --> PushSW
+    PushSW --> User["Browser user"]
 ```
 
 Important current constraint:
