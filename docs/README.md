@@ -44,18 +44,11 @@ On wide layouts, the center pane is intentionally width-limited and organized as
 ```mermaid
 flowchart TD
     Shell["Lab shell"]
-    Adapt["Screen-size-based UI adaptation"]
-    Wide["Wide screen detected"]
+    Adapt{"Viewport width"}
 
     Shell --> Adapt
-    Adapt --> Wide
-
-    subgraph WideLayout["Wide-screen layout"]
-        direction LR
-        Left["Left panel: Operator Rail"] --> Center["Center panel: Task Workspace"] --> Right["Right panel: Runtime Diagnostics"]
-    end
-
-    Wide --> Left
+    Adapt -->|Wide| Wide["Operator Rail | Task Workspace | Runtime Diagnostics"]
+    Adapt -->|Narrow| Narrow["Task Workspace with left and right drawers"]
 ```
 
 ### Operator Rail
@@ -88,68 +81,40 @@ On narrow screens, the rails move into drawers so observability remains accessib
 
 ## Current system model
 
-The current system model is easier to read as one browser-runtime view and one external-integration view.
+The current system model reads more cleanly when it stays separate from the UI shell illustration above.
+At the highest level, the implemented system is three linked surfaces: browser runtime, Supabase, and the independently deployable notify worker.
 
 ```mermaid
-flowchart TD
+flowchart LR
     User["Browser user"]
-    Shell["LabShell"]
-    Order["Wide-screen panel order"]
-    Left["Left panel: Operator Rail"]
-    Workspace["Center panel: Task Workspace"]
-    Diagnostics["Right panel: Runtime Diagnostics"]
-    SessionCoord["WorkspaceSessionCoordinator"]
-    Agenda["AgendaProvider"]
-    Interaction["TaskWorkspaceInteractionController"]
-    Mutation["TaskMutationCoordinator"]
-    Snapshot["TaskLocalSnapshotCoordinator"]
-    SyncCoord["TaskSyncCoordinator"]
-    Runtime["RuntimeDebugProvider"]
-    Sync["TaskSyncService"]
-    Local["SharedPreferences task store"]
 
-    User --> Shell
-    Shell --> Order
-    Order --> Left
-    Left --> Workspace
-    Workspace --> Diagnostics
-    Workspace --> SessionCoord
-    Left --> Agenda
-    Workspace --> Agenda
-    Left --> Runtime
-    Diagnostics --> Runtime
-    SessionCoord --> Agenda
-    Agenda --> Interaction
-    Agenda --> Mutation
-    Mutation --> Snapshot
-    Agenda --> SyncCoord
-    Snapshot --> Local
-    SyncCoord --> Sync
-    SyncCoord --> Local
-```
+    subgraph Browser["Browser runtime"]
+        App["Flutter web app"]
+        PushSW["push-sw.js"]
+    end
 
-```mermaid
-flowchart TD
     subgraph Cloud["Supabase surface"]
         Auth["Supabase Auth"]
         DB[("Postgres + RLS tables")]
         Edge["Edge Functions"]
+        Subs[("push_subscriptions")]
     end
 
     subgraph Delivery["Scheduled delivery surface"]
         Worker["Cloudflare scheduled worker"]
         Push["Web Push provider"]
-        PushSW["Browser service worker"]
     end
 
-    Sync["TaskSyncService"] --> Auth
-    Sync --> DB
-    Workspace["Task Workspace"] --> Edge
-    Edge --> DB
+    User --> App
+    App --> Auth
+    App --> DB
+    App --> Edge
+    Edge --> Subs
     Worker --> DB
+    Worker --> Subs
     Worker --> Push
     Push --> PushSW
-    PushSW --> User["Browser user"]
+    PushSW --> User
 ```
 
 Important current constraint:
@@ -157,6 +122,37 @@ Important current constraint:
 The sync engine is still task-based, not operation-based.
 The UI is intentionally reserving space for an explicit outbox and conflict model that does not exist yet in the backend contract.
 That is also why a true archive or trash workflow is documented as the next safe evolution rather than implemented as a local-only patch today.
+
+For the detailed runtime seams inside the Flutter app, use [`ARCHITECTURE.md`](ARCHITECTURE.md).
+
+## Planned evolution at a glance
+
+The repository is already shaping the UI around deeper reliability control, but the target boundary model is still planned work.
+
+```mermaid
+flowchart TD
+    Shell["Shell and widgets"]
+    UIState["UI state and interaction controllers"]
+    Session["Session and startup coordination"]
+    Sync["Sync orchestration boundary"]
+    Runtime["Runtime evidence model"]
+    Outbox["Durable outbox and operation states"]
+    Local["Local persistence boundary"]
+    Remote["Remote backend contract boundary"]
+    Delivery["Scheduled delivery boundary"]
+
+    Shell --> UIState
+    Shell --> Runtime
+    UIState --> Session
+    UIState --> Sync
+    Session --> Sync
+    Sync --> Outbox
+    Outbox --> Local
+    Outbox --> Remote
+    Remote --> Delivery
+```
+
+That target shape is described in more detail in [`ARCHITECTURE.md`](ARCHITECTURE.md) and the staged plan in [`OBJECTIVE_0_FOUNDATION_PLAN.md`](OBJECTIVE_0_FOUNDATION_PLAN.md).
 
 ## Current status
 

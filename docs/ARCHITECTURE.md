@@ -66,70 +66,77 @@ Why:
 
 ## High-level topology
 
-Read the implemented system as three linked surfaces: the browser runtime, the Supabase-backed cloud surface, and the separately deployable scheduled worker.
-The browser runtime reads more cleanly as a strict top-to-bottom flow that names the wide-screen panel order explicitly before dropping into providers and services.
+Read the architecture in three separate views:
+
+1. the **implemented system context** across browser, Supabase, and scheduled delivery
+2. the **implemented browser runtime seams** inside the Flutter app
+3. the **UI shell layout**, which is documented later in this file instead of being folded into the system diagrams
 
 ```mermaid
-flowchart TD
+flowchart LR
     User["Browser user"]
-    Shell["LabShell"]
-    Order["Wide-screen panel order"]
-    Left["Left panel: Operator Rail"]
-    Workspace["Center panel: Task Workspace"]
-    Diagnostics["Right panel: Runtime Diagnostics"]
-    SessionCoord["WorkspaceSessionCoordinator"]
-    Agenda["AgendaProvider"]
-    Interaction["TaskWorkspaceInteractionController"]
-    Mutation["TaskMutationCoordinator"]
-    Snapshot["TaskLocalSnapshotCoordinator"]
-    SyncCoord["TaskSyncCoordinator"]
-    Runtime["RuntimeDebugProvider"]
-    Sync["TaskSyncService"]
-    Local["SharedPreferences task store"]
 
-    User --> Shell
-    Shell --> Order
-    Order --> Left
-    Left --> Workspace
-    Workspace --> Diagnostics
-    Workspace --> SessionCoord
-    Left --> Agenda
-    Workspace --> Agenda
-    Left --> Runtime
-    Diagnostics --> Runtime
-    SessionCoord --> Agenda
-    Agenda --> Interaction
-    Agenda --> Mutation
-    Mutation --> Snapshot
-    Agenda --> SyncCoord
-    Snapshot --> Local
-    SyncCoord --> Sync
-    SyncCoord --> Local
-```
-
-```mermaid
-flowchart TD
+    subgraph Browser["Browser runtime"]
+        App["Flutter web app"]
+        PushSW["push-sw.js"]
+    end
 
     subgraph Cloud["Supabase surface"]
         Auth["Supabase Auth"]
         DB[("Postgres + RLS tables")]
         Edge["Edge Functions"]
+        Subs[("push_subscriptions")]
     end
 
     subgraph Delivery["Scheduled delivery surface"]
         Worker["Cloudflare notify worker"]
         Push["Web Push provider"]
-        PushSW["Browser push service worker"]
     end
 
-    Sync["TaskSyncService"] --> Auth
-    Sync --> DB
-    Workspace["Task Workspace"] --> Edge
-    Edge --> DB
+    User --> App
+    App --> Auth
+    App --> DB
+    App --> Edge
+    Edge --> Subs
     Worker --> DB
+    Worker --> Subs
     Worker --> Push
     Push --> PushSW
-    PushSW --> User["Browser user"]
+    PushSW --> User
+```
+
+```mermaid
+flowchart TD
+    Bootstrap["main.dart / MyApp"]
+    Agenda["AgendaProvider"]
+    Runtime["RuntimeDebugProvider"]
+    Session["WorkspaceSessionCoordinator"]
+    SyncCoord["TaskSyncCoordinator"]
+    Interaction["TaskWorkspaceInteractionController"]
+    Mutation["TaskMutationCoordinator"]
+    Snapshot["TaskLocalSnapshotCoordinator"]
+    Sync["TaskSyncService"]
+    Local["SharedPreferences task store"]
+    Supabase["Supabase auth + tasks"]
+    PushReg["Web push registration"]
+
+    Bootstrap --> Agenda
+    Bootstrap --> Runtime
+    Bootstrap --> Session
+    Bootstrap --> SyncCoord
+    Agenda --> Interaction
+    Agenda --> Mutation
+    Mutation --> Snapshot
+    Agenda --> SyncCoord
+    Session --> Agenda
+    Session --> PushReg
+    Snapshot --> Local
+    SyncCoord --> Local
+    SyncCoord --> Sync
+    Sync --> Supabase
+    Sync --> Runtime
+    Session --> Runtime
+    Agenda --> Runtime
 ```
 
 ## Client shell architecture
@@ -155,6 +162,18 @@ Responsibilities:
 Primary file:
 
 - `lib/screens/lab_shell.dart`
+
+UI layout belongs here, not in the system-topology diagrams above.
+
+```mermaid
+flowchart TD
+    Shell["LabShell"]
+    Layout{"Viewport width"}
+
+    Shell --> Layout
+    Layout -->|Wide| Wide["Operator Rail | Task Workspace | Runtime Diagnostics"]
+    Layout -->|Narrow| Narrow["Task Workspace with left and right drawers"]
+```
 
 Responsibilities:
 
@@ -545,6 +564,30 @@ Server-side values:
 ## Planned evolution
 
 The next meaningful phase is deeper system control, not another shell redesign.
+The following diagram is a **target boundary map**, not a claim that these seams are fully implemented today.
+
+```mermaid
+flowchart TD
+    Shell["Shell and widgets"]
+    UIState["UI state and interaction controllers"]
+    Session["Session and startup coordination"]
+    Sync["Sync orchestration boundary"]
+    Runtime["Runtime evidence model"]
+    Outbox["Durable outbox and operation states"]
+    Local["Local persistence boundary"]
+    Remote["Remote backend contract boundary"]
+    Delivery["Scheduled delivery boundary"]
+
+    Shell --> UIState
+    Shell --> Runtime
+    UIState --> Session
+    UIState --> Sync
+    Session --> Sync
+    Sync --> Outbox
+    Outbox --> Local
+    Outbox --> Remote
+    Remote --> Delivery
+```
 
 Recommended evolution path:
 
