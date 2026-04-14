@@ -94,6 +94,13 @@ class _MyAppState extends State<MyApp> {
         debugShowCheckedModeBanner: false,
         title: 'SaaS Reliability Lab',
         theme: buildLabTheme(),
+        builder: (context, child) {
+          if (child == null) {
+            return const SizedBox.shrink();
+          }
+
+          return SelectionArea(child: child);
+        },
         home: const LabShell(),
       ),
     );
