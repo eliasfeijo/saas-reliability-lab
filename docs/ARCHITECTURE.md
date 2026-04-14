@@ -67,31 +67,36 @@ Why:
 ## High-level topology
 
 Read the implemented system as three linked surfaces: the browser runtime, the Supabase-backed cloud surface, and the separately deployable scheduled worker.
+The browser runtime reads more cleanly as a strict top-to-bottom flow that names the wide-screen panel order explicitly before dropping into providers and services.
 
 ```mermaid
 flowchart TD
     User["Browser user"]
+    Shell["LabShell"]
+    Order["Wide-screen panel order"]
+    Left["Left panel: Operator Rail"]
+    Workspace["Center panel: Task Workspace"]
+    Diagnostics["Right panel: Runtime Diagnostics"]
+    Agenda["AgendaProvider"]
+    Runtime["RuntimeDebugProvider"]
+    Sync["TaskSyncService"]
+    Local["SharedPreferences task store"]
 
-    subgraph Browser["Flutter web runtime"]
-        Shell["LabShell"]
-        Left["Operator Rail"]
-        Workspace["Task Workspace"]
-        Diagnostics["Runtime Diagnostics"]
-        Agenda["AgendaProvider"]
-        Runtime["RuntimeDebugProvider"]
-        Local["SharedPreferences task store"]
-        Sync["TaskSyncService"]
+    User --> Shell
+    Shell --> Order
+    Order --> Left
+    Left --> Workspace
+    Workspace --> Diagnostics
+    Left --> Agenda
+    Workspace --> Agenda
+    Left --> Runtime
+    Diagnostics --> Runtime
+    Agenda --> Sync
+    Agenda --> Local
+```
 
-        Shell --> Left
-        Shell --> Workspace
-        Shell --> Diagnostics
-        Left --> Agenda
-        Left --> Runtime
-        Workspace --> Agenda
-        Diagnostics --> Runtime
-        Agenda --> Local
-        Agenda --> Sync
-    end
+```mermaid
+flowchart TD
 
     subgraph Cloud["Supabase surface"]
         Auth["Supabase Auth"]
@@ -105,15 +110,14 @@ flowchart TD
         PushSW["Browser push service worker"]
     end
 
-    User --> Shell
-    Sync --> Auth
+    Sync["TaskSyncService"] --> Auth
     Sync --> DB
-    Workspace --> Edge
+    Workspace["Task Workspace"] --> Edge
     Edge --> DB
     Worker --> DB
     Worker --> Push
     Push --> PushSW
-    PushSW --> User
+    PushSW --> User["Browser user"]
 ```
 
 ## Client shell architecture

@@ -44,12 +44,18 @@ On wide layouts, the center pane is intentionally width-limited and organized as
 ```mermaid
 flowchart TD
     Shell["Lab shell"]
-    Shell --> Left["Operator Rail"]
-    Shell --> Center["Task Workspace"]
-    Shell --> Right["Runtime Diagnostics"]
-    Shell --> Narrow["Narrow screens"]
-    Narrow --> LeftDrawer["Operator drawer"]
-    Narrow --> RightDrawer["Diagnostics drawer"]
+    Adapt["Screen-size-based UI adaptation"]
+    Wide["Wide screen detected"]
+
+    Shell --> Adapt
+    Adapt --> Wide
+
+    subgraph WideLayout["Wide-screen layout"]
+        direction LR
+        Left["Left panel: Operator Rail"] --> Center["Center panel: Task Workspace"] --> Right["Right panel: Runtime Diagnostics"]
+    end
+
+    Wide --> Left
 ```
 
 ### Operator Rail
