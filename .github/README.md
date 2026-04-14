@@ -8,7 +8,12 @@ It is where deploy and verification behavior becomes concrete through GitHub Act
 - `workflows\deploy.yaml`: builds and publishes the Flutter web app to GitHub Pages
 - `workflows\deploy-notify-worker.yaml`: deploys the Cloudflare notification worker
 - `workflows\verify.yaml`: runs repository verification without deploying
+- `instructions\`: path-specific instructions used by local Copilot CLI and VS Code chat
+- `agents\`: repository custom agents for workflow orchestration, planning, implementation, verification, docs, and review work
+- `skills\`: reusable Copilot skills for repeatable repo workflows and slash-invokable prompt patterns
+- `prompts\`: VS Code prompt files for reusable IDE prompt templates
 - `actions\build-and-deploy-action\action.yaml`: shared composite action for the frontend deploy flow
+- `copilot-instructions.md`: repository-specific guidance for Copilot and other agents working in this repo
 
 ## How to work with this folder locally
 
@@ -17,7 +22,10 @@ When you change automation here, validate the underlying projects directly:
 
 - frontend behavior: use the commands in [`..\flutter-app\README.md`](../flutter-app/README.md)
 - worker behavior: use the commands in [`..\notify-worker\README.md`](../notify-worker/README.md)
-- repository workflow expectations: use [`..\docs\DEPLOYMENT.md`](../docs/DEPLOYMENT.md) and [`..\docs\LOCAL_DEVELOPMENT.md`](../docs/LOCAL_DEVELOPMENT.md)
+- repository workflow expectations: use [`..\docs\DEPLOYMENT.md`](../docs/DEPLOYMENT.md), [`..\docs\LOCAL_DEVELOPMENT.md`](../docs/LOCAL_DEVELOPMENT.md), and [`..\docs\AI_ASSISTED_DEVELOPMENT.md`](../docs/AI_ASSISTED_DEVELOPMENT.md)
+
+For local Copilot CLI and VS Code chat, assume the repository root is the active workspace root.
+That keeps `.github\` instructions, agents, skills, and prompt files addressable through the same repo-relative paths used everywhere else in this monorepo.
 
 ## Project-specific concerns
 
@@ -25,9 +33,13 @@ When you change automation here, validate the underlying projects directly:
 - the public frontend base href must remain `/saas-reliability-lab/` unless the Pages path changes
 - worker deployment is intentionally independent from frontend deployment
 - verification is the place for repository trust; deploy workflows should not be the only automated safety net
+- AI-assisted development is an explicit repository workflow, not an ad hoc convenience layer
+- the main local Copilot DX surface is instructions, agents, skills, and VS Code prompt files checked into the repo
+- the repo does not currently define a Copilot cloud-agent setup workflow because hosted Copilot is not part of the active development path
 
 ## Read this with
 
 - [`..\README.md`](../README.md)
+- [`..\docs\AI_ASSISTED_DEVELOPMENT.md`](../docs/AI_ASSISTED_DEVELOPMENT.md)
 - [`..\docs\DEPLOYMENT.md`](../docs/DEPLOYMENT.md)
 - [`..\docs\TESTING_STRATEGY.md`](../docs/TESTING_STRATEGY.md)
