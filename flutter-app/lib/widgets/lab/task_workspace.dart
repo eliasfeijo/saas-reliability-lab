@@ -465,7 +465,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
           SizedBox(height: dense ? 12 : 16),
           _buildSearchBar(agenda),
           SizedBox(height: dense ? 10 : 14),
-          _buildFilterStrip(agenda: agenda, dense: dense),
+          _buildFilterStrip(agenda: agenda, compact: compact, dense: dense),
           SizedBox(height: dense ? 10 : 14),
           _buildMetricStrip(agenda: agenda, dense: dense),
           if (agenda.hasPendingAnonymousReview ||
@@ -480,11 +480,10 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
 
   Widget _buildFilterStrip({
     required AgendaProvider agenda,
+    required bool compact,
     required bool dense,
   }) {
-    final controls = [
-      _buildSortMenuButton(agenda: agenda, dense: dense),
-      ...TaskFilter.values.map((filter) {
+    final filterChips = TaskFilter.values.map((filter) {
         final count = _taskCountForFilter(agenda.tasks, filter);
         return ChoiceChip(
           label: Text('${_shortFilterLabel(filter)} $count'),
@@ -492,16 +491,30 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
           onSelected: (_) => agenda.setFilter(filter),
           visualDensity: dense ? VisualDensity.compact : null,
         );
-      }),
-    ];
+      }).toList();
 
-    if (!dense) {
-      return Wrap(spacing: 10, runSpacing: 10, children: controls);
+    if (compact) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildSortMenuButton(agenda: agenda, dense: dense),
+          SizedBox(height: dense ? 8 : 10),
+          Wrap(
+            spacing: dense ? 8 : 10,
+            runSpacing: dense ? 8 : 10,
+            children: filterChips,
+          ),
+        ],
+      );
     }
 
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(children: _withHorizontalSpacing(controls, 10)),
+    return Wrap(
+      spacing: dense ? 8 : 10,
+      runSpacing: dense ? 8 : 10,
+      children: [
+        _buildSortMenuButton(agenda: agenda, dense: dense),
+        ...filterChips,
+      ],
     );
   }
 

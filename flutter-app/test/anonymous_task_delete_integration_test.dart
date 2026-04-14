@@ -262,6 +262,7 @@ void main() {
         lessThan(1),
       );
 
+      await tester.ensureVisible(find.text('Earlier task'));
       await tester.tap(find.text('Earlier task'));
       await tester.pumpAndSettle();
 
@@ -318,6 +319,61 @@ void main() {
   );
 
   testWidgets(
+    'compact queue controls wrap filter badges into multiple rows',
+    (tester) async {
+      tester.view.devicePixelRatio = 1.0;
+      tester.view.physicalSize = const Size(540, 900);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final seededTask = TaskModel(
+        id: 'task-filter-wrap',
+        title: 'Filter wrap task',
+        beginsAt: DateTime(2026, 2, 22, 9),
+        estimatedDuration: const Duration(hours: 1),
+        syncStatus: SyncStatus.dirty,
+      );
+
+      final repository = _InMemoryTasksRepository([seededTask]);
+      final runtimeDebug = RuntimeDebugProvider();
+      addTearDown(runtimeDebug.dispose);
+
+      final syncService = TaskSyncService.forTesting(
+        repository,
+        remote: _FakeTaskRemoteDataSource([]),
+        connectivityCheck: () async => [ConnectivityResult.wifi],
+        hasActiveSession: () => false,
+        runtimeDebug: runtimeDebug,
+      );
+
+      final agenda = AgendaProvider(
+        repository,
+        syncService,
+        _InMemoryUserSessionService(runtimeDebug: runtimeDebug),
+        runtimeDebug: runtimeDebug,
+      );
+      addTearDown(agenda.dispose);
+
+      await tester.pumpWidget(
+        _CompactWorkspaceHarness(agenda: agenda, runtimeDebug: runtimeDebug),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Sort: Closest'), findsOneWidget);
+      expect(find.text('All 1'), findsOneWidget);
+      expect(find.text('Upcoming 0'), findsOneWidget);
+      expect(
+        _top(tester, 'All 1'),
+        greaterThan(_top(tester, 'Sort: Closest')),
+      );
+      expect(
+        tester.getTopLeft(find.text('Upcoming 0')).dy,
+        greaterThan(_top(tester, 'All 1')),
+      );
+    },
+  );
+
+  testWidgets(
     'small screens use attached details instead of inline inspector space',
     (tester) async {
       tester.view.devicePixelRatio = 1.0;
@@ -358,6 +414,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      await tester.ensureVisible(find.text('Mobile overlay task'));
       await tester.tap(find.text('Mobile overlay task'));
       await tester.pumpAndSettle();
 
@@ -407,6 +464,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      await tester.ensureVisible(find.text('Minimize me'));
       await tester.tap(find.text('Minimize me'));
       await tester.pumpAndSettle();
 
