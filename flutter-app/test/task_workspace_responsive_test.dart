@@ -79,7 +79,6 @@ void main() {
       final agenda = AgendaProvider(
         repository,
         syncService,
-        InMemoryUserSessionService(runtimeDebug: runtimeDebug),
         runtimeDebug: runtimeDebug,
       );
       addTearDown(agenda.dispose);
@@ -138,7 +137,6 @@ void main() {
     final agenda = AgendaProvider(
       repository,
       syncService,
-      InMemoryUserSessionService(runtimeDebug: runtimeDebug),
       runtimeDebug: runtimeDebug,
     );
     addTearDown(agenda.dispose);
@@ -182,7 +180,6 @@ void main() {
     final agenda = AgendaProvider(
       repository,
       syncService,
-      InMemoryUserSessionService(runtimeDebug: runtimeDebug),
       runtimeDebug: runtimeDebug,
     );
     addTearDown(agenda.dispose);
@@ -228,7 +225,6 @@ void main() {
     final agenda = AgendaProvider(
       repository,
       syncService,
-      InMemoryUserSessionService(runtimeDebug: runtimeDebug),
       runtimeDebug: runtimeDebug,
     );
     addTearDown(agenda.dispose);
@@ -275,7 +271,6 @@ void main() {
     final agenda = AgendaProvider(
       repository,
       syncService,
-      InMemoryUserSessionService(runtimeDebug: runtimeDebug),
       runtimeDebug: runtimeDebug,
     );
     addTearDown(agenda.dispose);

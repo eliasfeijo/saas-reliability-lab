@@ -32,6 +32,10 @@ Current files:
 
 - `flutter-app\test\sync_logic_test.dart`
 - `flutter-app\test\agenda_provider_test.dart`
+- `flutter-app\test\task_local_snapshot_coordinator_test.dart`
+- `flutter-app\test\task_mutation_coordinator_test.dart`
+- `flutter-app\test\task_sync_coordinator_test.dart`
+- `flutter-app\test\workspace_session_coordinator_test.dart`
 - `flutter-app\test\task_workspace_test.dart`
 - `flutter-app\test\task_workspace_responsive_test.dart`
 - `flutter-app\test\test_support\app_test_support.dart`
@@ -40,6 +44,10 @@ What they currently cover:
 
 - sync reconciliation rules
 - anonymous-task adoption and deletion behavior
+- local snapshot pruning and snapshot persistence helpers
+- task-mutation rules for completion, deletion, and anonymous-task adoption
+- sync gating and post-sync reload orchestration
+- workspace startup and auth-session orchestration
 - provider-level queue and batch behavior
 - workflow-style widget regressions in the task workspace
 - responsive widget behavior at fixed viewport sizes
@@ -214,6 +222,10 @@ Recommended direction:
 
 - `flutter-app\test\sync_logic_test.dart`
 - `flutter-app\test\agenda_provider_test.dart`
+- `flutter-app\test\task_local_snapshot_coordinator_test.dart`
+- `flutter-app\test\task_mutation_coordinator_test.dart`
+- `flutter-app\test\task_sync_coordinator_test.dart`
+- `flutter-app\test\workspace_session_coordinator_test.dart`
 - `flutter-app\test\task_workspace_test.dart`
 - `flutter-app\test\task_workspace_responsive_test.dart`
 - `flutter-app\test\lab_shell_test.dart`

@@ -90,6 +90,10 @@ LabShell
 
 TaskWorkspace + LabLeftRail
   -> AgendaProvider
+  -> TaskLocalSnapshotCoordinator
+  -> TaskMutationCoordinator
+  -> TaskSyncCoordinator
+  -> WorkspaceSessionCoordinator
   -> RuntimeDebugProvider
   -> SharedPreferences task store
   -> TaskSyncService
@@ -113,6 +117,10 @@ The shell already thinks in terms of explicit runtime states, but the underlying
 | `lib/widgets/debug/` | diagnostics rail primitives and rendering | active implementation |
 | `lib/providers/agenda_provider.dart` | task orchestration | active implementation |
 | `lib/providers/runtime_debug_provider.dart` | runtime evidence model | active implementation |
+| `lib/services/task_local_snapshot_coordinator.dart` | local snapshot orchestration | active implementation |
+| `lib/services/task_mutation_coordinator.dart` | task-list mutation rules | active implementation |
+| `lib/services/task_sync_coordinator.dart` | sync gating and post-sync reload orchestration | active implementation |
+| `lib/services/workspace_session_coordinator.dart` | startup and auth-session orchestration | active implementation |
 | `lib/services/task_sync_service.dart` | current sync pass | transitional, not yet outbox-based |
 | `lib/services/user_session_service.dart` | cached identity and auth alignment | active implementation |
 | `lib/helpers/web_push_helper.dart` | browser push registration lifecycle | active implementation |
@@ -132,7 +140,7 @@ Current state:
 
 - Supabase initialization is straightforward and explicit.
 - `RuntimeDebugProvider` is now a first-class dependency.
-- `AgendaProvider` and the runtime diagnostics model are wired together cleanly.
+- `AgendaProvider` is now wired together with explicit coordination seams for local snapshot, task mutation, sync, and session flow.
 - The app now launches `LabShell` directly.
 
 Assessment:
@@ -200,6 +208,7 @@ Primary file:
 
 Current state:
 
+- `TaskSyncCoordinator` now gates sync entry and reloads local state around the sync engine.
 - verifies connectivity and authenticated session presence
 - replays tombstoned deletions
 - reconciles dirty tasks with remote state using timestamps
@@ -312,19 +321,21 @@ Remaining gap:
 
 ## Recommended next priorities
 
-1. define the explicit outbox model and connect it to the placeholder operation states already reserved in the shell
-2. decide where conflict visibility belongs between the diagnostics rail and the task workspace
-3. add structured logs and metrics that complement, rather than duplicate, the in-app diagnostics panel
-4. add targeted widget tests for the operator rail and diagnostics rail
-5. introduce fault-injection controls only after the runtime model can represent their effects faithfully
+1. run the Objective 0 foundation pass so provider ownership, sync coordination, persistence boundaries, backend seams, and delivery boundaries are cleaner before outbox work begins
+2. define the explicit outbox model and connect it to the placeholder operation states already reserved in the shell
+3. decide where conflict visibility belongs between the diagnostics rail and the task workspace
+4. add structured logs and metrics that complement, rather than duplicate, the in-app diagnostics panel
+5. add targeted widget tests for the operator rail and diagnostics rail
+6. introduce fault-injection controls only after the runtime model can represent their effects faithfully
 
 ## Final assessment
 
 The repository is no longer blocked on UI direction.
 That problem is solved.
 
-The main challenge now is making the system semantics worthy of the new shell:
+The main challenge now is making the system foundation and later semantics worthy of the new shell:
 
+- cleaner architectural seams
 - explicit outbox behavior
 - visible conflict handling
 - stronger observability

@@ -98,7 +98,11 @@ flowchart TD
     Left["Left panel: Operator Rail"]
     Workspace["Center panel: Task Workspace"]
     Diagnostics["Right panel: Runtime Diagnostics"]
+    SessionCoord["WorkspaceSessionCoordinator"]
     Agenda["AgendaProvider"]
+    Mutation["TaskMutationCoordinator"]
+    Snapshot["TaskLocalSnapshotCoordinator"]
+    SyncCoord["TaskSyncCoordinator"]
     Runtime["RuntimeDebugProvider"]
     Sync["TaskSyncService"]
     Local["SharedPreferences task store"]
@@ -108,12 +112,18 @@ flowchart TD
     Order --> Left
     Left --> Workspace
     Workspace --> Diagnostics
+    Workspace --> SessionCoord
     Left --> Agenda
     Workspace --> Agenda
     Left --> Runtime
     Diagnostics --> Runtime
-    Agenda --> Sync
-    Agenda --> Local
+    SessionCoord --> Agenda
+    Agenda --> Mutation
+    Mutation --> Snapshot
+    Agenda --> SyncCoord
+    Snapshot --> Local
+    SyncCoord --> Sync
+    SyncCoord --> Local
 ```
 
 ```mermaid
@@ -154,6 +164,7 @@ That is also why a true archive or trash workflow is documented as the next safe
 - `TaskWorkspace` is the canonical center pane and now uses a bounded master/detail layout
 - `TaskList` remains only as a compatibility wrapper
 - runtime state is modeled explicitly through `RuntimeDebugProvider` and `RuntimeDebugState`
+- the client now routes session flow, sync entry, local snapshot handling, and task mutation rules through dedicated coordination seams around `TaskWorkspace` and `AgendaProvider`
 - sync, auth, connectivity, local counts, and push state are visible in the UI
 - push notifications work end to end for signed-in browser profiles
 
@@ -190,6 +201,7 @@ The goal is to make reliability behavior inspectable.
 - [`../notify-worker/README.md`](../notify-worker/README.md): Cloudflare Worker purpose, local commands, runtime expectations, and delivery concerns
 - [`../supabase/README.md`](../supabase/README.md): backend surface, local Supabase workflow, functions, migrations, and backend-specific concerns
 - [`ARCHITECTURE.md`](ARCHITECTURE.md): implemented topology, state ownership, and evolution path
+- [`OBJECTIVE_0_FOUNDATION_PLAN.md`](OBJECTIVE_0_FOUNDATION_PLAN.md): end-to-end plan for the foundation refactor that should land before durable outbox work
 - [`DEPLOYMENT.md`](DEPLOYMENT.md): GitHub Actions workflows, GitHub Pages integration, worker deployment, and environment matrix
 - [`LOCAL_DEVELOPMENT.md`](LOCAL_DEVELOPMENT.md): repository-root workflow, local commands, and developer setup for running the projects locally
 - [`AI_ASSISTED_DEVELOPMENT.md`](AI_ASSISTED_DEVELOPMENT.md): intended human-and-agent development loop, Copilot workflow, and low-friction lifecycle expectations

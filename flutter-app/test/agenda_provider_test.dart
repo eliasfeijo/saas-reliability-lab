@@ -3,7 +3,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:todo_flutter/models/task.dart';
 import 'package:todo_flutter/providers/agenda_provider.dart';
 import 'package:todo_flutter/services/task_sync_service.dart';
-import 'package:todo_flutter/services/user_session_service.dart';
 import 'test_support/app_test_support.dart';
 
 void main() {
@@ -24,7 +23,7 @@ void main() {
       connectivityCheck: () async => [ConnectivityResult.wifi],
       hasActiveSession: () => true,
     );
-    final agenda = AgendaProvider(repository, service, UserSessionService())..userId = 'user-1';
+    final agenda = AgendaProvider(repository, service)..userId = 'user-1';
 
     agenda.tasks = [anonymousTask];
     await agenda.syncAllTasks();
@@ -54,7 +53,7 @@ void main() {
       connectivityCheck: () async => [ConnectivityResult.wifi],
       hasActiveSession: () => true,
     );
-    final agenda = AgendaProvider(repository, service, UserSessionService())..userId = 'user-1';
+    final agenda = AgendaProvider(repository, service)..userId = 'user-1';
 
     agenda.tasks = [anonymousTask];
     await agenda.takeOwnershipOfAnonymousTasks();
@@ -84,7 +83,7 @@ void main() {
       connectivityCheck: () async => [ConnectivityResult.wifi],
       hasActiveSession: () => false,
     );
-    final agenda = AgendaProvider(repository, service, UserSessionService());
+    final agenda = AgendaProvider(repository, service);
 
     agenda.tasks = [anonymousTask];
     await agenda.deleteTask(anonymousTask.id);
@@ -116,7 +115,7 @@ void main() {
       connectivityCheck: () async => [ConnectivityResult.wifi],
       hasActiveSession: () => false,
     );
-    final agenda = AgendaProvider(repository, service, UserSessionService());
+    final agenda = AgendaProvider(repository, service);
 
     await agenda.loadTasks();
 
@@ -149,7 +148,7 @@ void main() {
         connectivityCheck: () async => [ConnectivityResult.wifi],
         hasActiveSession: () => false,
       );
-      final agenda = AgendaProvider(repository, service, UserSessionService())..userId = 'user-1';
+      final agenda = AgendaProvider(repository, service)..userId = 'user-1';
 
       agenda.tasks = [accountTask];
       await agenda.deleteTask(accountTask.id);
@@ -188,7 +187,7 @@ void main() {
       connectivityCheck: () async => [ConnectivityResult.wifi],
       hasActiveSession: () => false,
     );
-    final agenda = AgendaProvider(repository, service, UserSessionService());
+    final agenda = AgendaProvider(repository, service);
 
     agenda.tasks = [alphaTask, betaTask];
     agenda.selectTask(alphaTask);
@@ -228,7 +227,7 @@ void main() {
       connectivityCheck: () async => [ConnectivityResult.wifi],
       hasActiveSession: () => false,
     );
-    final agenda = AgendaProvider(repository, service, UserSessionService())..userId = 'user-1';
+    final agenda = AgendaProvider(repository, service)..userId = 'user-1';
 
     agenda.tasks = [anonymousTask, accountTask];
     agenda.enterBatchMode();
@@ -278,7 +277,7 @@ void main() {
       connectivityCheck: () async => [ConnectivityResult.wifi],
       hasActiveSession: () => false,
     );
-    final agenda = AgendaProvider(repository, service, UserSessionService());
+    final agenda = AgendaProvider(repository, service);
 
     agenda.tasks = [urgentTask, laterTask, earlierTask];
     expect(agenda.filteredTasks.map((task) => task.id).toList(), [

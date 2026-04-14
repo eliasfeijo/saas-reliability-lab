@@ -77,7 +77,11 @@ flowchart TD
     Left["Left panel: Operator Rail"]
     Workspace["Center panel: Task Workspace"]
     Diagnostics["Right panel: Runtime Diagnostics"]
+    SessionCoord["WorkspaceSessionCoordinator"]
     Agenda["AgendaProvider"]
+    Mutation["TaskMutationCoordinator"]
+    Snapshot["TaskLocalSnapshotCoordinator"]
+    SyncCoord["TaskSyncCoordinator"]
     Runtime["RuntimeDebugProvider"]
     Sync["TaskSyncService"]
     Local["SharedPreferences task store"]
@@ -87,12 +91,18 @@ flowchart TD
     Order --> Left
     Left --> Workspace
     Workspace --> Diagnostics
+    Workspace --> SessionCoord
     Left --> Agenda
     Workspace --> Agenda
     Left --> Runtime
     Diagnostics --> Runtime
-    Agenda --> Sync
-    Agenda --> Local
+    SessionCoord --> Agenda
+    Agenda --> Mutation
+    Mutation --> Snapshot
+    Agenda --> SyncCoord
+    Snapshot --> Local
+    SyncCoord --> Sync
+    SyncCoord --> Local
 ```
 
 ```mermaid
@@ -128,12 +138,14 @@ Primary files:
 
 - `lib/main.dart`
 - `lib/theme/lab_theme.dart`
+- `lib/services/workspace_session_coordinator.dart`
+- `lib/services/task_sync_coordinator.dart`
 
 Responsibilities:
 
 - initialize Supabase
 - construct the shared dependency graph
-- provide both `AgendaProvider` and `RuntimeDebugProvider`
+- provide `AgendaProvider`, `RuntimeDebugProvider`, and the coordination seams that sit between workspace widgets and lower-level services
 - launch the lab shell instead of the legacy centered screen
 
 ### 2. Root visual shell
@@ -180,7 +192,7 @@ Responsibilities:
 - canonical task queue and selection workflow
 - persistent task inspector on desktop and inline inspector on narrower layouts
 - create, edit, delete, and completion actions inside the workspace
-- auth-state reaction for startup sync, push registration, and anonymous-task decision flow
+- delegate startup and auth-session flow to `WorkspaceSessionCoordinator`
 
 Architectural significance:
 
@@ -228,9 +240,10 @@ The debug rail is now backed by explicit state rather than by ad hoc logs.
 
 ### 1. Local persistence layer
 
-Primary file:
+Primary files:
 
 - `lib/repositories/tasks_repository.dart`
+- `lib/services/task_local_snapshot_coordinator.dart`
 
 Current model:
 
@@ -241,6 +254,11 @@ Tradeoff:
 
 - simple and workable for the current prototype
 - not strong enough yet for a durable outbox, operation log, or richer local inspection model
+
+Current boundary:
+
+- `TasksRepository` still owns the raw SharedPreferences storage contract
+- `TaskLocalSnapshotCoordinator` now owns snapshot load, save, removal, clear, and legacy anonymous-tombstone pruning around that repository
 
 ### 2. Task model and metadata
 
@@ -268,13 +286,40 @@ Primary file:
 Responsibilities:
 
 - manage task collection, selection, filter, and search state
-- coordinate local persistence and sync triggers
-- mirror user identity locally for convenience
+- coordinate local persistence and workspace-facing task intents
+- mirror the current user identity locally for convenience
 - publish task counts into the runtime diagnostics model
 - keep all user-facing queue and review counts scoped to active tasks rather than raw tombstones
 - prune legacy anonymous deleted tombstones during load so stale local state does not survive upgrades
 
-### 4. Sync engine
+Current boundary:
+
+- `AgendaProvider` no longer owns sync gating, post-sync reload, or startup/auth session flow
+- `AgendaProvider` also no longer owns raw snapshot load/save/remove/clear orchestration against `TasksRepository`
+- `AgendaProvider` also no longer owns the task-list mutation rules for completion, deletion, and anonymous-task adoption
+- `TaskLocalSnapshotCoordinator` now owns the local snapshot orchestration seam around `TasksRepository`
+- `TaskMutationCoordinator` now owns task-list mutation rules while leaving persistence and sync triggering to the provider
+- `TaskSyncCoordinator` now owns sync-entry checks and reload wiring around `TaskSyncService`
+- `WorkspaceSessionCoordinator` now owns startup/session bootstrap, auth reactions, and push-registration sequencing
+
+### 4. Sync coordination
+
+Primary file:
+
+- `lib/services/task_sync_coordinator.dart`
+
+Responsibilities:
+
+- gate sync attempts on authenticated user context and anonymous-task review state
+- bridge `AgendaProvider` task intents to the remote sync engine
+- reload the local snapshot after sync so the provider can stay focused on workspace state
+
+Important constraint:
+
+This is an orchestration seam, not the remote contract itself.
+The task-based reconciliation logic still lives in `TaskSyncService`.
+
+### 5. Sync engine
 
 Primary file:
 
@@ -304,7 +349,9 @@ Current implemented sync pass:
 flowchart TD
     LocalChange["Local task change"]
     Agenda["AgendaProvider"]
-    Persist["Write local snapshot"]
+    Mutation["TaskMutationCoordinator"]
+    Persist["TaskLocalSnapshotCoordinator"]
+    SyncCoord["TaskSyncCoordinator"]
     SyncGate{"Authenticated session<br/>and sync allowed?"}
     Wait["Keep local state visible<br/>until sync can run"]
     Sync["TaskSyncService"]
@@ -316,8 +363,10 @@ flowchart TD
     Outcome["Publish sync outcome<br/>to runtime diagnostics"]
 
     LocalChange --> Agenda
-    Agenda --> Persist
-    Persist --> SyncGate
+    Agenda --> Mutation
+    Mutation --> Persist
+    Agenda --> SyncCoord
+    SyncCoord --> SyncGate
     SyncGate -->|No| Wait
     SyncGate -->|Yes| Sync
     Sync --> Checks
@@ -328,10 +377,11 @@ flowchart TD
     Merge --> Outcome
 ```
 
-### 5. Session and identity handling
+### 6. Session and identity handling
 
 Primary files:
 
+- `lib/services/workspace_session_coordinator.dart`
 - `lib/services/user_session_service.dart`
 - `lib/widgets/bottomsheets/login.dart`
 - `lib/widgets/forms/otp_verify_form.dart`
@@ -339,11 +389,11 @@ Primary files:
 Responsibilities:
 
 - restore and clear cached local identity
-- align UI behavior with Supabase auth state
-- trigger authenticated startup sync and push registration
+- align workspace behavior with Supabase auth state
+- trigger authenticated startup sync and push registration through a dedicated coordinator
 - support login, signup, and OTP verification flows
 
-### 6. Push registration and browser runtime
+### 7. Push registration and browser runtime
 
 Primary files:
 
@@ -368,7 +418,7 @@ Current deployment model:
 - `flutter-app/scripts/merge_sw.sh` and `flutter-app/scripts/merge_sw.bat` append the push handler into `flutter_service_worker.js`
 - GitHub Pages deployments must also preserve the standalone `push-sw.js` asset because the browser fetches it directly at runtime
 
-### 7. Supabase backend surface
+### 8. Supabase backend surface
 
 Primary files:
 
@@ -385,7 +435,7 @@ Responsibilities:
 - save and remove browser subscriptions
 - support the on-demand push path for the current authenticated user
 
-### 8. Scheduled notification worker
+### 9. Scheduled notification worker
 
 Primary file:
 
@@ -492,12 +542,15 @@ The next meaningful phase is deeper system control, not another shell redesign.
 
 Recommended evolution path:
 
-1. introduce a durable outbox instead of implicit dirty-task replay
-2. define per-operation states such as queued, sending, acknowledged, failed, and conflict
-3. connect those states to the placeholders already reserved in the diagnostics rail
-4. add structured logs, metrics, and richer evidence trails
-5. add failure injection paths and scenario tooling
-6. add audit tables for sync events and notification attempts
+1. refactor the system foundation toward clearer boundaries between shell state, session coordination, sync orchestration, local persistence, backend contract, runtime evidence, and scheduled delivery
+2. introduce a durable outbox instead of implicit dirty-task replay
+3. define per-operation states such as queued, sending, acknowledged, failed, and conflict
+4. connect those states to the placeholders already reserved in the diagnostics rail
+5. add structured logs, metrics, and richer evidence trails
+6. add failure injection paths and scenario tooling
+7. add audit tables for sync events and notification attempts
+
+See `OBJECTIVE_0_FOUNDATION_PLAN.md` for the concrete plan that now sits in front of outbox work.
 
 ## Why this architecture matters
 
@@ -510,4 +563,4 @@ This repository is valuable because it studies a common SaaS boundary that looks
 - eventual user-visible convergence
 
 The architecture is intentionally small enough to understand and now structured enough to observe.
-The next step is to make its reliability semantics explicit, durable, and testable.
+The next step is to clean up the foundation so its reliability semantics can later become explicit, durable, and testable on stronger seams.

@@ -7,6 +7,7 @@ It is the part of the repository where local-first task state, auth transitions,
 
 - `lib\main.dart`: app entry point and provider wiring
 - `lib\screens\lab_shell.dart`: the current lab-style shell
+- `lib\services\`: sync, session, local snapshot, and task-mutation coordination seams for the current Objective 0 refactor
 - `test\`: Flutter test coverage for sync logic, provider behavior, and responsive workspace behavior
 - `web\`: browser assets, manifest, and push-service-worker files
 - `env.example.json`: template for local runtime values
@@ -42,6 +43,7 @@ The app reads `SUPABASE_URL` and `SUPABASE_ANON_KEY` at startup, and the browser
 - this project is intentionally web-first even though Flutter platform folders still exist
 - the UI is organized around a lab shell, not a centered todo screen
 - local persistence uses SharedPreferences, so local state behavior is part of the product contract
+- `AgendaProvider` now sits on top of explicit coordination seams for local snapshot handling, task mutation rules, sync orchestration, and workspace session flow
 - push behavior depends on both `web\push.js` and the dedicated `web\push-sw.js` asset
 - the current sync engine is still task-based rather than operation-based, so UI expectations should stay aligned with the existing docs
 

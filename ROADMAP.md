@@ -80,6 +80,8 @@ Concrete outcomes to target:
 - a more stable base for later outbox, conflict, observability, and fault-injection work
 - reduced structural coupling between prototype-era assumptions and the next reliability-lab phases
 
+Detailed planning for this objective now lives in [`docs/OBJECTIVE_0_FOUNDATION_PLAN.md`](docs/OBJECTIVE_0_FOUNDATION_PLAN.md).
+
 ### Objective 1: make sync semantics explicit
 
 Recommended focus:

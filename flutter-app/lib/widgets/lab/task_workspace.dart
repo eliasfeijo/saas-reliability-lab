@@ -3,11 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:todo_flutter/helpers/web_push_helper.dart';
-import 'package:todo_flutter/models/runtime_event.dart';
 import 'package:todo_flutter/models/task.dart';
 import 'package:todo_flutter/providers/agenda_provider.dart';
 import 'package:todo_flutter/providers/runtime_debug_provider.dart';
+import 'package:todo_flutter/services/workspace_session_coordinator.dart';
 import 'package:todo_flutter/widgets/bottomsheets/login.dart';
 import 'package:todo_flutter/widgets/forms/task_form.dart';
 
@@ -25,6 +24,11 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
   final TextEditingController _searchController = TextEditingController();
   bool _isCompactPanelMinimized = false;
 
+  bool get _hasAuthenticatedSession {
+    final auth = Supabase.instance.client.auth;
+    return auth.currentUser != null && auth.currentSession != null;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -41,7 +45,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
     _authStateSubscription = Supabase.instance.client.auth.onAuthStateChange
         .listen(
           (event) async {
-            await _handleAuthStateChange(event);
+            await _handleAuthStateChange(event.event);
           },
           onError: (Object error, StackTrace stackTrace) {
             debugPrint('Auth state listener error: $error');
@@ -57,63 +61,29 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
     super.dispose();
   }
 
-  bool get _hasAuthenticatedSession {
-    final auth = Supabase.instance.client.auth;
-    return auth.currentUser != null && auth.currentSession != null;
-  }
-
-  Future<void> _handleAuthStateChange(AuthState authState) async {
+  Future<void> _handleAuthStateChange(AuthChangeEvent event) async {
     if (!mounted) return;
 
-    final provider = context.read<AgendaProvider>();
+    final agenda = context.read<AgendaProvider>();
     final runtimeDebug = context.read<RuntimeDebugProvider>();
+    final sessionCoordinator = context.read<WorkspaceSessionCoordinator>();
 
-    runtimeDebug.setUserState(
-      cachedUserId: provider.userId,
-      activeUserId: Supabase.instance.client.auth.currentUser?.id,
-      hasAuthenticatedSession: _hasAuthenticatedSession,
-      logEvent: true,
-      message: 'Auth event: ${authState.event.name}',
+    final result = await sessionCoordinator.handleAuthStateChange(
+      event,
+      agenda: agenda,
+      runtimeDebug: runtimeDebug,
     );
 
-    if (authState.event == AuthChangeEvent.signedIn) {
-      final user = Supabase.instance.client.auth.currentUser;
-      if (user == null) return;
-
-      await provider.saveUser(user.id);
-      await _completeAuthenticatedSetup(provider);
-      return;
-    }
-
-    if (authState.event == AuthChangeEvent.signedOut) {
-      provider.clearSelection();
-      provider.clearSearch();
-      await provider.clearUser();
-      await provider.clearAllTasksFromLocalStorage();
+    if (result.shouldClearSearch) {
       _searchController.clear();
     }
-  }
 
-  Future<void> _completeAuthenticatedSetup(AgendaProvider agenda) async {
-    final runtimeDebug = context.read<RuntimeDebugProvider>();
-
-    if (agenda.hasPendingAnonymousReview) {
-      runtimeDebug.addEvent(
-        category: RuntimeEventCategory.storage,
-        message:
-            'Anonymous local tasks are waiting for review before cloud sync can continue.',
-        level: RuntimeEventLevel.warning,
-      );
-
-      await registerWebPushSubscription(runtimeDebug: runtimeDebug);
-
-      if (!mounted) return;
+    if (result.shouldShowAnonymousTaskReview) {
+      if (!mounted) {
+        return;
+      }
       _showAnonymousTaskReviewDialog();
-      return;
     }
-
-    await agenda.syncAllTasks();
-    await registerWebPushSubscription(runtimeDebug: runtimeDebug);
   }
 
   void _showLoginBottomSheet() {
@@ -215,25 +185,20 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
   Future<void> _initAgenda() async {
     final agenda = context.read<AgendaProvider>();
     final runtimeDebug = context.read<RuntimeDebugProvider>();
-
-    runtimeDebug.startInitialLoad('Loading local session and task snapshot.');
+    final sessionCoordinator = context.read<WorkspaceSessionCoordinator>();
 
     try {
-      await agenda.loadUser();
-      await agenda.loadTasks();
-      runtimeDebug.finishInitialLoad(
-        message: 'Loaded local session and task snapshot.',
+      final result = await sessionCoordinator.initialize(
+        agenda: agenda,
+        runtimeDebug: runtimeDebug,
       );
-
-      if (_hasAuthenticatedSession &&
-          agenda.userId != null &&
-          agenda.userId!.isNotEmpty) {
-        await _completeAuthenticatedSetup(agenda);
+      if (result.shouldShowAnonymousTaskReview) {
+        if (!mounted) {
+          return;
+        }
+        _showAnonymousTaskReviewDialog();
       }
     } catch (error) {
-      runtimeDebug.failInitialLoad(
-        'Failed to initialize the workspace: $error',
-      );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Failed to initialize the workspace.')),

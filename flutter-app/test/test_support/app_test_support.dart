@@ -10,8 +10,10 @@ import 'package:todo_flutter/models/task.dart';
 import 'package:todo_flutter/providers/agenda_provider.dart';
 import 'package:todo_flutter/providers/runtime_debug_provider.dart';
 import 'package:todo_flutter/repositories/tasks_repository.dart';
+import 'package:todo_flutter/services/task_sync_coordinator.dart';
 import 'package:todo_flutter/services/task_sync_service.dart';
 import 'package:todo_flutter/services/user_session_service.dart';
+import 'package:todo_flutter/services/workspace_session_coordinator.dart';
 import 'package:todo_flutter/theme/lab_theme.dart';
 import 'package:todo_flutter/widgets/lab/lab_left_rail.dart';
 import 'package:todo_flutter/widgets/lab/task_workspace.dart';
@@ -54,9 +56,16 @@ class LabWorkspaceHarness extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final sessionCoordinator = WorkspaceSessionCoordinator(
+      InMemoryUserSessionService(runtimeDebug: runtimeDebug),
+      registerPushSubscription: ({runtimeDebug}) async {},
+      hasAuthenticatedSession: () => false,
+    );
+
     return MultiProvider(
       providers: [
         ChangeNotifierProvider<RuntimeDebugProvider>.value(value: runtimeDebug),
+        Provider<WorkspaceSessionCoordinator>.value(value: sessionCoordinator),
         ChangeNotifierProvider<AgendaProvider>.value(value: agenda),
       ],
       child: MaterialApp(
@@ -88,9 +97,16 @@ class NotebookWorkspaceHarness extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final sessionCoordinator = WorkspaceSessionCoordinator(
+      InMemoryUserSessionService(runtimeDebug: runtimeDebug),
+      registerPushSubscription: ({runtimeDebug}) async {},
+      hasAuthenticatedSession: () => false,
+    );
+
     return MultiProvider(
       providers: [
         ChangeNotifierProvider<RuntimeDebugProvider>.value(value: runtimeDebug),
+        Provider<WorkspaceSessionCoordinator>.value(value: sessionCoordinator),
         ChangeNotifierProvider<AgendaProvider>.value(value: agenda),
       ],
       child: MaterialApp(
@@ -116,9 +132,16 @@ class CompactWorkspaceHarness extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final sessionCoordinator = WorkspaceSessionCoordinator(
+      InMemoryUserSessionService(runtimeDebug: runtimeDebug),
+      registerPushSubscription: ({runtimeDebug}) async {},
+      hasAuthenticatedSession: () => false,
+    );
+
     return MultiProvider(
       providers: [
         ChangeNotifierProvider<RuntimeDebugProvider>.value(value: runtimeDebug),
+        Provider<WorkspaceSessionCoordinator>.value(value: sessionCoordinator),
         ChangeNotifierProvider<AgendaProvider>.value(value: agenda),
       ],
       child: MaterialApp(

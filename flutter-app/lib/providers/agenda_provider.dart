@@ -3,22 +3,20 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:todo_flutter/controllers/task_filter_controller.dart';
 import 'package:todo_flutter/controllers/task_selection_controller.dart';
-import 'package:todo_flutter/models/runtime_debug_state.dart';
 import 'package:todo_flutter/models/task.dart';
 import 'package:todo_flutter/providers/runtime_debug_provider.dart';
 import 'package:todo_flutter/repositories/tasks_repository.dart';
+import 'package:todo_flutter/services/task_local_snapshot_coordinator.dart';
+import 'package:todo_flutter/services/task_mutation_coordinator.dart';
+import 'package:todo_flutter/services/task_sync_coordinator.dart';
 import 'package:todo_flutter/services/task_sync_service.dart';
-import 'package:todo_flutter/services/user_session_service.dart';
 
 class AgendaProvider extends ChangeNotifier {
   // Private fields
 
   // Task sync service for managing task synchronization
   // This service handles syncing tasks with the cloud and local storage.
-  final TaskSyncService _taskSyncService;
-
-  // User session service for managing user sessions
-  final UserSessionService _userSession;
+  final TaskSyncCoordinator _taskSyncCoordinator;
   final RuntimeDebugProvider? _runtimeDebug;
 
   // Filter controller for managing task filters
@@ -26,7 +24,8 @@ class AgendaProvider extends ChangeNotifier {
   // Selection controller for managing selected tasks
   final _selectionController = TaskSelectionController();
 
-  final TasksRepository _repository;
+  final TaskLocalSnapshotCoordinator _localSnapshotCoordinator;
+  final TaskMutationCoordinator _taskMutationCoordinator;
 
   final List<TaskModel> _tasks = [];
   final Set<String> _batchSelectedTaskIds = <String>{};
@@ -41,11 +40,24 @@ class AgendaProvider extends ChangeNotifier {
 
   // Constructor
   AgendaProvider(
-    this._repository,
-    this._taskSyncService,
-    this._userSession, {
+    TasksRepository repository,
+    TaskSyncService taskSyncService, {
+    TaskSyncCoordinator? taskSyncCoordinator,
+    TaskLocalSnapshotCoordinator? localSnapshotCoordinator,
+    TaskMutationCoordinator? taskMutationCoordinator,
     RuntimeDebugProvider? runtimeDebug,
-  }) : _runtimeDebug = runtimeDebug;
+  }) : _taskSyncCoordinator =
+            taskSyncCoordinator ??
+            TaskSyncCoordinator(
+              repository,
+              taskSyncService,
+              runtimeDebug: runtimeDebug,
+            ),
+        _localSnapshotCoordinator =
+            localSnapshotCoordinator ?? TaskLocalSnapshotCoordinator(repository),
+        _taskMutationCoordinator =
+            taskMutationCoordinator ?? const TaskMutationCoordinator(),
+        _runtimeDebug = runtimeDebug;
 
   // Getters
 
@@ -103,7 +115,6 @@ class AgendaProvider extends ChangeNotifier {
   set tasks(List<TaskModel> tasks) {
     _tasks.clear();
     _tasks.addAll(tasks);
-    _pruneLocallyDeletedAnonymousTasks();
     _pruneInteractionState();
     _publishTaskDebugState();
     notifyListeners();
@@ -116,63 +127,30 @@ class AgendaProvider extends ChangeNotifier {
 
   // Methods
 
-  // Load user ID from SharedPreferences
-  Future<void> loadUser() async {
-    _isLoading = true;
-    notifyListeners();
-
-    _userId = await _userSession.loadUserId();
-    // debugPrint('Loaded user ID: $_userId');
-
-    _isLoading = false;
-    notifyListeners();
-  }
-
-  // Save user ID to SharedPreferences
-  Future<void> saveUser(String userId) async {
-    await _userSession.saveUserId(userId);
-    await loadUser(); // Reload user after saving
-  }
-
-  // Clear user ID from SharedPreferences
-  Future<void> clearUser() async {
-    await _userSession.clearUserId();
-    _userId = null; // Clear the user ID in the provider
-    notifyListeners();
-  }
-
   // Loading from repository
   Future<void> loadTasks() async {
-    final storedTasks = await _repository.loadTasks();
+    final storedTasks = await _localSnapshotCoordinator.loadSnapshot();
     _tasks
       ..clear()
       ..addAll(storedTasks);
-    final didPrune = _pruneLocallyDeletedAnonymousTasks();
     _pruneInteractionState();
-    if (didPrune) {
-      await _repository.saveTasks(_tasks);
-    }
     _publishTaskDebugState();
     notifyListeners();
   }
 
   // Task Management Methods
   Future<void> addTask(TaskModel task) async {
-    task.userId = _userId; // Set user ID for the task
-    task.dirty(); // Mark task as dirty for sync
-    _tasks.add(task);
-    await _saveTasks();
-    _triggerSync(task); // Trigger sync immediately
+    final result = _taskMutationCoordinator.addTask(
+      _tasks,
+      task,
+      userId: _userId,
+    );
+    await _persistMutationResult(result);
   }
 
   Future<void> updateTask(TaskModel updatedTask) async {
-    updatedTask.dirty(); // Mark task as dirty for sync
-    final index = _tasks.indexWhere((task) => task.id == updatedTask.id);
-    if (index != -1) {
-      _tasks[index] = updatedTask;
-      await _saveTasks();
-      _triggerSync(updatedTask); // Trigger sync immediately
-    }
+    final result = _taskMutationCoordinator.updateTask(_tasks, updatedTask);
+    await _persistMutationResult(result);
   }
 
   Future<void> deleteTask(String taskId) async {
@@ -194,43 +172,43 @@ class AgendaProvider extends ChangeNotifier {
   }
 
   Future<void> markTaskCompleted(String taskId) async {
-    await _applyTaskUpdate([taskId], (task) {
-      if (task.isCompleted) {
-        return false;
-      }
-      task.markAsCompleted();
-      return true;
-    });
+    await _persistMutationResult(
+      _taskMutationCoordinator.setCompletionState(
+        _tasks,
+        [taskId],
+        isCompleted: true,
+      ),
+    );
   }
 
   Future<void> reopenTask(String taskId) async {
-    await _applyTaskUpdate([taskId], (task) {
-      if (!task.isCompleted) {
-        return false;
-      }
-      task.markAsPending();
-      return true;
-    });
+    await _persistMutationResult(
+      _taskMutationCoordinator.setCompletionState(
+        _tasks,
+        [taskId],
+        isCompleted: false,
+      ),
+    );
   }
 
   Future<void> markSelectedTasksCompleted() async {
-    await _applyTaskUpdate(_batchSelectedTaskIds, (task) {
-      if (task.isCompleted) {
-        return false;
-      }
-      task.markAsCompleted();
-      return true;
-    });
+    await _persistMutationResult(
+      _taskMutationCoordinator.setCompletionState(
+        _tasks,
+        _batchSelectedTaskIds,
+        isCompleted: true,
+      ),
+    );
   }
 
   Future<void> reopenSelectedTasks() async {
-    await _applyTaskUpdate(_batchSelectedTaskIds, (task) {
-      if (!task.isCompleted) {
-        return false;
-      }
-      task.markAsPending();
-      return true;
-    });
+    await _persistMutationResult(
+      _taskMutationCoordinator.setCompletionState(
+        _tasks,
+        _batchSelectedTaskIds,
+        isCompleted: false,
+      ),
+    );
   }
 
   Future<void> deleteSelectedTasks() async {
@@ -238,8 +216,10 @@ class AgendaProvider extends ChangeNotifier {
   }
 
   Future<void> clearAllTasks() async {
-    _tasks.clear();
-    await _repository.clearTasks();
+    final clearedTasks = await _localSnapshotCoordinator.clearSnapshot();
+    _tasks
+      ..clear()
+      ..addAll(clearedTasks);
     _publishTaskDebugState();
     notifyListeners();
   }
@@ -350,11 +330,8 @@ class AgendaProvider extends ChangeNotifier {
 
   // Bulk Operations
   void markAllAsCompleted() {
-    for (var task in _tasks) {
-      if (!task.isCompleted) {
-        task.markAsCompleted();
-      }
-    }
+    final result = _taskMutationCoordinator.markAllCompleted(_tasks);
+    _replaceTasks(result.tasks);
     notifyListeners();
   }
 
@@ -364,7 +341,8 @@ class AgendaProvider extends ChangeNotifier {
       _selectionController.clear();
     }
 
-    _tasks.removeWhere((task) => task.isCompleted);
+    final result = _taskMutationCoordinator.clearCompletedTasks(_tasks);
+    _replaceTasks(result.tasks);
     _publishTaskDebugState();
     notifyListeners();
   }
@@ -407,74 +385,46 @@ class AgendaProvider extends ChangeNotifier {
 
   // Sync all tasks (e.g.: on user login)
   Future<void> syncAllTasks() async {
-    if (_userId == null) {
-      debugPrint('No user ID found. Skipping task sync on login.');
-      return;
-    }
-    if (hasPendingAnonymousReview) {
-      _markSyncBlockedForAnonymousReview();
-      debugPrint('Anonymous tasks pending review. Pausing cloud sync.');
-      return;
-    }
-    if (_isLoading) {
-      debugPrint('Sync already in progress. Skipping task sync.');
-      return;
-    }
-    _isLoading = true;
-    notifyListeners();
-    debugPrint('Syncing all tasks...');
-    await _taskSyncService.syncAllTasks(_tasks);
-    await loadTasks(); // Reload tasks after sync
-    debugPrint('All tasks synced.');
-    _isLoading = false;
-    notifyListeners();
+    await _taskSyncCoordinator.syncAllTasks(
+      tasks: _tasks,
+      userId: _userId,
+      hasPendingAnonymousReview: hasPendingAnonymousReview,
+      isLoading: _isLoading,
+      setLoading: _setLoading,
+      onTasksReloaded: _replaceTasksAfterSync,
+    );
   }
 
   // Trigger sync for a specific task
   void _triggerSync(TaskModel task) {
-    if (_userId == null) {
-      debugPrint('No user ID found. Skipping sync for task');
-      return;
-    }
-    if (hasPendingAnonymousReview) {
-      _markSyncBlockedForAnonymousReview();
-      debugPrint('Anonymous tasks pending review. Skipping sync for task.');
-      return;
-    }
-    if (_isLoading) {
-      debugPrint('Sync already in progress. Skipping sync for task');
-      return;
-    }
-    // debugPrint('Triggering sync for task: ${task.id}');
-    // debugPrint('Task sync status: ${task.syncStatus}');
-    _taskSyncService.syncIfLoggedIn(
-      task.copyWith(), // Use a copy to avoid modifying the original task
-      () {
-        // Optional: handle before sync logic here
-        _isLoading = true; // Set loading state before sync
-        notifyListeners();
-      },
-      (List<TaskModel> syncedTasks) async {
-        // Optional: handle synced tasks here
-        await loadTasks(); // Reload tasks after sync
-        _isLoading = false;
-        notifyListeners();
-      },
+    _taskSyncCoordinator.triggerTaskSync(
+      task: task,
+      userId: _userId,
+      hasPendingAnonymousReview: hasPendingAnonymousReview,
+      isLoading: _isLoading,
+      setLoading: _setLoading,
+      onTasksReloaded: _replaceTasksAfterSync,
     );
   }
 
   Future<void> removeFromLocalStorage(List<TaskModel> tasks) async {
-    // Remove tasks from the local storage
-    for (var task in tasks) {
-      _tasks.removeWhere((t) => t.id == task.id);
-    }
-    await _saveTasks();
+    final nextTasks = await _localSnapshotCoordinator.removeTaskIds(
+      _tasks,
+      tasks.map((task) => task.id),
+    );
+    _tasks
+      ..clear()
+      ..addAll(nextTasks);
+    _pruneInteractionState();
+    _publishTaskDebugState();
+    notifyListeners();
   }
 
   Future<void> clearAllTasksFromLocalStorage() async {
-    // Clear all tasks from local storage
-    _tasks.clear();
-    await _repository.clearTasks();
+    final clearedTasks = await _localSnapshotCoordinator.clearSnapshot();
+    _tasks
+      ..clear()
+      ..addAll(clearedTasks);
     _publishTaskDebugState();
     notifyListeners();
   }
@@ -497,30 +447,62 @@ class AgendaProvider extends ChangeNotifier {
       debugPrint('No authenticated user available to adopt anonymous tasks.');
       return;
     }
-    // Take ownership of anonymous tasks by assigning the current user ID
-    for (final task in anonymousTasks) {
-      task.userId = _userId;
-      task.dirty(); // Mark as dirty for sync
+    final result = _taskMutationCoordinator.adoptAnonymousTasks(
+      _tasks,
+      userId: _userId,
+    );
+    if (!result.didChange) {
+      return;
     }
+    _replaceTasks(result.tasks);
     await _saveTasks();
     // Trigger sync for all tasks after taking ownership
     await syncAllTasks();
   }
 
   Future<void> _saveTasks() async {
-    _pruneLocallyDeletedAnonymousTasks();
+    final storedTasks = await _localSnapshotCoordinator.saveSnapshot(_tasks);
+    _tasks
+      ..clear()
+      ..addAll(storedTasks);
     _pruneInteractionState();
-    await _repository.saveTasks(_tasks);
     _publishTaskDebugState();
     notifyListeners();
   }
 
-  bool _pruneLocallyDeletedAnonymousTasks() {
-    final initialCount = _tasks.length;
-    _tasks.removeWhere(
-      (task) => task.userId == null && task.syncStatus == SyncStatus.deleted,
-    );
-    return _tasks.length != initialCount;
+  void _setLoading(bool isLoading) {
+    if (_isLoading == isLoading) {
+      return;
+    }
+
+    _isLoading = isLoading;
+    notifyListeners();
+  }
+
+  Future<void> _replaceTasksAfterSync(List<TaskModel> tasks) async {
+    _replaceTasks(tasks);
+    _pruneInteractionState();
+    _publishTaskDebugState();
+    notifyListeners();
+  }
+
+  void _replaceTasks(List<TaskModel> tasks) {
+    _tasks
+      ..clear()
+      ..addAll(tasks);
+  }
+
+  Future<void> _persistMutationResult(TaskMutationResult result) async {
+    if (!result.didChange) {
+      return;
+    }
+
+    _replaceTasks(result.tasks);
+    await _saveTasks();
+
+    if (result.syncTask != null) {
+      _triggerSync(result.syncTask!);
+    }
   }
 
   void _resetInteractionForViewChange() {
@@ -559,38 +541,6 @@ class AgendaProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> _applyTaskUpdate(
-    Iterable<String> taskIds,
-    bool Function(TaskModel task) mutate,
-  ) async {
-    final targetIds = taskIds.toSet();
-    if (targetIds.isEmpty) {
-      return;
-    }
-
-    TaskModel? syncTask;
-    var didChange = false;
-
-    for (final task in _tasks) {
-      if (!targetIds.contains(task.id)) {
-        continue;
-      }
-      final changed = mutate(task);
-      if (!changed) {
-        continue;
-      }
-      syncTask ??= task;
-      didChange = true;
-    }
-
-    if (!didChange || syncTask == null) {
-      return;
-    }
-
-    await _saveTasks();
-    _triggerSync(syncTask);
-  }
-
   Future<void> _deleteTasksById(Iterable<String> taskIds) async {
     final targetIds = taskIds.toSet();
     if (targetIds.isEmpty) {
@@ -598,52 +548,13 @@ class AgendaProvider extends ChangeNotifier {
     }
 
     _selectionController.clear();
-    TaskModel? syncTask;
-    var didChange = false;
-
-    _tasks.removeWhere((task) {
-      if (!targetIds.contains(task.id)) {
-        return false;
-      }
-
-      _batchSelectedTaskIds.remove(task.id);
-
-      if (task.userId == null) {
-        didChange = true;
-        return true;
-      }
-
-      if (task.syncStatus == SyncStatus.deleted) {
-        return false;
-      }
-
-      task.markAsDeleted();
-      syncTask ??= task;
-      didChange = true;
-      return false;
-    });
-
-    if (!didChange) {
-      return;
-    }
-
-    final syncTaskToTrigger = syncTask;
-    await _saveTasks();
-
-    if (syncTaskToTrigger != null) {
-      _triggerSync(syncTaskToTrigger);
-    }
+    _batchSelectedTaskIds.removeWhere(targetIds.contains);
+    await _persistMutationResult(
+      _taskMutationCoordinator.deleteTasks(_tasks, targetIds),
+    );
   }
 
   void _publishTaskDebugState() {
     _runtimeDebug?.updateTaskCounts(_tasks);
-  }
-
-  void _markSyncBlockedForAnonymousReview() {
-    _runtimeDebug?.markSyncSkipped(
-      phase: RuntimeSyncPhase.blockedAnonymousReview,
-      message:
-          'Anonymous local tasks are waiting for review. Keep or discard them before cloud sync.',
-    );
   }
 }

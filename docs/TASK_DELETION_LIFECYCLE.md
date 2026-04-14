@@ -68,7 +68,7 @@ In practice that means:
 
 Older builds may already have persisted anonymous deleted tombstones locally.
 
-To clean that up safely, `AgendaProvider.loadTasks()` now prunes any task that is both:
+To clean that up safely, the local snapshot load path now prunes any task that is both:
 
 - anonymous (`userId == null`)
 - marked `SyncStatus.deleted`

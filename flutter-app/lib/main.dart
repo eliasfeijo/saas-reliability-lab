@@ -6,9 +6,11 @@ import 'package:todo_flutter/keys.dart';
 import 'package:todo_flutter/providers/agenda_provider.dart';
 import 'package:todo_flutter/providers/runtime_debug_provider.dart';
 import 'package:todo_flutter/repositories/tasks_repository.dart';
+import 'package:todo_flutter/services/task_sync_coordinator.dart';
 import 'package:todo_flutter/screens/lab_shell.dart';
 import 'package:todo_flutter/services/task_sync_service.dart';
 import 'package:todo_flutter/services/user_session_service.dart';
+import 'package:todo_flutter/services/workspace_session_coordinator.dart';
 import 'package:todo_flutter/theme/lab_theme.dart';
 
 void main() async {
@@ -50,7 +52,9 @@ class _MyAppState extends State<MyApp> {
   late final TasksRepository _tasksRepository;
   late final RuntimeDebugProvider _runtimeDebugProvider;
   late final TaskSyncService _taskSyncService;
+  late final TaskSyncCoordinator _taskSyncCoordinator;
   late final UserSessionService _userSessionService;
+  late final WorkspaceSessionCoordinator _workspaceSessionCoordinator;
 
   @override
   void initState() {
@@ -62,8 +66,16 @@ class _MyAppState extends State<MyApp> {
       Supabase.instance.client,
       runtimeDebug: _runtimeDebugProvider,
     );
+    _taskSyncCoordinator = TaskSyncCoordinator(
+      _tasksRepository,
+      _taskSyncService,
+      runtimeDebug: _runtimeDebugProvider,
+    );
     _userSessionService = UserSessionService(
       runtimeDebug: _runtimeDebugProvider,
+    );
+    _workspaceSessionCoordinator = WorkspaceSessionCoordinator(
+      _userSessionService,
     );
   }
 
@@ -80,11 +92,14 @@ class _MyAppState extends State<MyApp> {
         ChangeNotifierProvider<RuntimeDebugProvider>.value(
           value: _runtimeDebugProvider,
         ),
+        Provider<WorkspaceSessionCoordinator>.value(
+          value: _workspaceSessionCoordinator,
+        ),
         ChangeNotifierProvider(
           create: (context) => AgendaProvider(
             _tasksRepository,
             _taskSyncService,
-            _userSessionService,
+            taskSyncCoordinator: _taskSyncCoordinator,
             runtimeDebug: _runtimeDebugProvider,
           ),
         ),
