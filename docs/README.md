@@ -144,6 +144,7 @@ The goal is to make reliability behavior inspectable.
 - [`DEPLOYMENT.md`](DEPLOYMENT.md): GitHub Actions workflows, GitHub Pages integration, worker deployment, and environment matrix
 - [`LOCAL_DEVELOPMENT.md`](LOCAL_DEVELOPMENT.md): repository-root workflow, local commands, and developer setup for running the projects locally
 - [`EXPERIMENTS.md`](EXPERIMENTS.md): runnable and planned reliability scenarios
+- [`TASK_QUEUE_ACTIONS_PLAN.md`](TASK_QUEUE_ACTIONS_PLAN.md): recommended fix for the misleading completion control in Task Queue, plus the phased plan for explicit batch actions
 - [`TASK_DELETION_LIFECYCLE.md`](TASK_DELETION_LIFECYCLE.md): current delete semantics, bug-fix rationale, and the recommended future archive model
 - [`reliability_lab_checklist.md`](reliability_lab_checklist.md): milestone checklist for turning the prototype into a stronger lab
 - [`project_analysis.md`](project_analysis.md): current-state analysis of the codebase after the shell transformation
