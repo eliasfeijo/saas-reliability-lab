@@ -26,7 +26,6 @@ What it does:
 - checks out the repository
 - installs Flutter `3.41.5` on `stable`
 - builds Flutter web in release mode
-- uses `--pwa-strategy=offline-first`
 - uses the GitHub Pages base href `/saas-reliability-lab/`
 - injects client-facing runtime values through `--dart-define`
 - merges `web/push-sw.js` into `build/web/flutter_service_worker.js`
@@ -113,7 +112,6 @@ They serve different purposes.
 `flutter_service_worker.js`:
 
 - is the Flutter web release service worker
-- is built with `--pwa-strategy=offline-first`
 - also receives the merged push handler content from `web/push-sw.js`
 
 `push-sw.js`:

@@ -369,7 +369,6 @@ Responsibilities:
 ### Frontend
 
 - GitHub Actions builds Flutter web
-- `--pwa-strategy=offline-first` is used explicitly
 - release output is force-pushed to `gh-pages`
 - GitHub Pages serves the app from `/saas-reliability-lab/`
 - the published artifact includes both `flutter_service_worker.js` and the standalone `push-sw.js`
