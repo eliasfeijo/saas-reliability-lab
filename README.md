@@ -69,40 +69,23 @@ This repo now uses a monorepo-style structure:
 | `flutter-app\` | Flutter web app and platform projects |
 | `notify-worker\` | Cloudflare Worker for scheduled notifications |
 | `supabase\` | Supabase config, functions, migrations, and local backend tooling |
-| `docs\` | Architecture, deployment, experiments, and project analysis |
+| `docs\` | Architecture, local development, deployment, experiments, and project analysis |
 | `.github\` | CI/CD workflows and shared GitHub Action logic |
 
-## Where to start
+## Documentation Summary
 
-- Want the big-picture product and architecture overview? Start with `docs\README.md`
-- Want the deployment model? Read `docs\DEPLOYMENT.md`
-- Want the current system assessment? Read `docs\project_analysis.md`
-- Want to explore the app itself? Open `flutter-app\lib\main.dart`
+| Document | What it covers |
+| --- | --- |
+| [`docs/README.md`](docs/README.md) | Big-picture product framing, current UI shape, system model, and the repository guide. |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Implemented topology, state ownership, and the current evolution path. |
+| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | GitHub Actions workflows, GitHub Pages, Cloudflare Worker deployment, and environment expectations. |
+| [`docs/LOCAL_DEVELOPMENT.md`](docs/LOCAL_DEVELOPMENT.md) | Repository-root workflow, local run commands, and the day-to-day setup for working on the app locally. |
+| [`docs/EXPERIMENTS.md`](docs/EXPERIMENTS.md) | Runnable and planned reliability scenarios, expected behavior, and visible evidence. |
+| [`docs/project_analysis.md`](docs/project_analysis.md) | Current system assessment, structural strengths, and the main gaps still left to close. |
+| [`docs/TASK_DELETION_LIFECYCLE.md`](docs/TASK_DELETION_LIFECYCLE.md) | Current deletion semantics, the anonymous-task bug rationale, and the recommended future archive path. |
+| [`docs/reliability_lab_checklist.md`](docs/reliability_lab_checklist.md) | Milestones for turning the current prototype into a stronger reliability lab. |
 
-## Working from the repository root
-
-This VS Code workspace stays rooted at the repository top level.
-The checked-in launch and task configs point into the nested projects for you.
-
-### Flutter app
-
-- VS Code: use the `Flutter` launch config
-- CLI:
-  - `Push-Location .\flutter-app; flutter pub get; Pop-Location`
-  - `Push-Location .\flutter-app; flutter run --dart-define-from-file env.json -d chrome --web-port 3000; Pop-Location`
-  - `Push-Location .\flutter-app; flutter test; Pop-Location`
-
-### Notify worker
-
-- `Push-Location .\notify-worker; yarn install --frozen-lockfile; Pop-Location`
-- `Push-Location .\notify-worker; yarn test; Pop-Location`
-- `Push-Location .\notify-worker; yarn deploy; Pop-Location`
-
-### Supabase
-
-- `Push-Location .\supabase; yarn install --frozen-lockfile; Pop-Location`
-- `Push-Location .\supabase; npx supabase start; Pop-Location`
-- `Push-Location .\supabase; npx supabase db reset; Pop-Location`
+To jump straight into the client, start with [`flutter-app/lib/main.dart`](flutter-app/lib/main.dart).
 
 ## Current status
 
