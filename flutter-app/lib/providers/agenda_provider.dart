@@ -1,8 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
-import 'package:todo_flutter/controllers/task_filter_controller.dart';
-import 'package:todo_flutter/controllers/task_selection_controller.dart';
+import 'package:todo_flutter/controllers/task_workspace_interaction_controller.dart';
 import 'package:todo_flutter/models/task.dart';
 import 'package:todo_flutter/providers/runtime_debug_provider.dart';
 import 'package:todo_flutter/repositories/tasks_repository.dart';
@@ -19,16 +18,11 @@ class AgendaProvider extends ChangeNotifier {
   final TaskSyncCoordinator _taskSyncCoordinator;
   final RuntimeDebugProvider? _runtimeDebug;
 
-  // Filter controller for managing task filters
-  final _filterController = TaskFilterController();
-  // Selection controller for managing selected tasks
-  final _selectionController = TaskSelectionController();
-
   final TaskLocalSnapshotCoordinator _localSnapshotCoordinator;
   final TaskMutationCoordinator _taskMutationCoordinator;
+  final TaskWorkspaceInteractionController _interactionController;
 
   final List<TaskModel> _tasks = [];
-  final Set<String> _batchSelectedTaskIds = <String>{};
 
   // User ID for cloud sync
   // This is used to identify the user for cloud sync operations.
@@ -36,7 +30,6 @@ class AgendaProvider extends ChangeNotifier {
 
   // Loading state
   bool _isLoading = false;
-  bool _isBatchMode = false;
 
   // Constructor
   AgendaProvider(
@@ -45,19 +38,22 @@ class AgendaProvider extends ChangeNotifier {
     TaskSyncCoordinator? taskSyncCoordinator,
     TaskLocalSnapshotCoordinator? localSnapshotCoordinator,
     TaskMutationCoordinator? taskMutationCoordinator,
+    TaskWorkspaceInteractionController? interactionController,
     RuntimeDebugProvider? runtimeDebug,
   }) : _taskSyncCoordinator =
-            taskSyncCoordinator ??
-            TaskSyncCoordinator(
-              repository,
-              taskSyncService,
-              runtimeDebug: runtimeDebug,
-            ),
-        _localSnapshotCoordinator =
-            localSnapshotCoordinator ?? TaskLocalSnapshotCoordinator(repository),
-        _taskMutationCoordinator =
-            taskMutationCoordinator ?? const TaskMutationCoordinator(),
-        _runtimeDebug = runtimeDebug;
+           taskSyncCoordinator ??
+           TaskSyncCoordinator(
+             repository,
+             taskSyncService,
+             runtimeDebug: runtimeDebug,
+           ),
+       _localSnapshotCoordinator =
+           localSnapshotCoordinator ?? TaskLocalSnapshotCoordinator(repository),
+       _taskMutationCoordinator =
+           taskMutationCoordinator ?? const TaskMutationCoordinator(),
+       _interactionController =
+           interactionController ?? TaskWorkspaceInteractionController(),
+       _runtimeDebug = runtimeDebug;
 
   // Getters
 
@@ -78,24 +74,25 @@ class AgendaProvider extends ChangeNotifier {
 
   // Getters for filtered tasks, search query, and current filter
   // These getters provide access to the filtered tasks based on the current search query and filter.
-  List<TaskModel> get filteredTasks => _filterController.apply(_activeTasks);
-  String get searchQuery => _filterController.searchQuery;
-  TaskFilter get currentFilter => _filterController.filter;
-  TaskSort get currentSort => _filterController.sort;
+  List<TaskModel> get filteredTasks =>
+      _interactionController.apply(_activeTasks);
+  String get searchQuery => _interactionController.searchQuery;
+  TaskFilter get currentFilter => _interactionController.filter;
+  TaskSort get currentSort => _interactionController.sort;
   bool get isLoading => _isLoading;
   String? get userId => _userId;
   bool get hasPendingAnonymousReview =>
       _userId != null && _userId!.isNotEmpty && anonymousTasks.isNotEmpty;
 
   // Getters for task selection
-  TaskModel? get selectedTask => _selectionController.selected;
-  bool get hasSelectedTask => selectedTask != null;
-  bool get isTaskSelected => selectedTask != null;
-  bool get isBatchMode => _isBatchMode;
+  TaskModel? get selectedTask => _interactionController.selectedTask;
+  bool get hasSelectedTask => _interactionController.hasSelectedTask;
+  bool get isTaskSelected => hasSelectedTask;
+  bool get isBatchMode => _interactionController.isBatchMode;
   bool get hasBatchSelection => batchSelectedCount > 0;
-  int get batchSelectedCount => selectedBatchTasks.length;
+  int get batchSelectedCount => _interactionController.batchSelectedCount;
   List<TaskModel> get selectedBatchTasks => _activeTasks
-      .where((task) => _batchSelectedTaskIds.contains(task.id))
+      .where((task) => _interactionController.isTaskBatchSelected(task.id))
       .toList(growable: false);
 
   // Getters for task counts
@@ -173,21 +170,17 @@ class AgendaProvider extends ChangeNotifier {
 
   Future<void> markTaskCompleted(String taskId) async {
     await _persistMutationResult(
-      _taskMutationCoordinator.setCompletionState(
-        _tasks,
-        [taskId],
-        isCompleted: true,
-      ),
+      _taskMutationCoordinator.setCompletionState(_tasks, [
+        taskId,
+      ], isCompleted: true),
     );
   }
 
   Future<void> reopenTask(String taskId) async {
     await _persistMutationResult(
-      _taskMutationCoordinator.setCompletionState(
-        _tasks,
-        [taskId],
-        isCompleted: false,
-      ),
+      _taskMutationCoordinator.setCompletionState(_tasks, [
+        taskId,
+      ], isCompleted: false),
     );
   }
 
@@ -195,7 +188,7 @@ class AgendaProvider extends ChangeNotifier {
     await _persistMutationResult(
       _taskMutationCoordinator.setCompletionState(
         _tasks,
-        _batchSelectedTaskIds,
+        selectedBatchTasks.map((task) => task.id),
         isCompleted: true,
       ),
     );
@@ -205,14 +198,14 @@ class AgendaProvider extends ChangeNotifier {
     await _persistMutationResult(
       _taskMutationCoordinator.setCompletionState(
         _tasks,
-        _batchSelectedTaskIds,
+        selectedBatchTasks.map((task) => task.id),
         isCompleted: false,
       ),
     );
   }
 
   Future<void> deleteSelectedTasks() async {
-    await _deleteTasksById(_batchSelectedTaskIds);
+    await _deleteTasksById(selectedBatchTasks.map((task) => task.id));
   }
 
   Future<void> clearAllTasks() async {
@@ -226,104 +219,99 @@ class AgendaProvider extends ChangeNotifier {
 
   // Selected Task Management
   void selectTask(TaskModel task) {
-    if (_isBatchMode) {
+    if (!_interactionController.selectTask(task)) {
       return;
     }
-    _selectionController.select(task);
     notifyListeners();
   }
 
   void clearSelection() {
-    _selectionController.clear();
+    if (!_interactionController.clearSelection()) {
+      return;
+    }
     notifyListeners();
   }
 
   void enterBatchMode() {
-    if (_isBatchMode) {
+    if (!_interactionController.enterBatchMode()) {
       return;
     }
-    _isBatchMode = true;
-    _selectionController.clear();
-    _batchSelectedTaskIds.clear();
     notifyListeners();
   }
 
   void exitBatchMode() {
-    if (!_isBatchMode && _batchSelectedTaskIds.isEmpty) {
+    if (!_interactionController.exitBatchMode()) {
       return;
     }
-    _isBatchMode = false;
-    _batchSelectedTaskIds.clear();
     notifyListeners();
   }
 
   void toggleTaskInBatchSelection(String taskId) {
-    if (!_isBatchMode) {
+    if (!_interactionController.toggleTaskInBatchSelection(
+      taskId,
+      filteredTasks.map((task) => task.id),
+    )) {
       return;
-    }
-    if (_batchSelectedTaskIds.contains(taskId)) {
-      _batchSelectedTaskIds.remove(taskId);
-    } else if (isTaskInFiltered(taskId)) {
-      _batchSelectedTaskIds.add(taskId);
     }
     notifyListeners();
   }
 
   void selectAllVisibleTasks() {
-    if (!_isBatchMode) {
+    if (!_interactionController.selectAllVisibleTasks(
+      filteredTasks.map((task) => task.id),
+    )) {
       return;
     }
-    _batchSelectedTaskIds
-      ..clear()
-      ..addAll(filteredTasks.map((task) => task.id));
     notifyListeners();
   }
 
   void clearBatchSelection() {
-    if (_batchSelectedTaskIds.isEmpty) {
+    if (!_interactionController.clearBatchSelection()) {
       return;
     }
-    _batchSelectedTaskIds.clear();
     notifyListeners();
   }
 
   bool isTaskBatchSelected(String taskId) {
-    return _batchSelectedTaskIds.contains(taskId);
+    return _interactionController.isTaskBatchSelected(taskId);
   }
 
   // Filter Management
 
   void setFilter(TaskFilter filter) {
-    _filterController.setFilter(filter);
-    _resetInteractionForViewChange();
+    if (!_interactionController.setFilter(filter)) {
+      return;
+    }
     notifyListeners();
   }
 
   // Search and Filter Methods
   void updateSearchQuery(String query) {
-    _filterController.updateSearch(query);
-    _resetInteractionForViewChange();
+    if (!_interactionController.updateSearchQuery(query)) {
+      return;
+    }
     notifyListeners();
   }
 
   void clearSearch() {
-    _filterController.clearSearch();
-    _resetInteractionForViewChange();
+    if (!_interactionController.clearSearch()) {
+      return;
+    }
     notifyListeners();
   }
 
   void clearFilter() {
-    _filterController.clearFilter();
-    _resetInteractionForViewChange();
+    if (!_interactionController.clearFilter()) {
+      return;
+    }
     notifyListeners();
   }
 
   void setSort(TaskSort sort) {
-    if (_filterController.sort == sort) {
+    if (!_interactionController.setSort(sort)) {
       return;
     }
 
-    _filterController.setSort(sort);
     _pruneInteractionState();
     notifyListeners();
   }
@@ -338,7 +326,7 @@ class AgendaProvider extends ChangeNotifier {
   void clearCompletedTasks() {
     // Clear selection if selected task is completed
     if (selectedTask?.isCompleted == true) {
-      _selectionController.clear();
+      _interactionController.clearSelection();
     }
 
     final result = _taskMutationCoordinator.clearCompletedTasks(_tasks);
@@ -505,40 +493,13 @@ class AgendaProvider extends ChangeNotifier {
     }
   }
 
-  void _resetInteractionForViewChange() {
-    _selectionController.clear();
-    if (_isBatchMode) {
-      _batchSelectedTaskIds.clear();
-    }
-  }
-
   void _pruneInteractionState() {
     final activeTaskIds = _activeTasks.map((task) => task.id).toSet();
-    if (selectedTask != null && !activeTaskIds.contains(selectedTask!.id)) {
-      _selectionController.clear();
-    }
-
-    if (!_isBatchMode) {
-      _batchSelectedTaskIds.clear();
-      return;
-    }
-
-    if (_batchSelectedTaskIds.isEmpty) {
-      if (activeTaskIds.isEmpty) {
-        _isBatchMode = false;
-      }
-      return;
-    }
-
     final visibleTaskIds = filteredTasks.map((task) => task.id).toSet();
-    _batchSelectedTaskIds.removeWhere(
-      (taskId) =>
-          !activeTaskIds.contains(taskId) || !visibleTaskIds.contains(taskId),
+    _interactionController.pruneInteractionState(
+      activeTaskIds: activeTaskIds,
+      visibleTaskIds: visibleTaskIds,
     );
-
-    if (activeTaskIds.isEmpty) {
-      _isBatchMode = false;
-    }
   }
 
   Future<void> _deleteTasksById(Iterable<String> taskIds) async {
@@ -547,8 +508,7 @@ class AgendaProvider extends ChangeNotifier {
       return;
     }
 
-    _selectionController.clear();
-    _batchSelectedTaskIds.removeWhere(targetIds.contains);
+    _interactionController.removeTaskIds(targetIds);
     await _persistMutationResult(
       _taskMutationCoordinator.deleteTasks(_tasks, targetIds),
     );

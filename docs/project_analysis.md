@@ -90,6 +90,7 @@ LabShell
 
 TaskWorkspace + LabLeftRail
   -> AgendaProvider
+  -> TaskWorkspaceInteractionController
   -> TaskLocalSnapshotCoordinator
   -> TaskMutationCoordinator
   -> TaskSyncCoordinator
@@ -116,6 +117,7 @@ The shell already thinks in terms of explicit runtime states, but the underlying
 | `lib/widgets/lab/` | operator rail and task workspace | active implementation |
 | `lib/widgets/debug/` | diagnostics rail primitives and rendering | active implementation |
 | `lib/providers/agenda_provider.dart` | task orchestration | active implementation |
+| `lib/controllers/task_workspace_interaction_controller.dart` | workspace interaction state and batch-mode rules | active implementation |
 | `lib/providers/runtime_debug_provider.dart` | runtime evidence model | active implementation |
 | `lib/services/task_local_snapshot_coordinator.dart` | local snapshot orchestration | active implementation |
 | `lib/services/task_mutation_coordinator.dart` | task-list mutation rules | active implementation |
@@ -140,7 +142,7 @@ Current state:
 
 - Supabase initialization is straightforward and explicit.
 - `RuntimeDebugProvider` is now a first-class dependency.
-- `AgendaProvider` is now wired together with explicit coordination seams for local snapshot, task mutation, sync, and session flow.
+- `AgendaProvider` is now wired together with explicit coordination seams for workspace interaction state, local snapshot, task mutation, sync, and session flow.
 - The app now launches `LabShell` directly.
 
 Assessment:

@@ -5,6 +5,7 @@ It is the part of the repository where local-first task state, auth transitions,
 
 ## What lives here
 
+- `lib\controllers\`: queue filter, selection, and workspace interaction-state helpers
 - `lib\main.dart`: app entry point and provider wiring
 - `lib\screens\lab_shell.dart`: the current lab-style shell
 - `lib\services\`: sync, session, local snapshot, and task-mutation coordination seams for the current Objective 0 refactor

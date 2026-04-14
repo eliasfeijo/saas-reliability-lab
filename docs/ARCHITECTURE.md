@@ -79,6 +79,7 @@ flowchart TD
     Diagnostics["Right panel: Runtime Diagnostics"]
     SessionCoord["WorkspaceSessionCoordinator"]
     Agenda["AgendaProvider"]
+    Interaction["TaskWorkspaceInteractionController"]
     Mutation["TaskMutationCoordinator"]
     Snapshot["TaskLocalSnapshotCoordinator"]
     SyncCoord["TaskSyncCoordinator"]
@@ -97,6 +98,7 @@ flowchart TD
     Left --> Runtime
     Diagnostics --> Runtime
     SessionCoord --> Agenda
+    Agenda --> Interaction
     Agenda --> Mutation
     Mutation --> Snapshot
     Agenda --> SyncCoord
@@ -282,10 +284,12 @@ the model still carries more fidelity than the current sync contract actually tr
 Primary file:
 
 - `lib/providers/agenda_provider.dart`
+- `lib/controllers/task_workspace_interaction_controller.dart`
 
 Responsibilities:
 
-- manage task collection, selection, filter, and search state
+- manage task collection and workspace-facing task intents
+- delegate selection, search, filter, sort, batch-mode, and interaction-pruning rules to `TaskWorkspaceInteractionController`
 - coordinate local persistence and workspace-facing task intents
 - mirror the current user identity locally for convenience
 - publish task counts into the runtime diagnostics model
@@ -297,6 +301,8 @@ Current boundary:
 - `AgendaProvider` no longer owns sync gating, post-sync reload, or startup/auth session flow
 - `AgendaProvider` also no longer owns raw snapshot load/save/remove/clear orchestration against `TasksRepository`
 - `AgendaProvider` also no longer owns the task-list mutation rules for completion, deletion, and anonymous-task adoption
+- `AgendaProvider` also no longer owns the direct view-reset and selection-pruning rules for workspace interaction state
+- `TaskWorkspaceInteractionController` now composes `TaskFilterController` and `TaskSelectionController` with explicit batch-mode rules so queue state can evolve without further inflating the provider
 - `TaskLocalSnapshotCoordinator` now owns the local snapshot orchestration seam around `TasksRepository`
 - `TaskMutationCoordinator` now owns task-list mutation rules while leaving persistence and sync triggering to the provider
 - `TaskSyncCoordinator` now owns sync-entry checks and reload wiring around `TaskSyncService`

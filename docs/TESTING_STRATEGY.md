@@ -35,6 +35,7 @@ Current files:
 - `flutter-app\test\task_local_snapshot_coordinator_test.dart`
 - `flutter-app\test\task_mutation_coordinator_test.dart`
 - `flutter-app\test\task_sync_coordinator_test.dart`
+- `flutter-app\test\task_workspace_interaction_controller_test.dart`
 - `flutter-app\test\workspace_session_coordinator_test.dart`
 - `flutter-app\test\task_workspace_test.dart`
 - `flutter-app\test\task_workspace_responsive_test.dart`
@@ -47,6 +48,7 @@ What they currently cover:
 - local snapshot pruning and snapshot persistence helpers
 - task-mutation rules for completion, deletion, and anonymous-task adoption
 - sync gating and post-sync reload orchestration
+- workspace interaction rules for selection, batch mode, and view-state pruning
 - workspace startup and auth-session orchestration
 - provider-level queue and batch behavior
 - workflow-style widget regressions in the task workspace
@@ -225,6 +227,7 @@ Recommended direction:
 - `flutter-app\test\task_local_snapshot_coordinator_test.dart`
 - `flutter-app\test\task_mutation_coordinator_test.dart`
 - `flutter-app\test\task_sync_coordinator_test.dart`
+- `flutter-app\test\task_workspace_interaction_controller_test.dart`
 - `flutter-app\test\workspace_session_coordinator_test.dart`
 - `flutter-app\test\task_workspace_test.dart`
 - `flutter-app\test\task_workspace_responsive_test.dart`

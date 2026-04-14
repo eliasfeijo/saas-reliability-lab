@@ -19,7 +19,7 @@ Implemented now:
 - `TaskWorkspace` is the canonical center pane
 - `LabLeftRail` owns durable operator controls
 - `SyncDebugPanel` renders runtime evidence from `RuntimeDebugProvider`
-- `AgendaProvider` now primarily owns queue state, selection, filtering, and workspace-facing intents while coordination seams handle sync entry, startup/auth flow, local snapshot orchestration, and low-level task mutation rules
+- `AgendaProvider` now primarily owns task collection, task-facing intents, and runtime count publication while coordination seams handle workspace interaction state, sync entry, startup/auth flow, local snapshot orchestration, and low-level task mutation rules
 - `TaskSyncService` still performs task-level reconciliation rather than operation-level replay
 - `TasksRepository` still represents a simple local snapshot store backed by SharedPreferences
 
@@ -98,7 +98,7 @@ flowchart TD
 This is intentionally a **boundary map**, not a promise of exact class names.
 The important change is that the repo should move from a few large convenience-heavy components toward clearer application seams.
 
-### Current Objective 0 progress after the bounded coordinator slice
+### Current Objective 0 progress after the bounded coordination and interaction slices
 
 This repository now has an initial code seam for four of the most immediate Objective 0 concerns:
 
@@ -106,6 +106,7 @@ This repository now has an initial code seam for four of the most immediate Obje
 - `WorkspaceSessionCoordinator` sits between `TaskWorkspace`, `UserSessionService`, and authenticated startup behavior so workspace bootstrap and auth-session reactions are no longer mostly widget-owned
 - `TaskLocalSnapshotCoordinator` now sits around `TasksRepository` so local snapshot load/save/remove/clear behavior is no longer mixed directly into `AgendaProvider`
 - `TaskMutationCoordinator` now owns task-list mutation rules so `AgendaProvider` is less responsible for low-level completion, delete, and anonymous-adoption mutation details
+- `TaskWorkspaceInteractionController` now composes the existing filter and selection controllers with explicit batch-mode and interaction-pruning rules so `AgendaProvider` is less responsible for workspace view-state mechanics
 
 This slice is intentionally bounded.
 It does **not** add outbox semantics, change the remote task-reconciliation contract, or replace SharedPreferences.

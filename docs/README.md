@@ -100,6 +100,7 @@ flowchart TD
     Diagnostics["Right panel: Runtime Diagnostics"]
     SessionCoord["WorkspaceSessionCoordinator"]
     Agenda["AgendaProvider"]
+    Interaction["TaskWorkspaceInteractionController"]
     Mutation["TaskMutationCoordinator"]
     Snapshot["TaskLocalSnapshotCoordinator"]
     SyncCoord["TaskSyncCoordinator"]
@@ -118,6 +119,7 @@ flowchart TD
     Left --> Runtime
     Diagnostics --> Runtime
     SessionCoord --> Agenda
+    Agenda --> Interaction
     Agenda --> Mutation
     Mutation --> Snapshot
     Agenda --> SyncCoord
@@ -164,7 +166,7 @@ That is also why a true archive or trash workflow is documented as the next safe
 - `TaskWorkspace` is the canonical center pane and now uses a bounded master/detail layout
 - `TaskList` remains only as a compatibility wrapper
 - runtime state is modeled explicitly through `RuntimeDebugProvider` and `RuntimeDebugState`
-- the client now routes session flow, sync entry, local snapshot handling, and task mutation rules through dedicated coordination seams around `TaskWorkspace` and `AgendaProvider`
+- the client now routes workspace interaction state, session flow, sync entry, local snapshot handling, and task mutation rules through dedicated seams around `TaskWorkspace` and `AgendaProvider`
 - sync, auth, connectivity, local counts, and push state are visible in the UI
 - push notifications work end to end for signed-in browser profiles
 
