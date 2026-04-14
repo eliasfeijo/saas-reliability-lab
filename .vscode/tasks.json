@@ -1,0 +1,67 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Flutter pub get",
+      "type": "process",
+      "command": "flutter",
+      "args": ["pub", "get"],
+      "options": {
+        "cwd": "${workspaceFolder}\\flutter-app"
+      }
+    },
+    {
+      "label": "Flutter analyze",
+      "type": "process",
+      "command": "flutter",
+      "args": ["analyze"],
+      "options": {
+        "cwd": "${workspaceFolder}\\flutter-app"
+      }
+    },
+    {
+      "label": "Flutter test",
+      "type": "process",
+      "command": "flutter",
+      "args": ["test"],
+      "options": {
+        "cwd": "${workspaceFolder}\\flutter-app"
+      }
+    },
+    {
+      "label": "Flutter web (Chrome)",
+      "type": "process",
+      "command": "flutter",
+      "args": [
+        "run",
+        "--dart-define-from-file",
+        "env.json",
+        "-d",
+        "chrome",
+        "--web-port",
+        "3000"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}\\flutter-app"
+      }
+    },
+    {
+      "label": "Worker install",
+      "type": "process",
+      "command": "yarn",
+      "args": ["install", "--frozen-lockfile"],
+      "options": {
+        "cwd": "${workspaceFolder}\\notify-worker"
+      }
+    },
+    {
+      "label": "Worker test",
+      "type": "process",
+      "command": "yarn",
+      "args": ["test"],
+      "options": {
+        "cwd": "${workspaceFolder}\\notify-worker"
+      }
+    }
+  ]
+}

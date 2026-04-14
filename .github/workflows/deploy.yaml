@@ -22,5 +22,6 @@ jobs:
           cache: true
       - uses: ./.github/actions/build-and-deploy-action
         with:
+          workingDir: ./flutter-app
           baseHref: /saas-reliability-lab/
           customArgs: --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }} --dart-define=VAPID_PUBLIC_KEY=${{ secrets.VAPID_PUBLIC_KEY }}

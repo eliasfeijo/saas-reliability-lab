@@ -44,9 +44,9 @@ Not yet present today:
 Goal: make the implemented structure, ownership, and current limitations explicit.
 
 - [x] Align `README.md` with the lab-shell transformation
-- [x] Align `ARCHITECTURE.md` with `LabShell`, `TaskWorkspace`, `LabLeftRail`, and `SyncDebugPanel`
-- [x] Align `project_analysis.md` with the current implementation rather than the pre-shell app
-- [x] Align `EXPERIMENTS.md` with the current operator and diagnostics surfaces
+- [x] Align `docs/ARCHITECTURE.md` with `LabShell`, `TaskWorkspace`, `LabLeftRail`, and `SyncDebugPanel`
+- [x] Align `docs/project_analysis.md` with the current implementation rather than the pre-shell app
+- [x] Align `docs/EXPERIMENTS.md` with the current operator and diagnostics surfaces
 - [ ] Add a sync state-machine diagram covering local create, dirty, synced, deleted, conflict, and retry states
 - [ ] Add an auth/session state-machine diagram covering anonymous, signed-in, signed-out, expired-session, and startup-recovery paths
 - [x] Add an environment matrix for local development, GitHub Pages, Supabase, and Cloudflare Worker

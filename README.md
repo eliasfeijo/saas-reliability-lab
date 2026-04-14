@@ -1,175 +1,110 @@
 # SaaS Reliability Lab
 
-A web-first reliability lab built around a small task domain so sync, auth, push, and offline behavior can be observed directly in the product UI.
+**A small, inspectable SaaS built to show what happens when real-world product reliability gets messy.**
 
-This repository is in the middle of a deliberate structural transformation:
+This project uses a simple task domain to make reliability behavior easy to see:
 
-- from a centered task-list app
-- to a reliability-lab workspace with a durable operator shell and live runtime diagnostics
+- a user creates work locally
+- signs in later
+- goes offline and comes back
+- sync succeeds, stalls, or partially fails
+- push reminders are scheduled and delivered separately from the app
 
-The task domain is still useful, but it is no longer the point.
-The point is to study what breaks, what recovers, and what remains visible when a small SaaS starts operating under imperfect conditions.
-
-## What exists today
-
-- Flutter Web PWA with a three-pane lab shell:
-  - Operator Rail
-  - Task Workspace
-  - Runtime Diagnostics
-- Local-first task CRUD with SharedPreferences persistence
-- Supabase authentication and per-user task sync
-- Runtime diagnostics state for connectivity, auth, sync, push, and local task counts
-- Browser push registration for signed-in profiles
-- Scheduled notification dispatch through a Cloudflare Worker
-- Anonymous-to-authenticated task adoption or discard flow
-- Deletion lifecycle fix: local-only anonymous deletes are purged immediately, while account-backed deletes stay tombstoned only until sync confirms the remote delete
-
-## What this repository is trying to achieve
-
-The current shell transformation is the foundation, not the finish line.
-
-The next major goals are:
-
-- replace task-level dirty-object sync with an explicit operation outbox
-- surface conflict and blocked-sync states as first-class UI states
-- add fault-injection controls to the operator shell
-- strengthen observability beyond the in-app runtime panel
-- grow automated coverage for reliability-critical paths
-
-## Current UI shape
-
-The app now opens into a lab-style workspace rather than a single centered task screen.
-On wide layouts, the center pane is intentionally width-limited and organized as a desktop task canvas rather than a full-width stretched list.
-
-```mermaid
-flowchart LR
-    Left[Operator Rail]
-    Center[Task Workspace]
-    Right[Runtime Diagnostics]
-
-    Left --> Center
-    Center --> Right
-```
-
-### Operator Rail
-
-- session and auth actions
-- manual sync trigger
-- persistent task filters
-- anonymous-task review controls
-- reserved space for future fault injection and experiment toggles
-
-### Task Workspace
-
-- bounded desktop-first canvas instead of a full-width stretched task list
-- queue controls for search, scope, counts, and local session notices
-- dedicated task queue for browsing and selecting tasks
-- persistent task inspector for selected-task details and actions
-- inline inspector fallback on narrower widths
-
-### Runtime Diagnostics
-
-- connectivity and sync lifecycle state
-- explicit last success, skip, partial, and failure outcomes
-- session truth versus cached identity
-- local dirty, deleted, and anonymous counts
-- push permission and subscription state
-- recent runtime event timeline
-- reserved placeholders for future queued, sending, acknowledged, failed, and conflict operation states
-
-On narrow screens, the rails move into drawers so observability remains accessible without reintroducing the old centered layout as the primary model.
-
-## Current system model
-
-```text
-Browser user
-  -> LabShell
-     -> LabLeftRail
-     -> TaskWorkspace
-     -> SyncDebugPanel
-  -> AgendaProvider + RuntimeDebugProvider
-  -> SharedPreferences local task store
-  -> TaskSyncService task-based reconciliation
-  -> Supabase Auth + Postgres + Edge Functions
-  -> Cloudflare scheduled worker
-  -> Web Push provider + browser service worker
-```
-
-Important current constraint:
-
-The sync engine is still task-based, not operation-based.
-The UI is intentionally reserving space for an explicit outbox and conflict model that does not exist yet in the backend contract.
-That is also why a true archive or trash workflow is documented as the next safe evolution rather than implemented as a local-only patch today.
-
-## Current status
-
-### Implemented now
-
-- the new lab shell is the active root UI
-- `TaskWorkspace` is the canonical center pane and now uses a bounded master/detail layout
-- `TaskList` remains only as a compatibility wrapper
-- runtime state is modeled explicitly through `RuntimeDebugProvider` and `RuntimeDebugState`
-- sync, auth, connectivity, local counts, and push state are visible in the UI
-- push notifications work end to end for signed-in browser profiles
-
-### Still missing
-
-- durable outbox semantics
-- per-operation acknowledgement and retry state
-- explicit conflict capture and resolution
-- fault-injection controls
-- stronger structured logging and metrics
-- broad automated coverage across multi-device and failure scenarios
+The point is not "yet another todo app."
+The point is to make the hidden operational problems of an early-stage SaaS visible in the product itself.
 
 ## Why this exists
 
-Small SaaS systems usually do not fail first because of raw traffic volume.
-They fail because state stops lining up cleanly across clients, auth sessions, background jobs, and notifications.
+Many startup products feel stable in happy-path demos, then get strange in production:
 
-This repository exists to explore those situations before they show up in production:
+- local state and cloud state drift apart
+- auth sessions expire at inconvenient times
+- background jobs keep running even when the client is gone
+- notifications fire late, twice, or not at all
+- nobody can quickly explain what happened
 
-- users creating work offline and reconnecting later
-- cached identity diverging from actual auth state
-- delayed or skipped sync attempts
-- multiple browser profiles receiving the same notification
-- scheduled backend behavior operating independently from the client
+This repository is a compact reliability lab for exploring those situations before they become expensive customer problems.
 
-The goal is not to build a broad productivity product.
-The goal is to make reliability behavior inspectable.
+## Who this is for
 
-## Repository guide
+### Founders and early-stage teams
 
-- `README.md`: current project overview and transformation status
-- `ARCHITECTURE.md`: implemented topology, state ownership, and evolution path
-- `DEPLOYMENT.md`: GitHub Actions workflows, GitHub Pages integration, worker deployment, and environment matrix
-- `EXPERIMENTS.md`: runnable and planned reliability scenarios
-- `TASK_DELETION_LIFECYCLE.md`: current delete semantics, bug-fix rationale, and the recommended future archive model
-- `reliability_lab_checklist.md`: milestone checklist for turning the prototype into a stronger lab
-- `project_analysis.md`: current-state analysis of the codebase after the shell transformation
-- `.tmp/ui_lab_redesign_plan.md`: local execution tracker for the UI redesign work
+If you are building a product with a small team, this repo is meant to be a practical reminder that reliability is not only about scale.
+It is also about state, recovery, observability, and trust.
 
-## Tech stack
+### Technical reviewers
 
-Client:
+If you found this from GitHub, a blog post, or a hiring review, the project is intentionally small enough to inspect end to end:
 
-- Flutter
-- Dart
-- SharedPreferences local persistence
-- Provider state management
+- Flutter web client
+- Supabase backend surface
+- scheduled notification worker
+- visible runtime diagnostics in the UI
 
-Backend and delivery:
+## What the product demonstrates today
 
-- Supabase Auth
-- Supabase Postgres
-- Supabase Edge Functions
-- GitHub Actions for frontend and worker deployment
-- GitHub Pages for the public web build
-- Cloudflare Worker for scheduled notification dispatch
-- Web Push + browser service worker runtime
+- local-first task creation and editing
+- anonymous-to-authenticated task adoption or discard
+- per-user sync with Supabase
+- runtime diagnostics for auth, sync, connectivity, push, and local task state
+- browser push subscription management
+- scheduled reminder dispatch through a Cloudflare Worker
 
-## Current framing
+## Why the task domain is intentionally small
 
-This project should now be read as a reliability lab with a task domain, not as a task app with reliability-themed notes.
+The app uses tasks because they are familiar.
+That keeps the user's mental model simple, so the interesting part becomes the system behavior:
 
-That distinction matters because the next engineering steps are not more CRUD polish.
-They are explicit sync semantics, conflict visibility, and controlled experiment execution.
+- what breaks
+- what recovers
+- what stays visible
+- what remains ambiguous
+
+## Repository layout
+
+This repo now uses a monorepo-style structure:
+
+| Path | Purpose |
+| --- | --- |
+| `flutter-app\` | Flutter web app and platform projects |
+| `notify-worker\` | Cloudflare Worker for scheduled notifications |
+| `supabase\` | Supabase config, functions, migrations, and local backend tooling |
+| `docs\` | Architecture, deployment, experiments, and project analysis |
+| `.github\` | CI/CD workflows and shared GitHub Action logic |
+
+## Where to start
+
+- Want the big-picture product and architecture overview? Start with `docs\README.md`
+- Want the deployment model? Read `docs\DEPLOYMENT.md`
+- Want the current system assessment? Read `docs\project_analysis.md`
+- Want to explore the app itself? Open `flutter-app\lib\main.dart`
+
+## Working from the repository root
+
+This VS Code workspace stays rooted at the repository top level.
+The checked-in launch and task configs point into the nested projects for you.
+
+### Flutter app
+
+- VS Code: use the `Flutter` launch config
+- CLI:
+  - `Push-Location .\flutter-app; flutter pub get; Pop-Location`
+  - `Push-Location .\flutter-app; flutter run --dart-define-from-file env.json -d chrome --web-port 3000; Pop-Location`
+  - `Push-Location .\flutter-app; flutter test; Pop-Location`
+
+### Notify worker
+
+- `Push-Location .\notify-worker; yarn install --frozen-lockfile; Pop-Location`
+- `Push-Location .\notify-worker; yarn test; Pop-Location`
+- `Push-Location .\notify-worker; yarn deploy; Pop-Location`
+
+### Supabase
+
+- `Push-Location .\supabase; yarn install --frozen-lockfile; Pop-Location`
+- `Push-Location .\supabase; npx supabase start; Pop-Location`
+- `Push-Location .\supabase; npx supabase db reset; Pop-Location`
+
+## Current status
+
+The monorepo refactor is in place and local validation passes.
+The deeper docs under `docs\` now match the monorepo layout as well.

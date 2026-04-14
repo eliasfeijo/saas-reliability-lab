@@ -1,5 +1,7 @@
 # env
 env.json
+flutter-app/env.json
+supabase/.env
 /.tmp/
 
 # Miscellaneous
@@ -36,6 +38,12 @@ migrate_working_dir/
 .pub-cache/
 .pub/
 /build/
+flutter-app/.dart_tool/
+flutter-app/.flutter-plugins
+flutter-app/.flutter-plugins-dependencies
+flutter-app/.pub-cache/
+flutter-app/.pub/
+flutter-app/build/
 
 # Symbolication related
 app.*.symbols
@@ -44,6 +52,9 @@ app.*.symbols
 app.*.map.json
 
 # Android Studio will place build artifacts here
-/android/app/debug
-/android/app/profile
-/android/app/release
+android/app/debug
+android/app/profile
+android/app/release
+flutter-app/android/app/debug
+flutter-app/android/app/profile
+flutter-app/android/app/release

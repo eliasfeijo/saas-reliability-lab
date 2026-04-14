@@ -302,10 +302,10 @@ Responsibilities:
 Primary files:
 
 - `lib/helpers/web_push_helper.dart`
-- `web/push.js`
-- `web/push-sw.js`
-- `scripts/merge_sw.sh`
-- `scripts/merge_sw.bat`
+- `flutter-app/web/push.js`
+- `flutter-app/web/push-sw.js`
+- `flutter-app/scripts/merge_sw.sh`
+- `flutter-app/scripts/merge_sw.bat`
 
 Responsibilities:
 
@@ -317,19 +317,19 @@ Responsibilities:
 
 Current deployment model:
 
-- `web/push.js` registers `web/push-sw.js` under a dedicated `/push/` scope
+- `flutter-app/web/push.js` registers `flutter-app/web/push-sw.js` under a dedicated `/push/` scope
 - release builds still ship `flutter_service_worker.js` for Flutter web offline behavior
-- `scripts/merge_sw.sh` and `scripts/merge_sw.bat` append the push handler into `flutter_service_worker.js`
+- `flutter-app/scripts/merge_sw.sh` and `flutter-app/scripts/merge_sw.bat` append the push handler into `flutter_service_worker.js`
 - GitHub Pages deployments must also preserve the standalone `push-sw.js` asset because the browser fetches it directly at runtime
 
 ### 7. Supabase backend surface
 
 Primary files:
 
-- `@backend/supabase/migrations/*.sql`
-- `@backend/supabase/functions/save_subscription/index.ts`
-- `@backend/supabase/functions/delete_subscription/index.ts`
-- `@backend/supabase/functions/send-push-notifications/index.ts`
+- `supabase/migrations/*.sql`
+- `supabase/functions/save_subscription/index.ts`
+- `supabase/functions/delete_subscription/index.ts`
+- `supabase/functions/send-push-notifications/index.ts`
 
 Responsibilities:
 
@@ -343,7 +343,7 @@ Responsibilities:
 
 Primary file:
 
-- `@backend/agenda-notify-worker/src/index.ts`
+- `notify-worker/src/index.ts`
 
 Responsibilities:
 
@@ -387,7 +387,7 @@ Client-facing values:
 - `SUPABASE_ANON_KEY`
 - `VAPID_PUBLIC_KEY`
 
-See `DEPLOYMENT.md` for the current workflow inventory, GitHub Pages branch model, required secrets, and environment matrix.
+See `docs/DEPLOYMENT.md` for the current workflow inventory, GitHub Pages branch model, required secrets, and environment matrix.
 
 Server-side values:
 

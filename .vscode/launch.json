@@ -8,6 +8,7 @@
       "name": "Flutter",
       "type": "dart",
       "request": "launch",
+      "cwd": "flutter-app",
       "program": "lib/main.dart",
       "args": [
         "--dart-define-from-file",

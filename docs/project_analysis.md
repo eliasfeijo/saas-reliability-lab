@@ -7,11 +7,11 @@ This analysis reflects the current repository after the shell transformation fro
 Reviewed in depth:
 
 - root documentation and configuration
-- Flutter application code under `lib/`
-- web runtime files under `web/`
-- Supabase migrations and Edge Functions under `@backend/supabase/`
-- scheduled notification worker under `@backend/agenda-notify-worker/`
-- test coverage under `test/` and `@backend/agenda-notify-worker/test/`
+- Flutter application code under `flutter-app/lib/`
+- web runtime files under `flutter-app/web/`
+- Supabase migrations and Edge Functions under `supabase/`
+- scheduled notification worker under `notify-worker/`
+- test coverage under `flutter-app/test/` and `notify-worker/test/`
 
 Excluded from deep analysis:
 
@@ -116,8 +116,8 @@ The shell already thinks in terms of explicit runtime states, but the underlying
 | `lib/services/task_sync_service.dart` | current sync pass | transitional, not yet outbox-based |
 | `lib/services/user_session_service.dart` | cached identity and auth alignment | active implementation |
 | `lib/helpers/web_push_helper.dart` | browser push registration lifecycle | active implementation |
-| `@backend/supabase/` | schema, RPCs, subscription functions | active implementation |
-| `@backend/agenda-notify-worker/` | scheduled notification dispatch | active implementation |
+| `supabase/` | schema, RPCs, subscription functions | active implementation |
+| `notify-worker/` | scheduled notification dispatch | active implementation |
 
 ## Subsystem assessment
 
@@ -254,8 +254,8 @@ Primary files:
 - `lib/helpers/web_push_helper.dart`
 - `web/push.js`
 - `web/push-sw.js`
-- `@backend/supabase/functions/*`
-- `@backend/agenda-notify-worker/src/index.ts`
+- `supabase/functions/*`
+- `notify-worker/src/index.ts`
 
 Current state:
 

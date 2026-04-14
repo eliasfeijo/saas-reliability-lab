@@ -44,11 +44,11 @@ Operational expectations:
 Primary files:
 
 - `.github/workflows/deploy-notify-worker.yaml`
-- `@backend/agenda-notify-worker/wrangler.jsonc`
+- `notify-worker/wrangler.jsonc`
 
 Trigger:
 
-- push to `master` when files under `@backend/agenda-notify-worker/**` change
+- push to `master` when files under `notify-worker/**` change
 - push to `master` when `.github/workflows/deploy-notify-worker.yaml` changes
 - manual `workflow_dispatch`
 
@@ -157,7 +157,7 @@ Those are configured in Cloudflare, not in the frontend deploy workflow.
 
 | Environment | Frontend host | Frontend config source | Push worker path | Backend target | Worker runtime |
 | --- | --- | --- | --- | --- | --- |
-| Local Flutter web run | `http://localhost:<port>/` | `env.json` via `--dart-define-from-file` | `/push-sw.js` with local base href | Supabase project from `env.json` | remote Cloudflare worker unless separately run locally |
+| Local Flutter web run | `http://localhost:<port>/` | `flutter-app/env.json` via `--dart-define-from-file` | `/push-sw.js` with local base href | Supabase project from `flutter-app/env.json` | remote Cloudflare worker unless separately run locally |
 | GitHub Pages production | `https://eliasfeijo.github.io/saas-reliability-lab/` | GitHub Actions secrets via `--dart-define` | `/saas-reliability-lab/push-sw.js` under `/saas-reliability-lab/push/` scope | production Supabase project from GitHub secrets | deployed Cloudflare worker |
 | Worker deploy pipeline | n/a | Wrangler and Cloudflare environment | n/a | production Supabase project | Cloudflare cron every 5 minutes |
 
@@ -205,10 +205,10 @@ When changing deployment or push runtime behavior, verify all of the following a
 ## Related files
 
 - `README.md`
-- `ARCHITECTURE.md`
+- `docs/ARCHITECTURE.md`
 - `.github/workflows/deploy.yaml`
 - `.github/workflows/deploy-notify-worker.yaml`
 - `.github/actions/build-and-deploy-action/action.yaml`
-- `web/push.js`
-- `web/push-sw.js`
-- `@backend/agenda-notify-worker/wrangler.jsonc`
+- `flutter-app/web/push.js`
+- `flutter-app/web/push-sw.js`
+- `notify-worker/wrangler.jsonc`
