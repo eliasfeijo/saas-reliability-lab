@@ -2,15 +2,12 @@ function getBaseHref() {
   return document.querySelector('base')?.getAttribute('href') ?? '/';
 }
 
-function isReleaseBuild() {
-  return globalThis.isReleaseMode !== false;
+function getPushServiceWorkerScope() {
+  return `${getBaseHref()}push/`;
 }
 
 function getPushServiceWorkerUrl() {
-  const serviceWorkerFile = isReleaseBuild()
-    ? 'flutter_service_worker.js'
-    : 'push-sw.js';
-  return `${getBaseHref()}${serviceWorkerFile}`;
+  return `${getBaseHref()}push-sw.js`;
 }
 
 const pushServiceWorkerActivationTimeoutMs = 5000;
@@ -72,15 +69,26 @@ async function waitForServiceWorkerActivation(registration) {
   return registration.active ? registration : null;
 }
 
-async function waitForActiveServiceWorkerRegistration() {
+async function waitForActiveServiceWorkerRegistration(scope) {
   let timeoutId;
 
   try {
     const registration = await Promise.race([
-      navigator.serviceWorker.ready,
+      (async function waitForScopedRegistration() {
+        while (true) {
+          const scopedRegistration = await navigator.serviceWorker.getRegistration(
+            scope,
+          );
+          if (scopedRegistration?.active) {
+            return scopedRegistration;
+          }
+
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+      })(),
       new Promise((_, reject) => {
         timeoutId = setTimeout(() => {
-          reject(new Error('Timed out waiting for active service worker'));
+          reject(new Error('Timed out waiting for active push service worker'));
         }, pushServiceWorkerActivationTimeoutMs);
       }),
     ]);
@@ -96,10 +104,10 @@ async function waitForActiveServiceWorkerRegistration() {
 }
 
 async function getPushServiceWorkerRegistration() {
-  const registrationScope = isReleaseBuild() ? getBaseHref() : undefined;
-  const existingRegistration = registrationScope
-    ? await navigator.serviceWorker.getRegistration(registrationScope)
-    : await navigator.serviceWorker.getRegistration();
+  const registrationScope = getPushServiceWorkerScope();
+  const existingRegistration = await navigator.serviceWorker.getRegistration(
+    registrationScope,
+  );
 
   if (existingRegistration?.active) {
     console.log('Using existing active push service worker registration');
@@ -117,13 +125,13 @@ async function getPushServiceWorkerRegistration() {
   }
 
   console.log(
-    `Registering ${isReleaseBuild() ? 'release' : 'development'} push service worker`,
+    `Registering dedicated push service worker for scope ${registrationScope}`,
   );
 
   const registration = await navigator.serviceWorker.register(
     getPushServiceWorkerUrl(),
     {
-      scope: getBaseHref(),
+      scope: registrationScope,
       updateViaCache: 'none',
     },
   );
@@ -135,7 +143,9 @@ async function getPushServiceWorkerRegistration() {
     return activatedRegistration;
   }
 
-  const readyRegistration = await waitForActiveServiceWorkerRegistration();
+  const readyRegistration = await waitForActiveServiceWorkerRegistration(
+    registrationScope,
+  );
   if (readyRegistration) {
     console.log('Using active push service worker registration from ready');
     return readyRegistration;
@@ -245,7 +255,7 @@ async function unregisterPush() {
   }
 
   const registration = await navigator.serviceWorker.getRegistration(
-    getBaseHref(),
+    getPushServiceWorkerScope(),
   );
   if (!registration) {
     console.log('No push service worker registration found.');
