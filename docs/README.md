@@ -140,7 +140,7 @@ The goal is to make reliability behavior inspectable.
 ## Repository guide
 
 - [`../README.md`](../README.md): root visitor-facing overview and monorepo entry point
-- [`../.github/README.md`](../.github/README.md): repository automation surface, workflows, and deployment-related GitHub Actions context
+- [`GITHUB_AUTOMATION.md`](GITHUB_AUTOMATION.md): repository automation surface, workflows, and deployment-related GitHub Actions context
 - [`../flutter-app/README.md`](../flutter-app/README.md): Flutter client overview, local run commands, runtime config, and app-specific concerns
 - [`../notify-worker/README.md`](../notify-worker/README.md): Cloudflare Worker purpose, local commands, runtime expectations, and delivery concerns
 - [`../supabase/README.md`](../supabase/README.md): backend surface, local Supabase workflow, functions, migrations, and backend-specific concerns

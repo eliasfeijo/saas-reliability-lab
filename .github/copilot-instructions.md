@@ -29,7 +29,7 @@
   - `docs\DEPLOYMENT.md`
   - `docs\LOCAL_DEVELOPMENT.md`
   - `docs\TESTING_STRATEGY.md`
-  - `.github\README.md`
+  - `docs\GITHUB_AUTOMATION.md`
 - Keep the root and `docs\README.md` indexes discoverable when new long-form docs are added.
 
 ## CI/CD expectations

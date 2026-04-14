@@ -17,12 +17,13 @@ The same assumption applies to local AI-assisted development:
 - reference files in Copilot CLI and VS Code chat with repo-relative paths such as `docs\AI_ASSISTED_DEVELOPMENT.md` or `flutter-app\lib\main.dart`
 - treat `.github\agents\`, `.github\skills\`, and `.github\prompts\` as part of the same root-scoped workflow surface
 
-For folder-specific setup and caveats, each immediate top-level project directory now has its own README:
+For folder-specific setup and caveats, the main top-level project directories have their own README files:
 
 - [`..\flutter-app\README.md`](../flutter-app/README.md)
 - [`..\notify-worker\README.md`](../notify-worker/README.md)
 - [`..\supabase\README.md`](../supabase/README.md)
-- [`..\.github\README.md`](../.github/README.md)
+
+For repository automation guidance, use [`GITHUB_AUTOMATION.md`](GITHUB_AUTOMATION.md).
 
 ## Local prerequisites
 

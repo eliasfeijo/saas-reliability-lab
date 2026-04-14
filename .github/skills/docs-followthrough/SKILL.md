@@ -12,7 +12,7 @@ Use this process:
    - `docs\DEPLOYMENT.md`
    - `docs\LOCAL_DEVELOPMENT.md`
    - `docs\TESTING_STRATEGY.md`
-   - `.github\README.md`
+   - `docs\GITHUB_AUTOMATION.md`
    - relevant subproject `README.md` files
 2. Describe the implemented behavior honestly.
 3. Preserve the reliability-lab framing and repo terminology.

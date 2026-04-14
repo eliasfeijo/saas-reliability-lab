@@ -1,9 +1,9 @@
 # GitHub Automation
 
-This folder holds the repository automation contract for the SaaS Reliability Lab.
+This document describes the repository automation contract implemented under `.github\` for the SaaS Reliability Lab.
 It is where deploy and verification behavior becomes concrete through GitHub Actions workflows and the shared composite action used to publish the Flutter web build.
 
-## What lives here
+## What lives under `.github\`
 
 - `workflows\deploy.yaml`: builds and publishes the Flutter web app to GitHub Pages
 - `workflows\deploy-notify-worker.yaml`: deploys the Cloudflare notification worker
@@ -15,14 +15,14 @@ It is where deploy and verification behavior becomes concrete through GitHub Act
 - `actions\build-and-deploy-action\action.yaml`: shared composite action for the frontend deploy flow
 - `copilot-instructions.md`: repository-specific guidance for Copilot and other agents working in this repo
 
-## How to work with this folder locally
+## How to work with this surface locally
 
 There is no separate runtime to boot from `.github\`.
 When you change automation here, validate the underlying projects directly:
 
 - frontend behavior: use the commands in [`..\flutter-app\README.md`](../flutter-app/README.md)
 - worker behavior: use the commands in [`..\notify-worker\README.md`](../notify-worker/README.md)
-- repository workflow expectations: use [`..\docs\DEPLOYMENT.md`](../docs/DEPLOYMENT.md), [`..\docs\LOCAL_DEVELOPMENT.md`](../docs/LOCAL_DEVELOPMENT.md), and [`..\docs\AI_ASSISTED_DEVELOPMENT.md`](../docs/AI_ASSISTED_DEVELOPMENT.md)
+- repository workflow expectations: use [`DEPLOYMENT.md`](DEPLOYMENT.md), [`LOCAL_DEVELOPMENT.md`](LOCAL_DEVELOPMENT.md), and [`AI_ASSISTED_DEVELOPMENT.md`](AI_ASSISTED_DEVELOPMENT.md)
 
 For local Copilot CLI and VS Code chat, assume the repository root is the active workspace root.
 That keeps `.github\` instructions, agents, skills, and prompt files addressable through the same repo-relative paths used everywhere else in this monorepo.
@@ -41,6 +41,6 @@ That keeps `.github\` instructions, agents, skills, and prompt files addressable
 ## Read this with
 
 - [`..\README.md`](../README.md)
-- [`..\docs\AI_ASSISTED_DEVELOPMENT.md`](../docs/AI_ASSISTED_DEVELOPMENT.md)
-- [`..\docs\DEPLOYMENT.md`](../docs/DEPLOYMENT.md)
-- [`..\docs\TESTING_STRATEGY.md`](../docs/TESTING_STRATEGY.md)
+- [`AI_ASSISTED_DEVELOPMENT.md`](AI_ASSISTED_DEVELOPMENT.md)
+- [`DEPLOYMENT.md`](DEPLOYMENT.md)
+- [`TESTING_STRATEGY.md`](TESTING_STRATEGY.md)

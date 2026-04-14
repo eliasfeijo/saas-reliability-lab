@@ -1,5 +1,5 @@
 ---
-applyTo: "docs/**/*.md,README.md,.github/README.md,flutter-app/README.md,notify-worker/README.md,supabase/README.md"
+applyTo: "docs/**/*.md,README.md,flutter-app/README.md,notify-worker/README.md,supabase/README.md"
 ---
 
 Keep repository documentation honest and implementation-aligned.

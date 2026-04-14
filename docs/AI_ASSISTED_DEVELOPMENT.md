@@ -68,7 +68,7 @@ Common documentation touchpoints:
 - `docs\DEPLOYMENT.md` for CI/CD, workflow, and environment behavior
 - `docs\LOCAL_DEVELOPMENT.md` for developer commands and day-to-day execution
 - `docs\TESTING_STRATEGY.md` for verification contract and test inventory
-- `.github\README.md` for repository automation structure
+- `docs\GITHUB_AUTOMATION.md` for repository automation structure
 
 ### 5. Commit
 
@@ -126,7 +126,7 @@ Recommended direction:
 | `flutter-app\` | `docs\ARCHITECTURE.md`, `docs\TESTING_STRATEGY.md`, `flutter-app\README.md` | `Push-Location .\flutter-app; flutter test; Pop-Location` | treat the app as a reliability-lab shell, not as a generic todo UI |
 | `notify-worker\` | `docs\DEPLOYMENT.md`, `docs\TESTING_STRATEGY.md`, `notify-worker\README.md` | `Push-Location .\notify-worker; yarn test; Pop-Location` | preserve worker independence from frontend deploys |
 | `supabase\` | `docs\ARCHITECTURE.md`, `docs\DEPLOYMENT.md`, `supabase\README.md` | validate only with existing repo tooling | backend changes must stay aligned with worker and sync behavior |
-| `.github\` | `.github\README.md`, `docs\DEPLOYMENT.md`, this document | run the repo commands affected by the automation change | workflow behavior must stay explicit in docs |
+| `.github\` | `docs\GITHUB_AUTOMATION.md`, `docs\DEPLOYMENT.md`, this document | run the repo commands affected by the automation change | workflow behavior must stay explicit in docs |
 | `docs\` | `docs\README.md` and the behavior-specific doc being changed | documentation review plus any behavior validation tied to the change | docs should describe implemented behavior honestly |
 
 ## Minimal-friction rules
@@ -193,7 +193,7 @@ If your current CLI build does not accept the bare slash form for a skill, use t
 `Use the /repo-task-loop skill to fix the deployment docs and workflow behavior for the notify worker.`
 
 In local VS Code chat, keep the same repo-root assumption.
-Attach or reference files with repo-relative paths such as `docs\LOCAL_DEVELOPMENT.md`, `flutter-app\lib\main.dart`, or `.github\README.md`.
+Attach or reference files with repo-relative paths such as `docs\LOCAL_DEVELOPMENT.md`, `flutter-app\lib\main.dart`, or `docs\GITHUB_AUTOMATION.md`.
 
 ### Suggested phase-to-tool mapping
 

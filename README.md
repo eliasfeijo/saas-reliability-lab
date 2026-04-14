@@ -70,7 +70,7 @@ This repo now uses a monorepo-style structure:
 | [`notify-worker\`](notify-worker/README.md) | Cloudflare Worker for scheduled notifications |
 | [`supabase\`](supabase/README.md) | Supabase config, functions, migrations, and local backend tooling |
 | [`docs\`](docs/README.md) | Architecture, local development, deployment, experiments, and project analysis |
-| [`.github\`](.github/README.md) | CI/CD workflows and shared GitHub Action logic |
+| [`.github\`](.github) | GitHub Actions, instructions, agents, skills, and prompt scaffolding; see [`docs/GITHUB_AUTOMATION.md`](docs/GITHUB_AUTOMATION.md) for the overview |
 
 ## Documentation Summary
 
@@ -79,6 +79,7 @@ This repo now uses a monorepo-style structure:
 | [`docs/README.md`](docs/README.md) | Big-picture product framing, current UI shape, system model, and the repository guide. |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Implemented topology, state ownership, and the current evolution path. |
 | [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | GitHub Actions workflows, GitHub Pages, Cloudflare Worker deployment, and environment expectations. |
+| [`docs/GITHUB_AUTOMATION.md`](docs/GITHUB_AUTOMATION.md) | Repository automation structure, workflow surfaces under `.github\`, and local guidance for automation changes. |
 | [`docs/LOCAL_DEVELOPMENT.md`](docs/LOCAL_DEVELOPMENT.md) | Repository-root workflow, local run commands, and the day-to-day setup for working on the app locally. |
 | [`docs/AI_ASSISTED_DEVELOPMENT.md`](docs/AI_ASSISTED_DEVELOPMENT.md) | The intended human-and-agent development loop, Copilot workflow, and low-friction delivery model for this repo. |
 | [`docs/TESTING_STRATEGY.md`](docs/TESTING_STRATEGY.md) | Repo-wide testing contract, current test inventory, and the planned structure for reliability-focused automation. |
@@ -89,7 +90,7 @@ This repo now uses a monorepo-style structure:
 
 To jump straight into the client, start with [`flutter-app/lib/main.dart`](flutter-app/lib/main.dart).
 
-Each immediate top-level project directory now also has its own `README.md` with local workflow notes and project-specific guidance.
+The main subproject directories also have their own `README.md` files with local workflow notes and project-specific guidance.
 
 ## Current status
 
