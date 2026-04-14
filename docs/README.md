@@ -65,7 +65,7 @@ flowchart LR
 - queue controls for search, scope, counts, and local session notices
 - dedicated task queue for browsing and selecting tasks
 - persistent task inspector for selected-task details and actions
-- inline inspector fallback on narrower widths
+- scrollable attached details and batch panels on narrower widths
 
 ### Runtime Diagnostics
 
@@ -145,6 +145,7 @@ The goal is to make reliability behavior inspectable.
 - [`LOCAL_DEVELOPMENT.md`](LOCAL_DEVELOPMENT.md): repository-root workflow, local commands, and developer setup for running the projects locally
 - [`EXPERIMENTS.md`](EXPERIMENTS.md): runnable and planned reliability scenarios
 - [`TASK_QUEUE_ACTIONS_PLAN.md`](TASK_QUEUE_ACTIONS_PLAN.md): recommended fix for the misleading completion control in Task Queue, plus the phased plan for explicit batch actions
+- [`TASK_WORKSPACE_RESPONSIVE_UX.md`](TASK_WORKSPACE_RESPONSIVE_UX.md): responsive Task Workspace strategy that preserves the desktop split layout while using attached compact panels on notebook and mobile widths
 - [`TASK_DELETION_LIFECYCLE.md`](TASK_DELETION_LIFECYCLE.md): current delete semantics, bug-fix rationale, and the recommended future archive model
 - [`reliability_lab_checklist.md`](reliability_lab_checklist.md): milestone checklist for turning the prototype into a stronger lab
 - [`project_analysis.md`](project_analysis.md): current-state analysis of the codebase after the shell transformation
