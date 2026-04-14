@@ -36,6 +36,7 @@ That keeps `.github\` instructions, agents, skills, and prompt files addressable
 - AI-assisted development is an explicit repository workflow, not an ad hoc convenience layer
 - the main local Copilot DX surface is instructions, agents, skills, and VS Code prompt files checked into the repo
 - the repo does not currently define a Copilot cloud-agent setup workflow because hosted Copilot is not part of the active development path
+- commit discipline is part of the local AI workflow: prefer atomic Conventional Commits and do not mix unrelated repo areas in one commit without a strong reason
 
 ## Read this with
 

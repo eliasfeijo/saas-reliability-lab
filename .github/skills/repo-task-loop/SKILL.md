@@ -18,6 +18,7 @@ Decision process:
    - use the `docs-followthrough` skill or `docs-writer` agent when docs need updating
    - use the `repo-verification` skill or `verifier` agent for validation
    - use the `reviewer` agent for commit and CI readiness
+   - use the `repo-commit-discipline` skill before committing when the diff may contain more than one unit of work
 4. End with a concise handoff covering:
    - what changed
    - what was verified

@@ -43,6 +43,7 @@ Use this repository as a low-friction loop:
    - `/repo-plan-task`
    - `/repo-task-loop`
    - `/repo-review-ready`
+   - `/repo-commit-discipline`
    - `/repo-verification`
    - `/docs-followthrough`
 8. Use `/instructions` if you want to inspect which instruction files are active
@@ -67,6 +68,7 @@ This repo now includes:
 - `repo-plan-task.prompt.md`
 - `repo-task-loop.prompt.md`
 - `repo-review-ready.prompt.md`
+- `repo-commit-discipline.prompt.md`
 - `repo-commit-discipline.prompt.md`
 
 ## Default expectations
@@ -115,6 +117,12 @@ Use when implementation is mostly done and you want a **merge-readiness pass**:
 
 `/repo-review-ready Review the current diff for commit scope, docs alignment, CI gate expectations, and deploy implications.`
 
+### `/repo-commit-discipline`
+
+Use when implementation is done and you want to split the current diff into **clean commit units**:
+
+`/repo-commit-discipline Review the current diff, separate unrelated changes, and suggest Conventional Commit messages for each commitable unit.`
+
 ## VS Code prompt-file equivalents
 
 Use these in VS Code chat via prompt files:
@@ -122,6 +130,7 @@ Use these in VS Code chat via prompt files:
 - `.github/prompts/repo-plan-task.prompt.md`
 - `.github/prompts/repo-task-loop.prompt.md`
 - `.github/prompts/repo-review-ready.prompt.md`
+- `.github/prompts/repo-commit-discipline.prompt.md`
 - `.github/prompts/repo-commit-discipline.prompt.md`
 
 Use prompt files when you want reusable **manual prompt templates** in VS Code.
@@ -146,6 +155,10 @@ Use skills when you want the closest CLI equivalent.
 ### Commit and CI readiness
 
 `Review the diff for commit readiness, suggest a Conventional Commit message, and identify what CI gate should pass before merge.`
+
+### Commit discipline
+
+`Review the current diff, split it into the smallest coherent commit units, and suggest a Conventional Commit message for each unit using a repo-area scope when helpful.`
 
 ## Hooks
 

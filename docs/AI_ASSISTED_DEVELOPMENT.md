@@ -78,6 +78,9 @@ Repository expectation:
 
 - use Conventional Commit style messages
 - keep commit scope aligned with the delivered capability or doc/config change
+- keep commits atomic by default: one coherent unit of work per commit
+- do not batch unrelated work into one commit just because it is available locally
+- in this monorepo, prefer a repo-area scope when it improves clarity, such as `flutter-app`, `notify-worker`, `docs`, or `github`
 - do not split one logical workflow change into confusing partial commits unless there is a strong review reason
 
 ### 6. CI gate
@@ -179,6 +182,7 @@ Practical local commands and controls:
    - `repo-plan-task`
    - `repo-task-loop`
    - `repo-review-ready`
+   - `repo-commit-discipline`
    - `repo-verification`
    - `docs-followthrough`
 
@@ -211,6 +215,7 @@ For this repository, the most useful short-term workflow is:
 1. `/repo-plan-task <task>` when you want a planning-only pass
 2. `/repo-task-loop <task>` when you want the agent to plan first and then decide whether to implement immediately or stop for review
 3. `/repo-review-ready` when the change is mostly done and you want a merge-readiness pass
+4. `/repo-commit-discipline` when the work is ready but the diff still needs to be split into clean commit units
 
 That gives you a practical local workflow without introducing hooks or heavy automation too early.
 
@@ -221,6 +226,7 @@ Slash-invokable repo prompts:
 - `/repo-plan-task Add a visible outbox state to the diagnostics rail and identify the code, docs, and tests that would need to change.`
 - `/repo-task-loop Refine the GitHub Actions verification and deployment docs to match the current workflow behavior.`
 - `/repo-review-ready Review the current diff for commit scope, Conventional Commit wording, CI gate expectations, and deploy implications.`
+- `/repo-commit-discipline Review the current diff, split unrelated work apart, and suggest Conventional Commit messages for each commitable unit.`
 
 Equivalent explicit prompt form:
 
@@ -245,6 +251,10 @@ Docs:
 Commit readiness:
 
 - `Review the diff for commit readiness, suggest a Conventional Commit message, and tell me what CI gate should pass before merge.`
+
+Commit discipline:
+
+- `Use the /repo-commit-discipline skill to split the current work into clean commit units and suggest repo-scoped Conventional Commit messages where helpful.`
 
 ## Copilot and agent scaffolding in this repo
 

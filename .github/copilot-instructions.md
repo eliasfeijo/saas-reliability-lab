@@ -44,6 +44,9 @@
 - Reuse existing patterns and commands already documented in the repo.
 - Do not claim a workflow or architecture is in place unless the repository actually contains the supporting files and wiring.
 - Use Conventional Commit style when creating commit messages.
+- Keep commits atomic by default: one coherent unit of work per commit.
+- Do not batch unrelated changes into one commit just because they are present in the worktree.
+- In this monorepo, prefer a repo-area scope in commit messages when it improves clarity, such as `flutter-app`, `notify-worker`, `docs`, or `github`.
 
 ## Environment notes
 
