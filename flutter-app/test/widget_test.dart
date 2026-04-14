@@ -222,6 +222,91 @@ void main() {
       expect(agenda.anonymousTasks, isEmpty);
     },
   );
+
+  test('batch mode selects only visible tasks in the current view', () async {
+    final alphaTask = _buildTask(
+      id: 'task-alpha',
+      title: 'Alpha queue task',
+      beginsAt: DateTime(2026, 2, 15, 9),
+      estimatedDuration: const Duration(hours: 1),
+    );
+    final betaTask = _buildTask(
+      id: 'task-beta',
+      title: 'Beta queue task',
+      beginsAt: DateTime(2026, 2, 15, 11),
+      estimatedDuration: const Duration(hours: 1),
+    );
+
+    final repository = _InMemoryTasksRepository([alphaTask, betaTask]);
+    final remote = _FakeTaskRemoteDataSource([]);
+    final service = TaskSyncService.forTesting(
+      repository,
+      remote: remote,
+      connectivityCheck: () async => [ConnectivityResult.wifi],
+      hasActiveSession: () => false,
+    );
+    final agenda = AgendaProvider(repository, service, UserSessionService());
+
+    agenda.tasks = [alphaTask, betaTask];
+    agenda.selectTask(alphaTask);
+    agenda.enterBatchMode();
+    agenda.updateSearchQuery('Alpha');
+    agenda.selectAllVisibleTasks();
+
+    expect(agenda.selectedTask, isNull);
+    expect(agenda.isBatchMode, isTrue);
+    expect(agenda.batchSelectedCount, 1);
+    expect(agenda.selectedBatchTasks.single.id, alphaTask.id);
+    expect(agenda.isTaskBatchSelected(alphaTask.id), isTrue);
+    expect(agenda.isTaskBatchSelected(betaTask.id), isFalse);
+  });
+
+  test(
+    'deleteSelectedTasks removes anonymous tasks and tombstones account tasks',
+    () async {
+      final anonymousTask = _buildTask(
+        id: 'task-batch-anon',
+        title: 'Local batch task',
+        beginsAt: DateTime(2026, 2, 16, 9),
+        estimatedDuration: const Duration(hours: 1),
+        syncStatus: SyncStatus.dirty,
+      );
+      final accountTask = _buildTask(
+        id: 'task-batch-account',
+        title: 'Account batch task',
+        beginsAt: DateTime(2026, 2, 16, 11),
+        estimatedDuration: const Duration(hours: 1),
+        userId: 'user-1',
+      );
+
+      final repository = _InMemoryTasksRepository([anonymousTask, accountTask]);
+      final remote = _FakeTaskRemoteDataSource([]);
+      final service = TaskSyncService.forTesting(
+        repository,
+        remote: remote,
+        connectivityCheck: () async => [ConnectivityResult.wifi],
+        hasActiveSession: () => false,
+      );
+      final agenda = AgendaProvider(repository, service, UserSessionService())
+        ..userId = 'user-1';
+
+      agenda.tasks = [anonymousTask, accountTask];
+      agenda.enterBatchMode();
+      agenda.toggleTaskInBatchSelection(anonymousTask.id);
+      agenda.toggleTaskInBatchSelection(accountTask.id);
+
+      await agenda.deleteSelectedTasks();
+
+      final savedTasks = await repository.loadTasks();
+
+      expect(savedTasks, hasLength(1));
+      expect(savedTasks.single.id, accountTask.id);
+      expect(savedTasks.single.syncStatus, SyncStatus.deleted);
+      expect(agenda.tasks, isEmpty);
+      expect(agenda.batchSelectedCount, 0);
+      expect(agenda.isBatchMode, isFalse);
+    },
+  );
 }
 
 class _InMemoryTasksRepository implements TasksRepository {

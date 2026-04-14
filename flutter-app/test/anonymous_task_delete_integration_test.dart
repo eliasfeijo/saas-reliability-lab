@@ -139,6 +139,59 @@ void main() {
       expect(_textValue(tester, 'anonymous-review-count-value'), '0');
     },
   );
+
+  testWidgets(
+    'task queue uses explicit mark-done CTA and only shows checkboxes in batch mode',
+    (tester) async {
+      tester.view.devicePixelRatio = 1.0;
+      tester.view.physicalSize = const Size(1600, 1400);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final seededTask = TaskModel(
+        id: 'task-cta',
+        title: 'Queue CTA task',
+        beginsAt: DateTime(2026, 2, 20, 9),
+        estimatedDuration: const Duration(hours: 1),
+        syncStatus: SyncStatus.dirty,
+      );
+
+      final repository = _InMemoryTasksRepository([seededTask]);
+      final runtimeDebug = RuntimeDebugProvider();
+      addTearDown(runtimeDebug.dispose);
+
+      final syncService = TaskSyncService.forTesting(
+        repository,
+        remote: _FakeTaskRemoteDataSource([]),
+        connectivityCheck: () async => [ConnectivityResult.wifi],
+        hasActiveSession: () => false,
+        runtimeDebug: runtimeDebug,
+      );
+
+      final agenda = AgendaProvider(
+        repository,
+        syncService,
+        _InMemoryUserSessionService(runtimeDebug: runtimeDebug),
+        runtimeDebug: runtimeDebug,
+      );
+      addTearDown(agenda.dispose);
+
+      await tester.pumpWidget(
+        _LabWorkspaceHarness(agenda: agenda, runtimeDebug: runtimeDebug),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Queue CTA task'), findsOneWidget);
+      expect(find.text('Mark done'), findsOneWidget);
+      expect(find.byType(Checkbox), findsNothing);
+
+      await tester.tap(find.text('Select'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(Checkbox), findsOneWidget);
+      expect(find.text('Done selecting'), findsOneWidget);
+    },
+  );
 }
 
 String _textValue(WidgetTester tester, String keyValue) {

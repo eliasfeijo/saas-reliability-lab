@@ -29,6 +29,7 @@ class AgendaProvider extends ChangeNotifier {
   final TasksRepository _repository;
 
   final List<TaskModel> _tasks = [];
+  final Set<String> _batchSelectedTaskIds = <String>{};
 
   // User ID for cloud sync
   // This is used to identify the user for cloud sync operations.
@@ -36,6 +37,7 @@ class AgendaProvider extends ChangeNotifier {
 
   // Loading state
   bool _isLoading = false;
+  bool _isBatchMode = false;
 
   // Constructor
   AgendaProvider(
@@ -76,6 +78,12 @@ class AgendaProvider extends ChangeNotifier {
   TaskModel? get selectedTask => _selectionController.selected;
   bool get hasSelectedTask => selectedTask != null;
   bool get isTaskSelected => selectedTask != null;
+  bool get isBatchMode => _isBatchMode;
+  bool get hasBatchSelection => batchSelectedCount > 0;
+  int get batchSelectedCount => selectedBatchTasks.length;
+  List<TaskModel> get selectedBatchTasks => _activeTasks
+      .where((task) => _batchSelectedTaskIds.contains(task.id))
+      .toList(growable: false);
 
   // Getters for task counts
   // These getters provide various counts of tasks based on their status.
@@ -95,6 +103,7 @@ class AgendaProvider extends ChangeNotifier {
     _tasks.clear();
     _tasks.addAll(tasks);
     _pruneLocallyDeletedAnonymousTasks();
+    _pruneInteractionState();
     _publishTaskDebugState();
     notifyListeners();
   }
@@ -138,6 +147,7 @@ class AgendaProvider extends ChangeNotifier {
       ..clear()
       ..addAll(storedTasks);
     final didPrune = _pruneLocallyDeletedAnonymousTasks();
+    _pruneInteractionState();
     if (didPrune) {
       await _repository.saveTasks(_tasks);
     }
@@ -165,37 +175,65 @@ class AgendaProvider extends ChangeNotifier {
   }
 
   Future<void> deleteTask(String taskId) async {
-    // debugPrint('Marking task $taskId as deleted');
-    final index = _tasks.indexWhere((task) => task.id == taskId);
-    if (index == -1) {
-      // debugPrint('Task with ID $taskId not found');
-      return;
-    }
-    final task = _tasks[index];
-
-    if (selectedTask?.id == taskId) {
-      _selectionController.clear();
-    }
-
-    if (task.userId == null) {
-      _tasks.removeAt(index);
-      await _saveTasks();
-      return;
-    }
-
-    task.markAsDeleted();
-    // Clear selection if deleted task was selected
-    await _saveTasks();
-    _triggerSync(task); // Trigger sync immediately
+    await _deleteTasksById([taskId]);
   }
 
   Future<void> toggleTaskCompletion(String taskId) async {
-    final index = _tasks.indexWhere((task) => task.id == taskId);
-    if (index != -1) {
-      _tasks[index].toggleCompletion();
-      await _saveTasks();
-      _triggerSync(_tasks[index]); // Trigger sync immediately
+    final task = getTaskById(taskId);
+    if (task == null) {
+      return;
     }
+
+    if (task.isCompleted) {
+      await reopenTask(taskId);
+      return;
+    }
+
+    await markTaskCompleted(taskId);
+  }
+
+  Future<void> markTaskCompleted(String taskId) async {
+    await _applyTaskUpdate([taskId], (task) {
+      if (task.isCompleted) {
+        return false;
+      }
+      task.markAsCompleted();
+      return true;
+    });
+  }
+
+  Future<void> reopenTask(String taskId) async {
+    await _applyTaskUpdate([taskId], (task) {
+      if (!task.isCompleted) {
+        return false;
+      }
+      task.markAsPending();
+      return true;
+    });
+  }
+
+  Future<void> markSelectedTasksCompleted() async {
+    await _applyTaskUpdate(_batchSelectedTaskIds, (task) {
+      if (task.isCompleted) {
+        return false;
+      }
+      task.markAsCompleted();
+      return true;
+    });
+  }
+
+  Future<void> reopenSelectedTasks() async {
+    await _applyTaskUpdate(_batchSelectedTaskIds, (task) {
+      if (!task.isCompleted) {
+        return false;
+      }
+      task.markAsPending();
+      return true;
+    });
+  }
+
+  Future<void> deleteSelectedTasks() async {
+    await _deleteTasksById(_batchSelectedTaskIds);
   }
 
   Future<void> clearAllTasks() async {
@@ -207,6 +245,9 @@ class AgendaProvider extends ChangeNotifier {
 
   // Selected Task Management
   void selectTask(TaskModel task) {
+    if (_isBatchMode) {
+      return;
+    }
     _selectionController.select(task);
     notifyListeners();
   }
@@ -216,34 +257,83 @@ class AgendaProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void enterBatchMode() {
+    if (_isBatchMode) {
+      return;
+    }
+    _isBatchMode = true;
+    _selectionController.clear();
+    _batchSelectedTaskIds.clear();
+    notifyListeners();
+  }
+
+  void exitBatchMode() {
+    if (!_isBatchMode && _batchSelectedTaskIds.isEmpty) {
+      return;
+    }
+    _isBatchMode = false;
+    _batchSelectedTaskIds.clear();
+    notifyListeners();
+  }
+
+  void toggleTaskInBatchSelection(String taskId) {
+    if (!_isBatchMode) {
+      return;
+    }
+    if (_batchSelectedTaskIds.contains(taskId)) {
+      _batchSelectedTaskIds.remove(taskId);
+    } else if (isTaskInFiltered(taskId)) {
+      _batchSelectedTaskIds.add(taskId);
+    }
+    notifyListeners();
+  }
+
+  void selectAllVisibleTasks() {
+    if (!_isBatchMode) {
+      return;
+    }
+    _batchSelectedTaskIds
+      ..clear()
+      ..addAll(filteredTasks.map((task) => task.id));
+    notifyListeners();
+  }
+
+  void clearBatchSelection() {
+    if (_batchSelectedTaskIds.isEmpty) {
+      return;
+    }
+    _batchSelectedTaskIds.clear();
+    notifyListeners();
+  }
+
+  bool isTaskBatchSelected(String taskId) {
+    return _batchSelectedTaskIds.contains(taskId);
+  }
+
   // Filter Management
 
   void setFilter(TaskFilter filter) {
     _filterController.setFilter(filter);
-    // Clear selection when changing filter
-    _selectionController.clear();
+    _resetInteractionForViewChange();
     notifyListeners();
   }
 
   // Search and Filter Methods
   void updateSearchQuery(String query) {
     _filterController.updateSearch(query);
-    // Clear selection when changing search query
-    _selectionController.clear();
+    _resetInteractionForViewChange();
     notifyListeners();
   }
 
   void clearSearch() {
     _filterController.clearSearch();
-    // Clear selection when clearing search
-    _selectionController.clear();
+    _resetInteractionForViewChange();
     notifyListeners();
   }
 
   void clearFilter() {
     _filterController.clearFilter();
-    // Clear selection when clearing filter
-    _selectionController.clear();
+    _resetInteractionForViewChange();
     notifyListeners();
   }
 
@@ -251,7 +341,7 @@ class AgendaProvider extends ChangeNotifier {
   void markAllAsCompleted() {
     for (var task in _tasks) {
       if (!task.isCompleted) {
-        task.toggleCompletion();
+        task.markAsCompleted();
       }
     }
     notifyListeners();
@@ -407,6 +497,7 @@ class AgendaProvider extends ChangeNotifier {
 
   Future<void> _saveTasks() async {
     _pruneLocallyDeletedAnonymousTasks();
+    _pruneInteractionState();
     await _repository.saveTasks(_tasks);
     _publishTaskDebugState();
     notifyListeners();
@@ -418,6 +509,117 @@ class AgendaProvider extends ChangeNotifier {
       (task) => task.userId == null && task.syncStatus == SyncStatus.deleted,
     );
     return _tasks.length != initialCount;
+  }
+
+  void _resetInteractionForViewChange() {
+    _selectionController.clear();
+    if (_isBatchMode) {
+      _batchSelectedTaskIds.clear();
+    }
+  }
+
+  void _pruneInteractionState() {
+    final activeTaskIds = _activeTasks.map((task) => task.id).toSet();
+    if (selectedTask != null && !activeTaskIds.contains(selectedTask!.id)) {
+      _selectionController.clear();
+    }
+
+    if (!_isBatchMode) {
+      _batchSelectedTaskIds.clear();
+      return;
+    }
+
+    if (_batchSelectedTaskIds.isEmpty) {
+      if (activeTaskIds.isEmpty) {
+        _isBatchMode = false;
+      }
+      return;
+    }
+
+    final visibleTaskIds = filteredTasks.map((task) => task.id).toSet();
+    _batchSelectedTaskIds.removeWhere(
+      (taskId) =>
+          !activeTaskIds.contains(taskId) || !visibleTaskIds.contains(taskId),
+    );
+
+    if (activeTaskIds.isEmpty) {
+      _isBatchMode = false;
+    }
+  }
+
+  Future<void> _applyTaskUpdate(
+    Iterable<String> taskIds,
+    bool Function(TaskModel task) mutate,
+  ) async {
+    final targetIds = taskIds.toSet();
+    if (targetIds.isEmpty) {
+      return;
+    }
+
+    TaskModel? syncTask;
+    var didChange = false;
+
+    for (final task in _tasks) {
+      if (!targetIds.contains(task.id)) {
+        continue;
+      }
+      final changed = mutate(task);
+      if (!changed) {
+        continue;
+      }
+      syncTask ??= task;
+      didChange = true;
+    }
+
+    if (!didChange || syncTask == null) {
+      return;
+    }
+
+    await _saveTasks();
+    _triggerSync(syncTask);
+  }
+
+  Future<void> _deleteTasksById(Iterable<String> taskIds) async {
+    final targetIds = taskIds.toSet();
+    if (targetIds.isEmpty) {
+      return;
+    }
+
+    _selectionController.clear();
+    TaskModel? syncTask;
+    var didChange = false;
+
+    _tasks.removeWhere((task) {
+      if (!targetIds.contains(task.id)) {
+        return false;
+      }
+
+      _batchSelectedTaskIds.remove(task.id);
+
+      if (task.userId == null) {
+        didChange = true;
+        return true;
+      }
+
+      if (task.syncStatus == SyncStatus.deleted) {
+        return false;
+      }
+
+      task.markAsDeleted();
+      syncTask ??= task;
+      didChange = true;
+      return false;
+    });
+
+    if (!didChange) {
+      return;
+    }
+
+    await _saveTasks();
+
+    if (syncTask != null) {
+      _triggerSync(syncTask!);
+    }
   }
 
   void _publishTaskDebugState() {

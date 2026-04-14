@@ -325,6 +325,14 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
   ) {
     final countLabel = _formatTaskCount(agenda.filteredTasks.length);
 
+    if (agenda.isBatchMode) {
+      if (agenda.hasBatchSelection) {
+        return '$countLabel in view. ${agenda.batchSelectedCount} selected for batch actions.';
+      }
+
+      return '$countLabel in view. Batch mode is active for multi-task actions.';
+    }
+
     if (selectedTask != null) {
       return '$countLabel in view. ${selectedTask.title} is open in the inspector.';
     }
@@ -348,7 +356,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _buildControlDeck(agenda: agenda, compact: compact, dense: dense),
-        if (compact && selectedTask != null) ...[
+        if (compact && (agenda.isBatchMode || selectedTask != null)) ...[
           SizedBox(height: spacing),
           SizedBox(
             height: dense ? 220 : 280,
@@ -777,6 +785,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
   }) {
     final theme = Theme.of(context);
     final tasks = agenda.filteredTasks;
+    final isBatchMode = agenda.isBatchMode;
 
     return Container(
       decoration: _panelDecoration(theme),
@@ -801,6 +810,10 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
                       Text(
                         tasks.isEmpty
                             ? 'Nothing is visible in the current scope.'
+                            : isBatchMode
+                            ? agenda.hasBatchSelection
+                                  ? '${agenda.batchSelectedCount} task(s) selected for batch actions.'
+                                  : 'Select tasks to mark done, reopen, or delete them together.'
                             : compact
                             ? 'Select a row to open the inline inspector.'
                             : 'Select a row to inspect and act without leaving the queue.',
@@ -811,11 +824,43 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
                     ],
                   ),
                 ),
-                if (selectedTask != null)
-                  TextButton.icon(
-                    onPressed: agenda.clearSelection,
-                    icon: const Icon(Icons.clear),
-                    label: const Text('Clear selection'),
+                if (tasks.isNotEmpty)
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    alignment: WrapAlignment.end,
+                    children: [
+                      if (isBatchMode) ...[
+                        TextButton.icon(
+                          onPressed: agenda.selectAllVisibleTasks,
+                          icon: const Icon(Icons.select_all),
+                          label: const Text('Select all'),
+                        ),
+                        if (agenda.hasBatchSelection)
+                          TextButton.icon(
+                            onPressed: agenda.clearBatchSelection,
+                            icon: const Icon(Icons.clear),
+                            label: const Text('Clear'),
+                          ),
+                        TextButton.icon(
+                          onPressed: agenda.exitBatchMode,
+                          icon: const Icon(Icons.done_all),
+                          label: const Text('Done selecting'),
+                        ),
+                      ] else ...[
+                        TextButton.icon(
+                          onPressed: agenda.enterBatchMode,
+                          icon: const Icon(Icons.checklist_outlined),
+                          label: const Text('Select'),
+                        ),
+                        if (selectedTask != null)
+                          TextButton.icon(
+                            onPressed: agenda.clearSelection,
+                            icon: const Icon(Icons.clear),
+                            label: const Text('Clear selection'),
+                          ),
+                      ],
+                    ],
                   ),
               ],
             ),
@@ -839,11 +884,19 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
                       final isSelected = selectedTask?.id == task.id;
                       return _WorkspaceTaskCard(
                         task: task,
+                        isBatchMode: isBatchMode,
+                        isBatchSelected: agenda.isTaskBatchSelected(task.id),
                         isSelected: isSelected,
                         dense: dense,
-                        onTap: () => agenda.selectTask(task),
-                        onToggleComplete: () =>
-                            agenda.toggleTaskCompletion(task.id),
+                        onTap: () => isBatchMode
+                            ? agenda.toggleTaskInBatchSelection(task.id)
+                            : agenda.selectTask(task),
+                        onMarkDone: task.isCompleted
+                            ? null
+                            : () => agenda.markTaskCompleted(task.id),
+                        onToggleBatchSelection: isBatchMode
+                            ? () => agenda.toggleTaskInBatchSelection(task.id)
+                            : null,
                       );
                     },
                   ),
@@ -959,7 +1012,13 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
             ? theme.colorScheme.surface
             : theme.colorScheme.surfaceContainerLowest,
       ),
-      child: selectedTask == null
+      child: agenda.isBatchMode
+          ? _buildBatchInspectorPane(
+              agenda: agenda,
+              compact: compact,
+              dense: dense,
+            )
+          : selectedTask == null
           ? _buildInspectorPlaceholder(compact: compact, dense: dense)
           : SingleChildScrollView(
               padding: EdgeInsets.all(dense ? 14 : 18),
@@ -1077,8 +1136,9 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
                         label: const Text('Edit'),
                       ),
                       OutlinedButton.icon(
-                        onPressed: () =>
-                            agenda.toggleTaskCompletion(selectedTask.id),
+                        onPressed: () => selectedTask.isCompleted
+                            ? agenda.reopenTask(selectedTask.id)
+                            : agenda.markTaskCompleted(selectedTask.id),
                         icon: Icon(
                           selectedTask.isCompleted
                               ? Icons.undo_outlined
@@ -1087,7 +1147,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
                         label: Text(
                           selectedTask.isCompleted
                               ? 'Reopen task'
-                              : 'Mark complete',
+                              : 'Mark done',
                         ),
                       ),
                       TextButton.icon(
@@ -1106,6 +1166,146 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
                 ],
               ),
             ),
+    );
+  }
+
+  Widget _buildBatchInspectorPane({
+    required AgendaProvider agenda,
+    required bool compact,
+    required bool dense,
+  }) {
+    final theme = Theme.of(context);
+    final selectedTasks = agenda.selectedBatchTasks;
+    final completedCount = selectedTasks
+        .where((task) => task.isCompleted)
+        .length;
+    final incompleteCount = selectedTasks.length - completedCount;
+
+    if (selectedTasks.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: EdgeInsets.all(dense ? 18 : 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.checklist_rtl_outlined,
+                size: 34,
+                color: theme.colorScheme.primary,
+              ),
+              const SizedBox(height: 14),
+              Text(
+                compact ? 'Batch mode is ready' : 'Batch actions are ready',
+                style: theme.textTheme.titleMedium,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Select tasks in the queue to mark them done, reopen them, or delete them together.',
+                style: theme.textTheme.bodyMedium,
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return SingleChildScrollView(
+      padding: EdgeInsets.all(dense ? 14 : 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      compact ? 'Batch Summary' : 'Batch Actions',
+                      style: theme.textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${agenda.batchSelectedCount} task(s) selected in the current view.',
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                onPressed: agenda.exitBatchMode,
+                icon: const Icon(Icons.close),
+                tooltip: 'Exit batch mode',
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _WorkspaceBadge(
+                icon: Icons.playlist_add_check_circle_outlined,
+                label: '${agenda.batchSelectedCount} selected',
+                backgroundColor: theme.colorScheme.primaryContainer,
+                foregroundColor: theme.colorScheme.onPrimaryContainer,
+              ),
+              _WorkspaceBadge(
+                icon: Icons.check_circle_outline,
+                label: '$incompleteCount ready to mark done',
+                backgroundColor: theme.colorScheme.secondaryContainer,
+                foregroundColor: theme.colorScheme.onSecondaryContainer,
+              ),
+              _WorkspaceBadge(
+                icon: Icons.undo_outlined,
+                label: '$completedCount ready to reopen',
+                backgroundColor: theme.colorScheme.surfaceContainerHigh,
+                foregroundColor: theme.colorScheme.onSurface,
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Text(
+            'Apply the current queue-safe actions to the selected tasks in one local save and one sync pass.',
+            style: theme.textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              FilledButton.tonalIcon(
+                onPressed: incompleteCount > 0
+                    ? () => agenda.markSelectedTasksCompleted()
+                    : null,
+                icon: const Icon(Icons.check_circle_outline),
+                label: const Text('Mark done'),
+              ),
+              OutlinedButton.icon(
+                onPressed: completedCount > 0
+                    ? () => agenda.reopenSelectedTasks()
+                    : null,
+                icon: const Icon(Icons.undo_outlined),
+                label: const Text('Reopen'),
+              ),
+              TextButton.icon(
+                onPressed: () => _confirmBatchDelete(context, agenda),
+                icon: Icon(
+                  Icons.delete_outline,
+                  color: theme.colorScheme.error,
+                ),
+                label: Text(
+                  'Delete',
+                  style: TextStyle(color: theme.colorScheme.error),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -1177,6 +1377,41 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
           TextButton(
             onPressed: () {
               agenda.deleteTask(task.id);
+              Navigator.of(context).pop();
+            },
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _confirmBatchDelete(
+    BuildContext context,
+    AgendaProvider agenda,
+  ) {
+    final count = agenda.batchSelectedCount;
+    if (count == 0) {
+      return Future.value();
+    }
+
+    return showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Tasks'),
+        content: Text(
+          count == 1
+              ? 'Are you sure you want to delete the selected task?'
+              : 'Are you sure you want to delete $count selected tasks?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              agenda.deleteSelectedTasks();
               Navigator.of(context).pop();
             },
             child: const Text('Delete', style: TextStyle(color: Colors.red)),
@@ -1378,17 +1613,23 @@ class _WorkspaceMetricChip extends StatelessWidget {
 class _WorkspaceTaskCard extends StatelessWidget {
   const _WorkspaceTaskCard({
     required this.task,
+    required this.isBatchMode,
+    required this.isBatchSelected,
     required this.isSelected,
     required this.dense,
     required this.onTap,
-    required this.onToggleComplete,
+    required this.onMarkDone,
+    required this.onToggleBatchSelection,
   });
 
   final TaskModel task;
+  final bool isBatchMode;
+  final bool isBatchSelected;
   final bool isSelected;
   final bool dense;
   final VoidCallback onTap;
-  final VoidCallback onToggleComplete;
+  final VoidCallback? onMarkDone;
+  final VoidCallback? onToggleBatchSelection;
 
   @override
   Widget build(BuildContext context) {
@@ -1445,22 +1686,42 @@ class _WorkspaceTaskCard extends StatelessWidget {
                       ],
                     ),
                   ),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        isSelected ? Icons.check_circle : Icons.circle_outlined,
-                        color: isSelected
-                            ? theme.colorScheme.primary
-                            : theme.colorScheme.outline,
-                      ),
-                      const SizedBox(width: 4),
-                      Checkbox(
-                        value: task.isCompleted,
-                        onChanged: (_) => onToggleComplete(),
-                      ),
-                    ],
-                  ),
+                  if (isBatchMode)
+                    Checkbox(
+                      value: isBatchSelected,
+                      onChanged: (_) => onToggleBatchSelection?.call(),
+                    )
+                  else
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          isSelected
+                              ? Icons.check_circle
+                              : Icons.circle_outlined,
+                          color: isSelected
+                              ? theme.colorScheme.primary
+                              : theme.colorScheme.outline,
+                        ),
+                        const SizedBox(width: 8),
+                        if (task.isCompleted)
+                          _WorkspaceBadge(
+                            icon: Icons.task_alt_outlined,
+                            label: 'Completed',
+                            backgroundColor: _statusBackgroundColor(
+                              task.status,
+                              theme.colorScheme,
+                            ),
+                            foregroundColor: statusColor,
+                          )
+                        else
+                          OutlinedButton.icon(
+                            onPressed: onMarkDone,
+                            icon: const Icon(Icons.check_circle_outline),
+                            label: const Text('Mark done'),
+                          ),
+                      ],
+                    ),
                 ],
               ),
               SizedBox(height: dense ? 10 : 12),
