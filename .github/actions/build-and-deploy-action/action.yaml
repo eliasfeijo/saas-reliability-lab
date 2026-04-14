@@ -49,9 +49,6 @@ runs:
     - run: ./scripts/merge_sw.sh
       shell: bash
       working-directory: ${{inputs.workingDir}}
-    - run: rm -f build/web/push-sw.js
-      shell: bash
-      working-directory: ${{inputs.workingDir}}
     - run: git config user.name github-actions[bot]
       shell: bash
       working-directory: ${{inputs.workingDir}}
