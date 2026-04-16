@@ -283,7 +283,6 @@ class TaskSyncService implements TaskSyncGateway {
     return result.acknowledgedTasks;
   }
 
-  @override
   void debouncedSync(
     TaskModel task,
     Function()? beforeSync,
