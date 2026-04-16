@@ -9,6 +9,7 @@ import 'package:todo_flutter/models/task.dart';
 import 'package:todo_flutter/providers/agenda_provider.dart';
 import 'package:todo_flutter/providers/runtime_debug_provider.dart';
 import 'package:todo_flutter/repositories/tasks_repository.dart';
+import 'package:todo_flutter/screens/lab_shell.dart';
 import 'package:todo_flutter/services/task_local_snapshot_coordinator.dart';
 import 'package:todo_flutter/services/task_sync_coordinator.dart';
 import 'package:todo_flutter/services/task_sync_service.dart';
@@ -170,6 +171,67 @@ class CompactWorkspaceHarness extends StatelessWidget {
         home: Scaffold(
           body: Center(child: SizedBox(width: 360, child: TaskWorkspace())),
         ),
+      ),
+    );
+  }
+}
+
+class LabShellHarness extends StatelessWidget {
+  const LabShellHarness({
+    super.key,
+    required this.agenda,
+    required this.runtimeDebug,
+  });
+
+  final AgendaProvider agenda;
+  final RuntimeDebugProvider runtimeDebug;
+
+  @override
+  Widget build(BuildContext context) {
+    final sessionCoordinator = WorkspaceSessionCoordinator(
+      InMemoryUserSessionService(runtimeDebug: runtimeDebug),
+      registerPushSubscription: ({runtimeDebug}) async {},
+      hasAuthenticatedSession: () => false,
+    );
+
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider<RuntimeDebugProvider>.value(value: runtimeDebug),
+        Provider<WorkspaceSessionCoordinator>.value(value: sessionCoordinator),
+        ChangeNotifierProvider<AgendaProvider>.value(value: agenda),
+      ],
+      child: MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: buildLabTheme(),
+        home: const LabShell(),
+      ),
+    );
+  }
+}
+
+class RailHarness extends StatelessWidget {
+  const RailHarness({
+    super.key,
+    required this.agenda,
+    required this.runtimeDebug,
+    required this.child,
+  });
+
+  final AgendaProvider agenda;
+  final RuntimeDebugProvider runtimeDebug;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider<RuntimeDebugProvider>.value(value: runtimeDebug),
+        ChangeNotifierProvider<AgendaProvider>.value(value: agenda),
+      ],
+      child: MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: buildLabTheme(),
+        home: Scaffold(body: child),
       ),
     );
   }

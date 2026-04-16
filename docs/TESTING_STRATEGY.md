@@ -37,6 +37,9 @@ Current files:
 - `flutter-app\test\task_sync_coordinator_test.dart`
 - `flutter-app\test\task_workspace_interaction_controller_test.dart`
 - `flutter-app\test\workspace_session_coordinator_test.dart`
+- `flutter-app\test\lab_shell_test.dart`
+- `flutter-app\test\lab_left_rail_test.dart`
+- `flutter-app\test\sync_debug_panel_test.dart`
 - `flutter-app\test\task_workspace_test.dart`
 - `flutter-app\test\task_workspace_responsive_test.dart`
 - `flutter-app\test\test_support\app_test_support.dart`
@@ -50,13 +53,16 @@ What they currently cover:
 - sync gating and post-sync reload orchestration
 - workspace interaction rules for selection, batch mode, and view-state pruning
 - workspace startup and auth-session orchestration
+- shell ownership across wide and narrow layouts
+- operator rail rendering for anonymous and authenticated states
+- diagnostics rail rendering for explicit sync, push, local-state, and timeline evidence
 - provider-level queue and batch behavior
 - workflow-style widget regressions in the task workspace
 - responsive widget behavior at fixed viewport sizes
 
 Current issue:
 
-The Flutter coverage is now structured more honestly by concern, but it still needs broader shell, rail, diagnostics, and integration coverage.
+The Flutter coverage is now structured more honestly by concern, but it still needs broader integration coverage and deeper multi-step reliability scenarios.
 
 ### Notify worker
 
@@ -91,6 +97,7 @@ Current state:
 
 - Flutter sync reconciliation logic
 - Flutter agenda-provider behavior for anonymous-task review, deletion semantics, batch selection, and queue sorting
+- Flutter shell ownership and direct rail rendering coverage
 - Flutter task-workspace workflow regressions
 - Flutter task-workspace responsive behavior at fixed viewport sizes
 - worker dispatch success, empty-run behavior, and stale-subscription cleanup
@@ -99,7 +106,7 @@ Current state:
 ### Partially covered
 
 - responsive behavior is covered at fixed sizes, but resize-in-place transitions still need broader automation
-- Flutter widget coverage is strongest in `TaskWorkspace`, but still thinner for `LabShell`, `LabLeftRail`, and `SyncDebugPanel`
+- Flutter widget coverage now directly covers `LabShell`, `LabLeftRail`, and `SyncDebugPanel`, but still leans heavier on rendering than on broader multi-step flows
 - worker reliability coverage exists, but does not yet cover richer failure matrices or multi-subscription fan-out
 
 ### Not yet covered well enough
@@ -232,6 +239,8 @@ Recommended direction:
 - `flutter-app\test\task_workspace_test.dart`
 - `flutter-app\test\task_workspace_responsive_test.dart`
 - `flutter-app\test\lab_shell_test.dart`
+- `flutter-app\test\lab_left_rail_test.dart`
+- `flutter-app\test\sync_debug_panel_test.dart`
 - `flutter-app\test\test_support\...` for shared fakes, harnesses, and helper utilities
 
 This structure is a target direction, not a requirement to land all at once.
