@@ -140,12 +140,12 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
                                       children: [
                                         Expanded(
                                           child: _buildTaskFlowPane(
-                                             agenda: agenda,
-                                             selectedTask: selectedTask,
-                                             compact: false,
-                                             dense: isDenseLayout,
-                                           ),
-                                         ),
+                                            agenda: agenda,
+                                            selectedTask: selectedTask,
+                                            compact: false,
+                                            dense: isDenseLayout,
+                                          ),
+                                        ),
                                         SizedBox(
                                           width: isDenseLayout ? 14 : 18,
                                         ),
@@ -160,12 +160,12 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
                                         ),
                                       ],
                                     )
-                                    : _buildCompactTaskWorkspace(
-                                       agenda: agenda,
-                                       selectedTask: selectedTask,
-                                       dense: isDenseLayout,
-                                       viewportHeight: constraints.maxHeight,
-                                     ),
+                                  : _buildCompactTaskWorkspace(
+                                      agenda: agenda,
+                                      selectedTask: selectedTask,
+                                      dense: isDenseLayout,
+                                      viewportHeight: constraints.maxHeight,
+                                    ),
                             );
                           },
                         );
@@ -449,14 +449,14 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
     required bool dense,
   }) {
     final filterChips = TaskFilter.values.map((filter) {
-        final count = _taskCountForFilter(agenda.tasks, filter);
-        return ChoiceChip(
-          label: Text('${_shortFilterLabel(filter)} $count'),
-          selected: agenda.currentFilter == filter,
-          onSelected: (_) => agenda.setFilter(filter),
-          visualDensity: dense ? VisualDensity.compact : null,
-        );
-      }).toList();
+      final count = _taskCountForFilter(agenda.tasks, filter);
+      return ChoiceChip(
+        label: Text('${_shortFilterLabel(filter)} $count'),
+        selected: agenda.currentFilter == filter,
+        onSelected: (_) => agenda.setFilter(filter),
+        visualDensity: dense ? VisualDensity.compact : null,
+      );
+    }).toList();
 
     if (compact) {
       return Column(
@@ -978,7 +978,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
                           ],
                         ),
                       ),
-                      if (queueActions != null) queueActions,
+                      ?queueActions,
                     ],
                   ),
           ),
@@ -1046,8 +1046,12 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
     );
   }
 
-  bool _hasCompactAttachedPanel(AgendaProvider agenda, TaskModel? selectedTask) {
-    return selectedTask != null || (agenda.isBatchMode && agenda.hasBatchSelection);
+  bool _hasCompactAttachedPanel(
+    AgendaProvider agenda,
+    TaskModel? selectedTask,
+  ) {
+    return selectedTask != null ||
+        (agenda.isBatchMode && agenda.hasBatchSelection);
   }
 
   void _handleTaskCardTap(AgendaProvider agenda, TaskModel task) {
