@@ -152,7 +152,7 @@ flowchart TD
     Remote --> Delivery
 ```
 
-That target shape is described in more detail in [`ARCHITECTURE.md`](ARCHITECTURE.md) and the staged plan in [`OBJECTIVE_0_FOUNDATION_PLAN.md`](OBJECTIVE_0_FOUNDATION_PLAN.md).
+That target shape is described in more detail in [`ARCHITECTURE.md`](ARCHITECTURE.md) and the staged execution plan in [`OBJECTIVE_0_FOUNDATION_PLAN.md`](OBJECTIVE_0_FOUNDATION_PLAN.md).
 
 ## Current status
 
@@ -199,7 +199,7 @@ The goal is to make reliability behavior inspectable.
 - [`../notify-worker/README.md`](../notify-worker/README.md): Cloudflare Worker purpose, local commands, runtime expectations, and delivery concerns
 - [`../supabase/README.md`](../supabase/README.md): backend surface, local Supabase workflow, functions, migrations, and backend-specific concerns
 - [`ARCHITECTURE.md`](ARCHITECTURE.md): implemented topology, state ownership, and evolution path
-- [`OBJECTIVE_0_FOUNDATION_PLAN.md`](OBJECTIVE_0_FOUNDATION_PLAN.md): end-to-end plan for the foundation refactor that should land before durable outbox work
+- [`OBJECTIVE_0_FOUNDATION_PLAN.md`](OBJECTIVE_0_FOUNDATION_PLAN.md): execution plan and the only live Objective 0 status tracker for the foundation refactor before durable outbox work
 - [`DEPLOYMENT.md`](DEPLOYMENT.md): GitHub Actions workflows, GitHub Pages integration, worker deployment, and environment matrix
 - [`LOCAL_DEVELOPMENT.md`](LOCAL_DEVELOPMENT.md): repository-root workflow, local commands, and developer setup for running the projects locally
 - [`AI_ASSISTED_DEVELOPMENT.md`](AI_ASSISTED_DEVELOPMENT.md): intended human-and-agent development loop, Copilot workflow, and low-friction lifecycle expectations

@@ -78,7 +78,7 @@ This repo now uses a monorepo-style structure:
 | --- | --- |
 | [`docs/README.md`](docs/README.md) | Big-picture product framing, current UI shape, system model, and the repository guide. |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Implemented topology, state ownership, and the current evolution path. |
-| [`docs/OBJECTIVE_0_FOUNDATION_PLAN.md`](docs/OBJECTIVE_0_FOUNDATION_PLAN.md) | Concrete implementation and refactor plan for the foundation cleanup that should happen before outbox work. |
+| [`docs/OBJECTIVE_0_FOUNDATION_PLAN.md`](docs/OBJECTIVE_0_FOUNDATION_PLAN.md) | Concrete execution plan and the only live Objective 0 status tracker for the foundation cleanup that should happen before outbox work. |
 | [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | GitHub Actions workflows, GitHub Pages, Cloudflare Worker deployment, and environment expectations. |
 | [`docs/GITHUB_AUTOMATION.md`](docs/GITHUB_AUTOMATION.md) | Repository automation structure, workflow surfaces under `.github\`, and local guidance for automation changes. |
 | [`docs/LOCAL_DEVELOPMENT.md`](docs/LOCAL_DEVELOPMENT.md) | Repository-root workflow, local run commands, and the day-to-day setup for working on the app locally. |

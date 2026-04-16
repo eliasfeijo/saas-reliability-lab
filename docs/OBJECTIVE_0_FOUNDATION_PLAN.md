@@ -1,11 +1,31 @@
-# Objective 0 Foundation Plan
+# Objective 0 Foundation Execution Plan
 
 ## Purpose
 
-This document translates **Objective 0** from `ROADMAP.md` into a concrete planning document for the next implementation and refactoring phase.
+This document turns **Objective 0** from `ROADMAP.md` into an execution plan for the current repository state.
 
 The goal is not another shell redesign.
-The goal is to make the current reliability-lab shell rest on cleaner system boundaries before the repository commits to durable outbox, conflict, observability, and fault-injection work.
+The goal is to make the current reliability-lab shell rest on cleaner boundaries before the repository commits to durable outbox, conflict, observability, and fault-injection work.
+
+## How to use this document
+
+This is the **only live status tracker** for Objective 0.
+
+Use it for:
+
+- current Objective 0 status
+- recommended implementation order
+- concrete refactor slices
+- exit criteria and verification expectations
+
+Do **not** duplicate ongoing Objective 0 task status in:
+
+- `ROADMAP.md`
+- `README.md`
+- `docs/README.md`
+- workflow docs or subproject READMEs
+
+Those docs should describe the objective and the current architecture honestly, but this file is the place to track active progress.
 
 ## Implemented baseline
 
@@ -19,7 +39,7 @@ Implemented now:
 - `TaskWorkspace` is the canonical center pane
 - `LabLeftRail` owns durable operator controls
 - `SyncDebugPanel` renders runtime evidence from `RuntimeDebugProvider`
-- `AgendaProvider` now primarily owns task collection, task-facing intents, and runtime count publication while coordination seams handle workspace interaction state, sync entry, startup/auth flow, local snapshot orchestration, and low-level task mutation rules
+- `AgendaProvider` is slimmer than before and now sits beside dedicated seams for workspace interaction state, sync entry, startup and auth flow, local snapshot orchestration, and low-level task mutation rules
 - `TaskSyncService` still performs task-level reconciliation rather than operation-level replay
 - `TasksRepository` still represents a simple local snapshot store backed by SharedPreferences
 
@@ -30,7 +50,7 @@ Implemented now:
 - Supabase Auth remains the cloud identity source of truth
 - task and subscription state live in Supabase tables and RPC-backed paths
 - Edge Functions support browser push subscription save and removal flows
-- the sync path is still documented as transitional and task-shaped rather than a stable long-term mutation contract
+- the sync path is still transitional and task-shaped rather than a stable long-term mutation contract
 
 ### Scheduled delivery
 
@@ -48,7 +68,7 @@ Implemented now:
 - frontend and worker deploys are separate workflows
 - architecture, deployment, testing, and experiment docs already describe the current lab shell honestly
 
-## Why Objective 0 comes before outbox work
+## Why Objective 0 still matters
 
 The shell transformation solved the UI ownership problem.
 It did **not** solve the deeper structural problem that several responsibilities are still too entangled:
@@ -60,19 +80,68 @@ It did **not** solve the deeper structural problem that several responsibilities
 
 If the repo adds durable outbox semantics directly on top of those seams, it risks freezing prototype debt into the next architecture.
 
-## Desired end state after Objective 0
+## Objective 0 status tracker
 
-Objective 0 should leave the repository with a cleaner **target architecture**, even if the sync semantics are still transitional at the end of the refactor.
+Update this tracker only when a workstream changes status or exit criteria.
+Do not turn every task delivery into a broad doc refresh.
 
-### Target architecture principles
+| Workstream | Status | What is already true | What still blocks exit |
+| --- | --- | --- | --- |
+| Shell ownership and diagnostics foundation | Completed | `LabShell`, `TaskWorkspace`, `LabLeftRail`, and `SyncDebugPanel` are the active product surfaces | No further Objective 0 work needed unless shell ownership regresses |
+| First coordination seams | Completed | `TaskSyncCoordinator`, `WorkspaceSessionCoordinator`, `TaskLocalSnapshotCoordinator`, `TaskMutationCoordinator`, and `TaskWorkspaceInteractionController` exist and are covered by focused tests | These seams still need to be used as the stable base for the remaining refactor slices |
+| Provider ownership cleanup | In progress | `AgendaProvider` is smaller than the pre-shell version and no longer owns every low-level rule | It still coordinates too much task state, persistence sequencing, sync triggering, and debug publication |
+| Sync boundary hardening | Not started | `TaskSyncService` and its remote data source are explicit seams | The app still depends on task-shaped reconciliation rather than a cleaner sync gateway contract |
+| Local persistence boundary split | Not started | Local snapshot behavior is wrapped by `TaskLocalSnapshotCoordinator` | Snapshot storage is still treated as the main local state model instead of one boundary among future local concerns |
+| Backend contract clarification | Not started | The current Supabase surface works and is documented as transitional | The app still lacks an explicit current sync gateway contract and a written keep-versus-transitional boundary |
+| Scheduled delivery boundary clarification | Not started | The notify worker is operationally independent and already tested | The end-to-end contract between app state, backend selection, and delivery evidence is still too implied |
+| Objective 0 exit and handoff to Objective 1 | Not started | The roadmap order is clear | The repo still needs explicit exit criteria, verification follow-through, and a clean handoff into outbox work |
 
-1. **Keep shell ownership stable.** `LabShell`, `TaskWorkspace`, `LabLeftRail`, and `SyncDebugPanel` remain the durable UI model.
-2. **Let providers own UI state, not every side effect.** UI-focused providers should stop being the place where selection, persistence, sync coordination, auth reactions, and diagnostics publication all mix together.
-3. **Make sync a boundary, not a leak.** Even before a real outbox lands, the repository should treat sync as an explicit application boundary that can later swap from task reconciliation to operation replay.
-4. **Separate local state concerns from cloud-contract concerns.** Shared local task snapshots, future local operation logs, remote sync contracts, and runtime evidence should be independently understandable.
-5. **Preserve deploy-surface independence.** The notify worker remains a separate scheduled delivery surface, not a side effect of frontend deployment.
+## Recommended approach
 
-### Target responsibility map
+### 1. Keep the visible shell stable
+
+Do not split attention between architectural cleanup and another UI direction change.
+Objective 0 should preserve the current shell and refactor beneath it.
+
+### 2. Treat `AgendaProvider` as a temporary facade, not the final architecture
+
+Recommended approach:
+
+- keep the current widget-facing API stable where practical
+- continue moving side effects and sequencing behind smaller collaborators
+- avoid replacing one monolith with several UI-facing providers at once unless the code proves that necessary
+
+This is the lowest-risk path because it improves structure without forcing a second UI ownership migration.
+
+### 3. Introduce boundaries before introducing semantics
+
+Objective 0 should prepare for outbox work by making sync, persistence, backend, and delivery seams explicit.
+It should **not** partially implement queued operations, retry policy, or conflict resolution.
+
+### 4. Keep status tracking here and keep other docs mostly stable
+
+This plan should carry active status.
+Other docs should be updated when architecture, workflow, testing scope, or runtime contracts actually change.
+
+## Keep, replace, defer matrix
+
+| Area | Current role | Objective 0 action | Reason |
+| --- | --- | --- | --- |
+| `LabShell` | root responsive shell | Keep | The visible shell direction is already correct |
+| `TaskWorkspace` | canonical center pane | Keep | Objective 0 is not another workspace redesign |
+| `LabLeftRail` | durable operator controls | Keep | It is the right home for future reliability controls |
+| `SyncDebugPanel` | runtime evidence surface | Keep | It already reserves space for later operation states |
+| `RuntimeDebugProvider` | UI-facing evidence model | Keep and decouple | The model is useful, but unrelated layers should publish into it more cleanly |
+| `AgendaProvider` | task-facing state and intent facade | Refactor | It still carries too much orchestration weight |
+| `TaskSyncCoordinator` | sync entry and reload gating | Keep and evolve | It is the right seam to stabilize before outbox work |
+| `TaskSyncService` | current task reconciliation engine | Refactor behind a clearer gateway | The implementation can stay transitional, but the app should depend on a more explicit contract |
+| `TaskLocalSnapshotCoordinator` | local snapshot orchestration | Keep and evolve | It is the right seam for separating snapshot concerns from future local state concerns |
+| `TasksRepository` | local task snapshot storage | Retain implementation, replace architectural meaning | SharedPreferences can stay for now, but it should stop looking like the long-term local-state model |
+| `WorkspaceSessionCoordinator` | startup and auth-session coordination | Keep and evolve | It already moves startup logic out of widgets |
+| Supabase task RPC and reads | current backend surface | Clarify and partially abstract | The long-term sync contract is still open |
+| `notify-worker` | scheduled delivery boundary | Keep and clarify | Operational independence should remain intact |
+
+## Target boundary map
 
 ```mermaid
 flowchart TD
@@ -95,186 +164,203 @@ flowchart TD
     Remote --> Delivery
 ```
 
-This is intentionally a **boundary map**, not a promise of exact class names.
-The important change is that the repo should move from a few large convenience-heavy components toward clearer application seams.
+This is intentionally a boundary map, not a promise of exact class names.
+The important change is to move from convenience-heavy seams toward application boundaries that can survive Objective 1.
 
-### Current Objective 0 progress after the bounded coordination and interaction slices
+## Execution sequence
 
-This repository now has an initial code seam for four of the most immediate Objective 0 concerns:
-
-- `TaskSyncCoordinator` sits between `AgendaProvider` and `TaskSyncService` so sync gating, post-sync reload, and runtime-debug skip behavior are no longer mixed directly into the provider
-- `WorkspaceSessionCoordinator` sits between `TaskWorkspace`, `UserSessionService`, and authenticated startup behavior so workspace bootstrap and auth-session reactions are no longer mostly widget-owned
-- `TaskLocalSnapshotCoordinator` now sits around `TasksRepository` so local snapshot load/save/remove/clear behavior is no longer mixed directly into `AgendaProvider`
-- `TaskMutationCoordinator` now owns task-list mutation rules so `AgendaProvider` is less responsible for low-level completion, delete, and anonymous-adoption mutation details
-- `TaskWorkspaceInteractionController` now composes the existing filter and selection controllers with explicit batch-mode and interaction-pruning rules so `AgendaProvider` is less responsible for workspace view-state mechanics
-
-This slice is intentionally bounded.
-It does **not** add outbox semantics, change the remote task-reconciliation contract, or replace SharedPreferences.
-
-## Structural issues to refactor in Objective 0
-
-### 1. `AgendaProvider` is carrying too much architectural weight
-
-Current issue:
-
-- task collection and filtering
-- selection and queue state
-- persistence triggers
-- sync triggering
-- auth-adjacent startup behavior
-- diagnostics count publication
-
-Objective 0 should reduce that coupling so later outbox work does not have to unwind a monolithic provider first.
-
-### 2. The sync boundary is still represented mostly by one service plus task metadata
-
-Current issue:
-
-- `TaskSyncService` is a real implementation seam, but not yet a durable architectural contract
-- task-shaped reconciliation assumptions still leak into the broader app model
-- runtime diagnostics can report sync outcomes, but not a richer sync lifecycle contract
-
-Objective 0 should leave the repo with a clearer seam between:
-
-- local task state
-- sync coordination
-- remote reads and writes
-- runtime evidence publication
-
-### 3. Local persistence is too coarse for the next phases
-
-Current issue:
-
-- `TasksRepository` stores a whole local snapshot under SharedPreferences
-- the current model is workable for the prototype but not expressive enough for future outbox durability or richer local inspection
-
-Objective 0 does **not** need to replace SharedPreferences yet.
-It **does** need to stop assuming that the current snapshot model is the long-term architectural shape.
-
-### 4. Backend boundaries are still more implied than explicit
-
-Current issue:
-
-- the repo uses Supabase successfully, but the long-term sync boundary is still undecided
-- current docs already call out open decisions around RPC vs Edge Function vs another backend surface
-- later auditability and idempotency work will be easier if the frontend is refactored toward an explicit backend contract now
-
-### 5. The worker is independent operationally, but not yet documented as part of a cleaner end-to-end contract
-
-Current issue:
-
-- the worker behavior is implemented and valuable
-- the longer-term architecture still needs a clearer contract between app-side notification state, backend notification selection, and delivery-attempt observability
-
-Objective 0 should improve the **system boundary documentation** around the worker without coupling it to frontend-only refactors.
-
-## Concrete implementation and refactoring phases
-
-### Phase 1 - Freeze the target boundary map
+### Phase 1 - Freeze the boundary contract and exit criteria
 
 Goal:
 
-- agree on what the repo is preserving, replacing, or deferring before code churn begins
+- agree on what Objective 0 is preserving, replacing, and deferring before more code churn begins
 
 Primary surfaces:
 
-- `docs\ARCHITECTURE.md`
-- `docs\project_analysis.md`
+- `docs/ARCHITECTURE.md`
+- `docs/project_analysis.md`
 - `ROADMAP.md`
 - this document
 
-Deliverables:
+Detailed implementation steps:
 
-1. a keep/replace/defer matrix for the current Flutter app layers
-2. an explicit target boundary map for UI state, session coordination, sync orchestration, local persistence, backend contract, runtime evidence, and scheduled delivery
-3. a list of design flaws that Objective 0 will address immediately versus leave for Objective 1+
+1. Lock the keep, replace, defer decisions for the current app layers.
+2. Confirm the target boundary map used by the Flutter app, backend surface, and notify worker.
+3. Write down the Objective 0 exit criteria in terms of architecture and verification, not just file movement.
+4. Keep the long-term sync gateway decision open, but stop treating that uncertainty as permission for fuzzy app boundaries.
 
-Recommended output of this phase:
+Exit criteria:
 
-- `LabShell`, `TaskWorkspace`, `LabLeftRail`, and `SyncDebugPanel` are preserved
-- `AgendaProvider`, `TaskSyncService`, and `TasksRepository` are evaluated as refactor targets rather than permanent shapes
-- the long-term sync boundary stays open, but the frontend is no longer allowed to depend on that decision remaining fuzzy
+- this document reflects the active workstreams and exit conditions
+- `ROADMAP.md` still describes Objective 0 accurately at the roadmap level
+- `docs/ARCHITECTURE.md` and `docs/project_analysis.md` describe the current implemented seams honestly
 
-### Phase 2 - Refactor the Flutter app around clearer boundaries
-
-Goal:
-
-- keep the current UI behavior while cleaning up the ownership model under `flutter-app\lib\`
-
-Primary surfaces:
-
-- `flutter-app\lib\providers\`
-- `flutter-app\lib\services\`
-- `flutter-app\lib\repositories\`
-- `flutter-app\lib\models\`
-- `flutter-app\lib\widgets\lab\`
-- `flutter-app\lib\widgets\debug\`
-
-Recommended work:
-
-1. slim `AgendaProvider` toward workspace-facing state and user intents
-2. move startup/session-side effects behind clearer session coordination responsibilities
-3. isolate sync orchestration from widget-facing queue state
-4. isolate local persistence responsibilities from higher-level workflow orchestration
-5. keep `RuntimeDebugProvider` as the UI-facing evidence model, but reduce ad hoc update coupling from unrelated layers
-
-Expected outcome:
-
-- the app keeps the same visible shell
-- the code becomes easier to evolve toward outbox semantics without another large UI refactor
-- future conflict and outbox state can be attached to a cleaner application layer
-
-### Phase 3 - Clarify the backend contract without implementing the full outbox yet
+### Phase 2 - Contract `AgendaProvider` into a narrower task-facing facade
 
 Goal:
 
-- make the backend boundary explicit enough that the future outbox does not need another architecture reset
+- keep the existing widget-facing behavior while reducing architectural weight in `AgendaProvider`
 
 Primary surfaces:
 
-- `supabase\migrations\`
-- `supabase\functions\`
-- `flutter-app\lib\services\`
-- `flutter-app\lib\repositories\`
+- `flutter-app/lib/providers/agenda_provider.dart`
+- `flutter-app/lib/services/`
+- `flutter-app/lib/controllers/`
+- `flutter-app/lib/widgets/lab/task_workspace.dart`
 
-Recommended work:
+Recommended implementation steps:
 
-1. decide what the app should treat as the current sync gateway abstraction
-2. document which current reads and writes are transitional and which should be preserved
-3. identify what audit-oriented tables or server-owned timestamps will be required later, without claiming they already exist
-4. remove or reduce direct task-shaped assumptions that would make operation-based replay harder
+1. Keep `AgendaProvider` as the current UI facade so widgets do not need a large migration during Objective 0.
+2. Move task-list sequencing concerns out of the provider in the next bounded slice.
+3. Separate these responsibilities explicitly:
+   - in-memory task collection updates
+   - persistence sequencing
+   - sync trigger sequencing
+   - debug-state publication
+4. Keep selection, filtering, and batch interactions attached to the existing interaction-controller seam instead of growing new widget-owned logic.
+5. Make the provider's public API read more like user intents and view state than infrastructure choreography.
+
+Recommended result:
+
+- widgets still depend on one main task-facing facade
+- orchestration is no longer mostly encoded inside provider private methods
+- Objective 1 can add outbox-facing state without first untangling a monolithic provider
+
+Exit criteria:
+
+- `AgendaProvider` no longer directly coordinates most persistence and sync sequencing
+- task mutation and interaction rules remain outside the provider
+- `TaskWorkspace` and `LabLeftRail` behavior stays the same from the user perspective
+
+### Phase 3 - Harden the sync boundary without implementing the outbox
+
+Goal:
+
+- preserve the current sync behavior while making the app depend on a clearer sync contract
+
+Primary surfaces:
+
+- `flutter-app/lib/services/task_sync_service.dart`
+- `flutter-app/lib/services/task_sync_coordinator.dart`
+- `flutter-app/lib/repositories/`
+- `flutter-app/lib/providers/runtime_debug_provider.dart`
+
+Recommended implementation steps:
+
+1. Introduce an explicit app-facing sync gateway contract above the current task reconciliation engine.
+2. Keep the current task-shaped implementation behind that contract during Objective 0.
+3. Normalize sync outcomes into a clearer result shape so later operation-based work can plug into the same high-level boundary.
+4. Reduce direct task-shaped assumptions leaking into unrelated layers.
+5. Keep runtime diagnostics wired to explicit sync outcomes, but avoid letting diagnostics concerns dictate the domain shape.
 
 Important constraint:
 
-Objective 0 should prepare the contract surface.
-Objective 0 should **not** pretend that idempotency, conflict handling, and durable mutation replay are already solved.
+Objective 0 prepares the boundary.
+It does **not** add durable mutation replay, per-operation ids, retry queues, or conflict resolution.
 
-### Phase 4 - Tighten the scheduled delivery boundary
+Exit criteria:
+
+- the app can depend on a sync boundary without depending on `TaskSyncService` details
+- the current reconciliation engine remains replaceable
+- runtime diagnostics still show honest current-state evidence
+
+### Phase 4 - Split local persistence meaning before changing storage technology
 
 Goal:
 
-- keep `notify-worker\` operationally separate while making its place in the system model cleaner
+- keep SharedPreferences for now, but stop treating the snapshot store as the long-term local-state model
 
 Primary surfaces:
 
-- `notify-worker\src\index.ts`
-- `notify-worker\README.md`
-- `supabase\migrations\`
-- `docs\ARCHITECTURE.md`
-- `docs\DEPLOYMENT.md`
+- `flutter-app/lib/repositories/tasks_repository.dart`
+- `flutter-app/lib/services/task_local_snapshot_coordinator.dart`
+- `flutter-app/lib/models/`
+- `docs/ARCHITECTURE.md`
 
-Recommended work:
+Recommended implementation steps:
 
-1. keep the worker deploy path independent from the Flutter app
-2. document the worker as a delivery boundary, not as a hidden extension of the frontend
-3. identify what delivery-attempt history or audit seams the later architecture will need
-4. make sure any backend refactor does not quietly break the worker's pending-notification contract
+1. Keep the existing snapshot repository working so the UI and tests stay stable.
+2. Clarify in code and docs that the current repository is a task snapshot boundary, not a future operation-log boundary.
+3. Separate snapshot responsibilities from future local-state responsibilities at the interface and architecture level.
+4. Avoid introducing a heavier local database during Objective 0 unless another task explicitly expands scope.
 
-### Phase 5 - Prepare Objective 1 instead of starting it implicitly
+Exit criteria:
+
+- SharedPreferences remains an implementation detail of the current snapshot boundary
+- the architecture no longer implies that task snapshot storage is the final local model
+- Objective 1 can add a real outbox without redefining what the current repository already means
+
+### Phase 5 - Clarify the backend contract and scheduled delivery boundary
 
 Goal:
 
-- leave the repo ready for explicit outbox semantics without partially implementing them by accident
+- make the app-side backend contract and the worker's place in the system model explicit enough for later reliability work
+
+Primary surfaces:
+
+- `supabase/migrations/`
+- `supabase/functions/`
+- `notify-worker/src/index.ts`
+- `notify-worker/README.md`
+- `docs/ARCHITECTURE.md`
+- `docs/DEPLOYMENT.md`
+- `supabase/README.md`
+
+Recommended implementation steps:
+
+1. Document what the frontend should currently treat as the sync gateway, even if the long-term decision remains open.
+2. Mark current reads and writes as either transitional or intended to survive into later phases.
+3. Confirm that backend refactors preserve the worker's pending-notification selection contract.
+4. Clarify the worker as a scheduled delivery boundary, not a hidden extension of the frontend.
+5. Identify later audit seams that Objective 1 and later objectives will need, such as delivery-attempt history and stronger sync-side evidence.
+
+Exit criteria:
+
+- the notify worker remains independently deployable and independently understandable
+- backend docs separate implemented current contracts from planned later contracts
+- the app, backend, and worker boundaries read as one coherent system model
+
+### Phase 6 - Expand the minimum verification surface needed to trust the refactor
+
+Goal:
+
+- protect the shell and the new architectural seams from silent regression while Objective 0 is in flight
+
+Primary surfaces:
+
+- `flutter-app/test/`
+- `notify-worker/test/`
+- `docs/TESTING_STRATEGY.md`
+
+Recommended implementation steps:
+
+1. Keep the current seam-focused unit and orchestration tests green throughout the refactor.
+2. Add direct widget coverage for the shell surfaces that now define the product:
+   - `LabShell`
+   - `LabLeftRail`
+   - `SyncDebugPanel`
+3. Add at least one integration-style app path for offline create -> reconnect -> sync.
+4. Add at least one auth/session divergence path.
+5. Expand worker coverage beyond success and stale-subscription cleanup when boundary changes make that practical.
+
+Exit criteria:
+
+- Flutter tests still protect the existing coordination seams
+- shell ownership is covered directly, not only through workspace tests
+- the worker test surface is still aligned with the actual delivery contract
+
+### Phase 7 - Close Objective 0 cleanly and hand off to Objective 1
+
+Goal:
+
+- finish Objective 0 as a foundation pass instead of drifting into partial outbox work
+
+Detailed implementation steps:
+
+1. Reassess this tracker and mark each workstream honestly.
+2. Update architecture and testing docs to match the implemented seams.
+3. Confirm that remaining open decisions are now easier to answer rather than more entangled.
+4. Write the Objective 1 starting conditions explicitly in terms of boundaries that now exist.
 
 Objective 0 is complete when:
 
@@ -285,38 +371,6 @@ Objective 0 is complete when:
 Objective 0 is **not** complete just because files moved around.
 The refactor has to make the future system easier to reason about.
 
-## Recommended scope boundaries
-
-Implement in Objective 0:
-
-- responsibility cleanup
-- clearer boundary definitions
-- provider/service/repository refactors
-- documented current-vs-target architecture
-- worker and backend contract cleanup that preserves current behavior
-
-Do not treat as part of Objective 0 unless explicitly expanded later:
-
-- full durable outbox implementation
-- conflict resolution workflow
-- fault injection features
-- stronger local database replacement
-- CI/CD orchestration redesign beyond documenting the current trust model
-- new product-surface expansion unrelated to reliability semantics
-
-## Affected docs and follow-through
-
-The Objective 0 implementation phase should keep these docs aligned:
-
-- `docs\ARCHITECTURE.md`
-- `docs\project_analysis.md`
-- `docs\TESTING_STRATEGY.md` when verification scope changes
-- `docs\DEPLOYMENT.md` if workflow or runtime contracts change
-- `docs\README.md`
-- `README.md`
-- `notify-worker\README.md` when delivery behavior or worker boundaries change
-- `supabase\README.md` when backend contract expectations change materially
-
 ## Verification required by this plan
 
 Use the existing repo commands only:
@@ -324,13 +378,26 @@ Use the existing repo commands only:
 - Flutter app verification: `Push-Location .\flutter-app; flutter test; Pop-Location`
 - worker verification: `Push-Location .\notify-worker; yarn test; Pop-Location`
 
-Validation expectations by phase:
+Validation expectations by workstream:
 
-1. provider, service, repository, widget, or sync refactors in `flutter-app\` must keep Flutter tests green
+1. provider, service, repository, widget, or sync refactors in `flutter-app/` must keep Flutter tests green
 2. worker or worker-facing backend changes must keep worker tests green
 3. docs and workflow changes must stay aligned with the actual repo files and commands
 
-## Open decisions that Objective 0 should surface explicitly
+## Documentation follow-through
+
+Objective 0 implementation work should update these docs when the underlying behavior or contract changes:
+
+- `docs/ARCHITECTURE.md`
+- `docs/project_analysis.md`
+- `docs/TESTING_STRATEGY.md` when verification scope changes
+- `docs/DEPLOYMENT.md` if workflow or runtime contracts change
+- `docs/README.md` only when the repository guide or framing needs updating
+- `README.md` only when the repo-level summary materially changes
+- `notify-worker/README.md` when delivery behavior or worker boundaries change
+- `supabase/README.md` when backend contract expectations change materially
+
+## Open decisions Objective 0 should surface, not prematurely answer
 
 These decisions do not all need to be implemented during Objective 0, but the refactor should make them easier to answer instead of harder:
 
@@ -339,15 +406,32 @@ These decisions do not all need to be implemented during Objective 0, but the re
 3. how conflict policy should eventually work: reject, merge, or explicit user resolution
 4. what notification guarantee the lab wants to model over time: best-effort, at-least-once, or at-most-once
 
-## Practical reading of the plan
+## Scope boundaries
 
-The repository does **not** need another broad visual redesign.
-It needs a foundation pass that makes the current shell honest, evolvable, and ready for deeper reliability semantics.
+Implement in Objective 0:
 
-That is the purpose of Objective 0.
+- responsibility cleanup
+- clearer boundary definitions
+- provider, service, and repository refactors
+- documented current-versus-target architecture
+- backend and worker contract cleanup that preserves current behavior
+- stronger test coverage for the existing shell and seam ownership
 
----
+Do not treat as part of Objective 0 unless scope is explicitly expanded later:
 
-# Task After Completing Objective 0
+- full durable outbox implementation
+- conflict resolution workflow
+- fault injection features
+- stronger local database replacement
+- CI/CD orchestration redesign beyond documenting the current trust model
+- new product-surface expansion unrelated to reliability semantics
 
-Remove this document file from the git repo and all mentions of it from other docs. Then check if there are any stale references to Objective 0 in the repo's docs, workflows, or guidance and update them accordingly.
+## Retiring this document
+
+After Objective 0 is complete, this file should stop acting as a live tracker.
+At that point the repo should either:
+
+- retire the document and remove stale references to it
+- or convert it into a short historical record and move active planning to the next objective document
+
+Do not keep a stale tracker here once Objective 0 is done.
