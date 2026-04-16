@@ -115,8 +115,8 @@ flowchart TD
     Interaction["TaskWorkspaceInteractionController"]
     Mutation["TaskMutationCoordinator"]
     Snapshot["TaskLocalSnapshotCoordinator"]
-    Sync["TaskSyncService"]
-    Local["SharedPreferences task store"]
+    Sync["TaskSyncGateway / TaskSyncService"]
+    Local["TaskSnapshotStore / SharedPreferences task snapshot"]
     Supabase["Supabase auth + tasks"]
     PushReg["Web push registration"]
 
@@ -154,6 +154,7 @@ Responsibilities:
 
 - initialize Supabase
 - construct the shared dependency graph
+- construct the current snapshot and sync boundaries explicitly before wiring `AgendaProvider`
 - provide `AgendaProvider`, `RuntimeDebugProvider`, and the coordination seams that sit between workspace widgets and lower-level services
 - launch the lab shell instead of the legacy centered screen
 
@@ -256,6 +257,41 @@ Responsibilities:
 Architectural significance:
 
 The debug rail is now backed by explicit state rather than by ad hoc logs.
+
+### 7. Local snapshot boundary
+
+Primary files:
+
+- `lib/repositories/tasks_repository.dart`
+- `lib/services/task_local_snapshot_coordinator.dart`
+
+Responsibilities:
+
+- keep the current local task snapshot readable and writable
+- prune legacy deleted anonymous tombstones from the persisted snapshot
+- isolate the current snapshot-storage meaning from future local-state concerns such as an outbox or richer inspection model
+
+Architectural significance:
+
+The app still uses SharedPreferences for local task storage, but the code now treats that as the implementation of a task snapshot boundary rather than as the long-term meaning of local persistence.
+
+### 8. Sync boundary
+
+Primary files:
+
+- `lib/services/task_sync_service.dart`
+- `lib/services/task_sync_coordinator.dart`
+
+Responsibilities:
+
+- expose an app-facing sync gateway contract
+- keep the current task-level reconciliation engine behind that contract
+- normalize sync entry and reload behavior through `TaskSyncCoordinator`
+- keep runtime evidence wired to explicit sync outcomes while the underlying implementation remains transitional
+
+Architectural significance:
+
+The current sync engine is still task-based, but the rest of the app no longer needs to depend directly on the concrete service shape to start or reload a sync pass.
 
 ## Core application layers
 

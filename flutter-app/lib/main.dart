@@ -6,8 +6,9 @@ import 'package:todo_flutter/keys.dart';
 import 'package:todo_flutter/providers/agenda_provider.dart';
 import 'package:todo_flutter/providers/runtime_debug_provider.dart';
 import 'package:todo_flutter/repositories/tasks_repository.dart';
-import 'package:todo_flutter/services/task_sync_coordinator.dart';
 import 'package:todo_flutter/screens/lab_shell.dart';
+import 'package:todo_flutter/services/task_local_snapshot_coordinator.dart';
+import 'package:todo_flutter/services/task_sync_coordinator.dart';
 import 'package:todo_flutter/services/task_sync_service.dart';
 import 'package:todo_flutter/services/user_session_service.dart';
 import 'package:todo_flutter/services/workspace_session_coordinator.dart';
@@ -50,6 +51,7 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   late final TasksRepository _tasksRepository;
+  late final TaskLocalSnapshotCoordinator _taskLocalSnapshotCoordinator;
   late final RuntimeDebugProvider _runtimeDebugProvider;
   late final TaskSyncService _taskSyncService;
   late final TaskSyncCoordinator _taskSyncCoordinator;
@@ -60,6 +62,9 @@ class _MyAppState extends State<MyApp> {
   void initState() {
     super.initState();
     _tasksRepository = TasksSharedPreferencesRepository();
+    _taskLocalSnapshotCoordinator = TaskLocalSnapshotCoordinator.fromRepository(
+      _tasksRepository,
+    );
     _runtimeDebugProvider = RuntimeDebugProvider();
     _taskSyncService = TaskSyncService(
       _tasksRepository,
@@ -67,7 +72,7 @@ class _MyAppState extends State<MyApp> {
       runtimeDebug: _runtimeDebugProvider,
     );
     _taskSyncCoordinator = TaskSyncCoordinator(
-      _tasksRepository,
+      _taskLocalSnapshotCoordinator,
       _taskSyncService,
       runtimeDebug: _runtimeDebugProvider,
     );
@@ -97,9 +102,8 @@ class _MyAppState extends State<MyApp> {
         ),
         ChangeNotifierProvider(
           create: (context) => AgendaProvider(
-            _tasksRepository,
-            _taskSyncService,
             taskSyncCoordinator: _taskSyncCoordinator,
+            localSnapshotCoordinator: _taskLocalSnapshotCoordinator,
             runtimeDebug: _runtimeDebugProvider,
           ),
         ),

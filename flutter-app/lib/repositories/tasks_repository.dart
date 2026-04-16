@@ -3,10 +3,37 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:todo_flutter/models/task.dart';
 
+abstract class TaskSnapshotStore {
+  Future<List<TaskModel>> loadSnapshot();
+  Future<void> saveSnapshot(List<TaskModel> tasks);
+  Future<void> clearSnapshot();
+}
+
 abstract class TasksRepository {
   Future<List<TaskModel>> loadTasks();
   Future<void> saveTasks(List<TaskModel> tasks);
   Future<void> clearTasks();
+}
+
+class TasksRepositorySnapshotStore implements TaskSnapshotStore {
+  TasksRepositorySnapshotStore(this._repository);
+
+  final TasksRepository _repository;
+
+  @override
+  Future<void> clearSnapshot() {
+    return _repository.clearTasks();
+  }
+
+  @override
+  Future<List<TaskModel>> loadSnapshot() {
+    return _repository.loadTasks();
+  }
+
+  @override
+  Future<void> saveSnapshot(List<TaskModel> tasks) {
+    return _repository.saveTasks(tasks);
+  }
 }
 
 class TasksSharedPreferencesRepository implements TasksRepository {

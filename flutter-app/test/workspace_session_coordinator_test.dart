@@ -3,7 +3,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:todo_flutter/models/task.dart';
-import 'package:todo_flutter/providers/agenda_provider.dart';
 import 'package:todo_flutter/providers/runtime_debug_provider.dart';
 import 'package:todo_flutter/services/task_sync_service.dart';
 import 'package:todo_flutter/services/workspace_session_coordinator.dart';
@@ -53,7 +52,7 @@ void main() {
       );
       await userSession.saveUserId('user-1');
 
-      final agenda = AgendaProvider(
+      final agenda = buildAgendaProviderForTesting(
         repository,
         TaskSyncService.forTesting(
           repository,
@@ -107,7 +106,7 @@ void main() {
       );
       await userSession.saveUserId('user-1');
 
-      final agenda = AgendaProvider(
+      final agenda = buildAgendaProviderForTesting(
         repository,
         TaskSyncService.forTesting(
           repository,

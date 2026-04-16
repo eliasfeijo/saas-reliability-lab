@@ -9,12 +9,34 @@ import 'package:todo_flutter/models/task.dart';
 import 'package:todo_flutter/providers/agenda_provider.dart';
 import 'package:todo_flutter/providers/runtime_debug_provider.dart';
 import 'package:todo_flutter/repositories/tasks_repository.dart';
+import 'package:todo_flutter/services/task_local_snapshot_coordinator.dart';
+import 'package:todo_flutter/services/task_sync_coordinator.dart';
 import 'package:todo_flutter/services/task_sync_service.dart';
 import 'package:todo_flutter/services/user_session_service.dart';
 import 'package:todo_flutter/services/workspace_session_coordinator.dart';
 import 'package:todo_flutter/theme/lab_theme.dart';
 import 'package:todo_flutter/widgets/lab/lab_left_rail.dart';
 import 'package:todo_flutter/widgets/lab/task_workspace.dart';
+
+AgendaProvider buildAgendaProviderForTesting(
+  TasksRepository repository,
+  TaskSyncGateway taskSyncGateway, {
+  RuntimeDebugProvider? runtimeDebug,
+}) {
+  final snapshotCoordinator = TaskLocalSnapshotCoordinator.fromRepository(
+    repository,
+  );
+
+  return AgendaProvider(
+    taskSyncCoordinator: TaskSyncCoordinator(
+      snapshotCoordinator,
+      taskSyncGateway,
+      runtimeDebug: runtimeDebug,
+    ),
+    localSnapshotCoordinator: snapshotCoordinator,
+    runtimeDebug: runtimeDebug,
+  );
+}
 
 Future<void> ensureSupabaseInitialized() async {
   try {

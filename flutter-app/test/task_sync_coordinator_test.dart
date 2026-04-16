@@ -55,7 +55,7 @@ void main() {
         hasActiveSession: () => true,
         runtimeDebug: runtimeDebug,
       );
-      final coordinator = TaskSyncCoordinator(
+      final coordinator = TaskSyncCoordinator.fromRepository(
         repository,
         service,
         runtimeDebug: runtimeDebug,
@@ -105,7 +105,7 @@ void main() {
         hasActiveSession: () => true,
         runtimeDebug: runtimeDebug,
       );
-      final coordinator = TaskSyncCoordinator(
+      final coordinator = TaskSyncCoordinator.fromRepository(
         repository,
         service,
         runtimeDebug: runtimeDebug,

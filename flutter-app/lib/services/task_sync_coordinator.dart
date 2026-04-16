@@ -5,6 +5,7 @@ import 'package:todo_flutter/models/runtime_debug_state.dart';
 import 'package:todo_flutter/models/task.dart';
 import 'package:todo_flutter/providers/runtime_debug_provider.dart';
 import 'package:todo_flutter/repositories/tasks_repository.dart';
+import 'package:todo_flutter/services/task_local_snapshot_coordinator.dart';
 import 'package:todo_flutter/services/task_sync_service.dart';
 
 typedef SyncLoadingCallback = void Function(bool isLoading);
@@ -12,13 +13,25 @@ typedef SyncedTasksCallback = FutureOr<void> Function(List<TaskModel> tasks);
 
 class TaskSyncCoordinator {
   TaskSyncCoordinator(
-    this._repository,
-    this._taskSyncService, {
+    this._localSnapshotCoordinator,
+    this._taskSyncGateway, {
     RuntimeDebugProvider? runtimeDebug,
   }) : _runtimeDebug = runtimeDebug;
 
-  final TasksRepository _repository;
-  final TaskSyncService _taskSyncService;
+  factory TaskSyncCoordinator.fromRepository(
+    TasksRepository repository,
+    TaskSyncGateway taskSyncGateway, {
+    RuntimeDebugProvider? runtimeDebug,
+  }) {
+    return TaskSyncCoordinator(
+      TaskLocalSnapshotCoordinator.fromRepository(repository),
+      taskSyncGateway,
+      runtimeDebug: runtimeDebug,
+    );
+  }
+
+  final TaskLocalSnapshotCoordinator _localSnapshotCoordinator;
+  final TaskSyncGateway _taskSyncGateway;
   final RuntimeDebugProvider? _runtimeDebug;
 
   Future<void> syncAllTasks({
@@ -41,7 +54,7 @@ class TaskSyncCoordinator {
 
     try {
       debugPrint('Syncing all tasks...');
-      await _taskSyncService.syncAllTasks(tasks);
+      await _taskSyncGateway.syncTasks(tasks);
       await _reloadTasks(onTasksReloaded);
       debugPrint('All tasks synced.');
     } finally {
@@ -65,7 +78,7 @@ class TaskSyncCoordinator {
       return;
     }
 
-    _taskSyncService.syncIfLoggedIn(
+    _taskSyncGateway.syncIfLoggedIn(
       task.copyWith(),
       () {
         setLoading(true);
@@ -109,7 +122,7 @@ class TaskSyncCoordinator {
   }
 
   Future<void> _reloadTasks(SyncedTasksCallback onTasksReloaded) async {
-    final reloadedTasks = await _repository.loadTasks();
+    final reloadedTasks = await _localSnapshotCoordinator.loadSnapshot();
     await onTasksReloaded(reloadedTasks);
   }
 }

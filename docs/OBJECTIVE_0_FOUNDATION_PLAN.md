@@ -39,9 +39,9 @@ Implemented now:
 - `TaskWorkspace` is the canonical center pane
 - `LabLeftRail` owns durable operator controls
 - `SyncDebugPanel` renders runtime evidence from `RuntimeDebugProvider`
-- `AgendaProvider` is slimmer than before and now sits beside dedicated seams for workspace interaction state, sync entry, startup and auth flow, local snapshot orchestration, and low-level task mutation rules
-- `TaskSyncService` still performs task-level reconciliation rather than operation-level replay
-- `TasksRepository` still represents a simple local snapshot store backed by SharedPreferences
+- `AgendaProvider` now has an explicit high-level construction path that depends on coordinators rather than assembling low-level sync and repository services in the production bootstrap
+- `TaskSyncService` now sits behind an app-facing sync gateway contract, even though it still performs task-level reconciliation rather than operation-level replay
+- local task persistence is now explicitly treated as a task snapshot boundary backed by SharedPreferences rather than as the long-term meaning of local state
 
 ### Backend surface
 
@@ -89,9 +89,9 @@ Do not turn every task delivery into a broad doc refresh.
 | --- | --- | --- | --- |
 | Shell ownership and diagnostics foundation | Completed | `LabShell`, `TaskWorkspace`, `LabLeftRail`, and `SyncDebugPanel` are the active product surfaces | No further Objective 0 work needed unless shell ownership regresses |
 | First coordination seams | Completed | `TaskSyncCoordinator`, `WorkspaceSessionCoordinator`, `TaskLocalSnapshotCoordinator`, `TaskMutationCoordinator`, and `TaskWorkspaceInteractionController` exist and are covered by focused tests | These seams still need to be used as the stable base for the remaining refactor slices |
-| Provider ownership cleanup | In progress | `AgendaProvider` is smaller than the pre-shell version and no longer owns every low-level rule | It still coordinates too much task state, persistence sequencing, sync triggering, and debug publication |
-| Sync boundary hardening | Not started | `TaskSyncService` and its remote data source are explicit seams | The app still depends on task-shaped reconciliation rather than a cleaner sync gateway contract |
-| Local persistence boundary split | Not started | Local snapshot behavior is wrapped by `TaskLocalSnapshotCoordinator` | Snapshot storage is still treated as the main local state model instead of one boundary among future local concerns |
+| Provider ownership cleanup | In progress | `AgendaProvider` is smaller than the pre-shell version, and the production bootstrap now wires it through explicit coordinators instead of low-level repository and sync-service construction | It still coordinates too much task state, persistence sequencing, sync triggering, and debug publication |
+| Sync boundary hardening | In progress | `TaskSyncService` now sits behind an app-facing sync gateway contract, and `TaskSyncCoordinator` depends on that contract instead of the concrete service | The current implementation is still task-shaped reconciliation and still needs broader contract clarification around backend behavior |
+| Local persistence boundary split | In progress | Local snapshot behavior is wrapped by `TaskLocalSnapshotCoordinator`, which now depends on an explicit snapshot-store boundary rather than directly on the repository type | Snapshot storage is still only the current local snapshot model and still needs broader architecture follow-through in docs and later code |
 | Backend contract clarification | Not started | The current Supabase surface works and is documented as transitional | The app still lacks an explicit current sync gateway contract and a written keep-versus-transitional boundary |
 | Scheduled delivery boundary clarification | Not started | The notify worker is operationally independent and already tested | The end-to-end contract between app state, backend selection, and delivery evidence is still too implied |
 | Objective 0 exit and handoff to Objective 1 | Not started | The roadmap order is clear | The repo still needs explicit exit criteria, verification follow-through, and a clean handoff into outbox work |

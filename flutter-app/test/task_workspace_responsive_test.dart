@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:todo_flutter/models/task.dart';
-import 'package:todo_flutter/providers/agenda_provider.dart';
 import 'package:todo_flutter/providers/runtime_debug_provider.dart';
 import 'package:todo_flutter/services/task_sync_service.dart';
 
@@ -76,7 +75,7 @@ void main() {
         runtimeDebug: runtimeDebug,
       );
 
-      final agenda = AgendaProvider(
+      final agenda = buildAgendaProviderForTesting(
         repository,
         syncService,
         runtimeDebug: runtimeDebug,
@@ -139,7 +138,7 @@ void main() {
         runtimeDebug: runtimeDebug,
       );
 
-      final agenda = AgendaProvider(
+      final agenda = buildAgendaProviderForTesting(
         repository,
         syncService,
         runtimeDebug: runtimeDebug,
@@ -185,7 +184,7 @@ void main() {
       runtimeDebug: runtimeDebug,
     );
 
-    final agenda = AgendaProvider(
+    final agenda = buildAgendaProviderForTesting(
       repository,
       syncService,
       runtimeDebug: runtimeDebug,
@@ -235,7 +234,7 @@ void main() {
         runtimeDebug: runtimeDebug,
       );
 
-      final agenda = AgendaProvider(
+      final agenda = buildAgendaProviderForTesting(
         repository,
         syncService,
         runtimeDebug: runtimeDebug,
@@ -284,7 +283,7 @@ void main() {
         runtimeDebug: runtimeDebug,
       );
 
-      final agenda = AgendaProvider(
+      final agenda = buildAgendaProviderForTesting(
         repository,
         syncService,
         runtimeDebug: runtimeDebug,

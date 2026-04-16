@@ -1,102 +1,113 @@
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:todo_flutter/models/task.dart';
-import 'package:todo_flutter/providers/agenda_provider.dart';
 import 'package:todo_flutter/services/task_sync_service.dart';
+
 import 'test_support/app_test_support.dart';
 
 void main() {
-  test('agenda syncAllTasks does not upload anonymous tasks before review', () async {
-    final anonymousTask = buildTask(
-      id: 'task-anon',
-      title: 'Anonymous draft',
-      beginsAt: DateTime(2026, 2, 10, 9),
-      estimatedDuration: const Duration(hours: 1),
-      syncStatus: SyncStatus.dirty,
-    );
+  test(
+    'agenda syncAllTasks does not upload anonymous tasks before review',
+    () async {
+      final anonymousTask = buildTask(
+        id: 'task-anon',
+        title: 'Anonymous draft',
+        beginsAt: DateTime(2026, 2, 10, 9),
+        estimatedDuration: const Duration(hours: 1),
+        syncStatus: SyncStatus.dirty,
+      );
 
-    final repository = InMemoryTasksRepository([anonymousTask]);
-    final remote = FakeTaskRemoteDataSource([]);
-    final service = TaskSyncService.forTesting(
-      repository,
-      remote: remote,
-      connectivityCheck: () async => [ConnectivityResult.wifi],
-      hasActiveSession: () => true,
-    );
-    final agenda = AgendaProvider(repository, service)..userId = 'user-1';
+      final repository = InMemoryTasksRepository([anonymousTask]);
+      final remote = FakeTaskRemoteDataSource([]);
+      final service = TaskSyncService.forTesting(
+        repository,
+        remote: remote,
+        connectivityCheck: () async => [ConnectivityResult.wifi],
+        hasActiveSession: () => true,
+      );
+      final agenda = buildAgendaProviderForTesting(repository, service)
+        ..userId = 'user-1';
 
-    agenda.tasks = [anonymousTask];
-    await agenda.syncAllTasks();
+      agenda.tasks = [anonymousTask];
+      await agenda.syncAllTasks();
 
-    final savedTasks = await repository.loadTasks();
+      final savedTasks = await repository.loadTasks();
 
-    expect(remote.insertedTaskIds, isEmpty);
-    expect(savedTasks, hasLength(1));
-    expect(savedTasks.single.userId, isNull);
-    expect(savedTasks.single.syncStatus, SyncStatus.dirty);
-  });
+      expect(remote.insertedTaskIds, isEmpty);
+      expect(savedTasks, hasLength(1));
+      expect(savedTasks.single.userId, isNull);
+      expect(savedTasks.single.syncStatus, SyncStatus.dirty);
+    },
+  );
 
-  test('takeOwnershipOfAnonymousTasks syncs only after explicit keep', () async {
-    final anonymousTask = buildTask(
-      id: 'task-adopt',
-      title: 'Local draft',
-      beginsAt: DateTime(2026, 2, 11, 9),
-      estimatedDuration: const Duration(hours: 1),
-      syncStatus: SyncStatus.dirty,
-    );
+  test(
+    'takeOwnershipOfAnonymousTasks syncs only after explicit keep',
+    () async {
+      final anonymousTask = buildTask(
+        id: 'task-adopt',
+        title: 'Local draft',
+        beginsAt: DateTime(2026, 2, 11, 9),
+        estimatedDuration: const Duration(hours: 1),
+        syncStatus: SyncStatus.dirty,
+      );
 
-    final repository = InMemoryTasksRepository([anonymousTask]);
-    final remote = FakeTaskRemoteDataSource([]);
-    final service = TaskSyncService.forTesting(
-      repository,
-      remote: remote,
-      connectivityCheck: () async => [ConnectivityResult.wifi],
-      hasActiveSession: () => true,
-    );
-    final agenda = AgendaProvider(repository, service)..userId = 'user-1';
+      final repository = InMemoryTasksRepository([anonymousTask]);
+      final remote = FakeTaskRemoteDataSource([]);
+      final service = TaskSyncService.forTesting(
+        repository,
+        remote: remote,
+        connectivityCheck: () async => [ConnectivityResult.wifi],
+        hasActiveSession: () => true,
+      );
+      final agenda = buildAgendaProviderForTesting(repository, service)
+        ..userId = 'user-1';
 
-    agenda.tasks = [anonymousTask];
-    await agenda.takeOwnershipOfAnonymousTasks();
+      agenda.tasks = [anonymousTask];
+      await agenda.takeOwnershipOfAnonymousTasks();
 
-    final savedTasks = await repository.loadTasks();
+      final savedTasks = await repository.loadTasks();
 
-    expect(remote.insertedTaskIds, ['task-adopt']);
-    expect(savedTasks, hasLength(1));
-    expect(savedTasks.single.userId, 'user-1');
-    expect(savedTasks.single.syncStatus, SyncStatus.synced);
-  });
+      expect(remote.insertedTaskIds, ['task-adopt']);
+      expect(savedTasks, hasLength(1));
+      expect(savedTasks.single.userId, 'user-1');
+      expect(savedTasks.single.syncStatus, SyncStatus.synced);
+    },
+  );
 
-  test('deleteTask removes anonymous tasks from storage and clears active counts', () async {
-    final anonymousTask = buildTask(
-      id: 'task-delete-anon',
-      title: 'Throwaway local task',
-      beginsAt: DateTime(2026, 2, 12, 9),
-      estimatedDuration: const Duration(hours: 1),
-      syncStatus: SyncStatus.dirty,
-    );
+  test(
+    'deleteTask removes anonymous tasks from storage and clears active counts',
+    () async {
+      final anonymousTask = buildTask(
+        id: 'task-delete-anon',
+        title: 'Throwaway local task',
+        beginsAt: DateTime(2026, 2, 12, 9),
+        estimatedDuration: const Duration(hours: 1),
+        syncStatus: SyncStatus.dirty,
+      );
 
-    final repository = InMemoryTasksRepository([anonymousTask]);
-    final remote = FakeTaskRemoteDataSource([]);
-    final service = TaskSyncService.forTesting(
-      repository,
-      remote: remote,
-      connectivityCheck: () async => [ConnectivityResult.wifi],
-      hasActiveSession: () => false,
-    );
-    final agenda = AgendaProvider(repository, service);
+      final repository = InMemoryTasksRepository([anonymousTask]);
+      final remote = FakeTaskRemoteDataSource([]);
+      final service = TaskSyncService.forTesting(
+        repository,
+        remote: remote,
+        connectivityCheck: () async => [ConnectivityResult.wifi],
+        hasActiveSession: () => false,
+      );
+      final agenda = buildAgendaProviderForTesting(repository, service);
 
-    agenda.tasks = [anonymousTask];
-    await agenda.deleteTask(anonymousTask.id);
+      agenda.tasks = [anonymousTask];
+      await agenda.deleteTask(anonymousTask.id);
 
-    final savedTasks = await repository.loadTasks();
+      final savedTasks = await repository.loadTasks();
 
-    expect(savedTasks, isEmpty);
-    expect(agenda.tasks, isEmpty);
-    expect(agenda.filteredTasks, isEmpty);
-    expect(agenda.totalTasks, 0);
-    expect(agenda.pendingTasksCount, 0);
-    expect(agenda.anonymousTasks, isEmpty);
-  });
+      expect(savedTasks, isEmpty);
+      expect(agenda.tasks, isEmpty);
+      expect(agenda.filteredTasks, isEmpty);
+      expect(agenda.totalTasks, 0);
+      expect(agenda.pendingTasksCount, 0);
+      expect(agenda.anonymousTasks, isEmpty);
+    },
+  );
 
   test('loadTasks prunes legacy deleted anonymous tombstones', () async {
     final deletedAnonymousTask = buildTask(
@@ -115,7 +126,7 @@ void main() {
       connectivityCheck: () async => [ConnectivityResult.wifi],
       hasActiveSession: () => false,
     );
-    final agenda = AgendaProvider(repository, service);
+    final agenda = buildAgendaProviderForTesting(repository, service);
 
     await agenda.loadTasks();
 
@@ -148,7 +159,8 @@ void main() {
         connectivityCheck: () async => [ConnectivityResult.wifi],
         hasActiveSession: () => false,
       );
-      final agenda = AgendaProvider(repository, service)..userId = 'user-1';
+      final agenda = buildAgendaProviderForTesting(repository, service)
+        ..userId = 'user-1';
 
       agenda.tasks = [accountTask];
       await agenda.deleteTask(accountTask.id);
@@ -187,7 +199,7 @@ void main() {
       connectivityCheck: () async => [ConnectivityResult.wifi],
       hasActiveSession: () => false,
     );
-    final agenda = AgendaProvider(repository, service);
+    final agenda = buildAgendaProviderForTesting(repository, service);
 
     agenda.tasks = [alphaTask, betaTask];
     agenda.selectTask(alphaTask);
@@ -203,48 +215,52 @@ void main() {
     expect(agenda.isTaskBatchSelected(betaTask.id), isFalse);
   });
 
-  test('deleteSelectedTasks removes anonymous tasks and tombstones account tasks', () async {
-    final anonymousTask = buildTask(
-      id: 'task-batch-anon',
-      title: 'Local batch task',
-      beginsAt: DateTime(2026, 2, 16, 9),
-      estimatedDuration: const Duration(hours: 1),
-      syncStatus: SyncStatus.dirty,
-    );
-    final accountTask = buildTask(
-      id: 'task-batch-account',
-      title: 'Account batch task',
-      beginsAt: DateTime(2026, 2, 16, 11),
-      estimatedDuration: const Duration(hours: 1),
-      userId: 'user-1',
-    );
+  test(
+    'deleteSelectedTasks removes anonymous tasks and tombstones account tasks',
+    () async {
+      final anonymousTask = buildTask(
+        id: 'task-batch-anon',
+        title: 'Local batch task',
+        beginsAt: DateTime(2026, 2, 16, 9),
+        estimatedDuration: const Duration(hours: 1),
+        syncStatus: SyncStatus.dirty,
+      );
+      final accountTask = buildTask(
+        id: 'task-batch-account',
+        title: 'Account batch task',
+        beginsAt: DateTime(2026, 2, 16, 11),
+        estimatedDuration: const Duration(hours: 1),
+        userId: 'user-1',
+      );
 
-    final repository = InMemoryTasksRepository([anonymousTask, accountTask]);
-    final remote = FakeTaskRemoteDataSource([]);
-    final service = TaskSyncService.forTesting(
-      repository,
-      remote: remote,
-      connectivityCheck: () async => [ConnectivityResult.wifi],
-      hasActiveSession: () => false,
-    );
-    final agenda = AgendaProvider(repository, service)..userId = 'user-1';
+      final repository = InMemoryTasksRepository([anonymousTask, accountTask]);
+      final remote = FakeTaskRemoteDataSource([]);
+      final service = TaskSyncService.forTesting(
+        repository,
+        remote: remote,
+        connectivityCheck: () async => [ConnectivityResult.wifi],
+        hasActiveSession: () => false,
+      );
+      final agenda = buildAgendaProviderForTesting(repository, service)
+        ..userId = 'user-1';
 
-    agenda.tasks = [anonymousTask, accountTask];
-    agenda.enterBatchMode();
-    agenda.toggleTaskInBatchSelection(anonymousTask.id);
-    agenda.toggleTaskInBatchSelection(accountTask.id);
+      agenda.tasks = [anonymousTask, accountTask];
+      agenda.enterBatchMode();
+      agenda.toggleTaskInBatchSelection(anonymousTask.id);
+      agenda.toggleTaskInBatchSelection(accountTask.id);
 
-    await agenda.deleteSelectedTasks();
+      await agenda.deleteSelectedTasks();
 
-    final savedTasks = await repository.loadTasks();
+      final savedTasks = await repository.loadTasks();
 
-    expect(savedTasks, hasLength(1));
-    expect(savedTasks.single.id, accountTask.id);
-    expect(savedTasks.single.syncStatus, SyncStatus.deleted);
-    expect(agenda.tasks, isEmpty);
-    expect(agenda.batchSelectedCount, 0);
-    expect(agenda.isBatchMode, isFalse);
-  });
+      expect(savedTasks, hasLength(1));
+      expect(savedTasks.single.id, accountTask.id);
+      expect(savedTasks.single.syncStatus, SyncStatus.deleted);
+      expect(agenda.tasks, isEmpty);
+      expect(agenda.batchSelectedCount, 0);
+      expect(agenda.isBatchMode, isFalse);
+    },
+  );
 
   test('setSort reorders filtered tasks by the selected queue sort', () async {
     final now = DateTime.now();
@@ -269,7 +285,11 @@ void main() {
     )..lastModifiedAt = now.subtract(const Duration(hours: 2));
     laterTask.lastModifiedAt = now.add(const Duration(hours: 6));
 
-    final repository = InMemoryTasksRepository([urgentTask, laterTask, earlierTask]);
+    final repository = InMemoryTasksRepository([
+      urgentTask,
+      laterTask,
+      earlierTask,
+    ]);
     final remote = FakeTaskRemoteDataSource([]);
     final service = TaskSyncService.forTesting(
       repository,
@@ -277,7 +297,7 @@ void main() {
       connectivityCheck: () async => [ConnectivityResult.wifi],
       hasActiveSession: () => false,
     );
-    final agenda = AgendaProvider(repository, service);
+    final agenda = buildAgendaProviderForTesting(repository, service);
 
     agenda.tasks = [urgentTask, laterTask, earlierTask];
     expect(agenda.filteredTasks.map((task) => task.id).toList(), [

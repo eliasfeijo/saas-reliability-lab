@@ -2,22 +2,30 @@ import 'package:todo_flutter/models/task.dart';
 import 'package:todo_flutter/repositories/tasks_repository.dart';
 
 class TaskLocalSnapshotCoordinator {
-  TaskLocalSnapshotCoordinator(this._repository);
+  TaskLocalSnapshotCoordinator(this._snapshotStore);
 
-  final TasksRepository _repository;
+  factory TaskLocalSnapshotCoordinator.fromRepository(
+    TasksRepository repository,
+  ) {
+    return TaskLocalSnapshotCoordinator(
+      TasksRepositorySnapshotStore(repository),
+    );
+  }
+
+  final TaskSnapshotStore _snapshotStore;
 
   Future<List<TaskModel>> loadSnapshot() async {
-    final tasks = await _repository.loadTasks();
+    final tasks = await _snapshotStore.loadSnapshot();
     final prunedTasks = _pruneDeletedAnonymousTasks(tasks);
     if (prunedTasks.length != tasks.length) {
-      await _repository.saveTasks(prunedTasks);
+      await _snapshotStore.saveSnapshot(prunedTasks);
     }
     return prunedTasks;
   }
 
   Future<List<TaskModel>> saveSnapshot(List<TaskModel> tasks) async {
     final prunedTasks = _pruneDeletedAnonymousTasks(tasks);
-    await _repository.saveTasks(prunedTasks);
+    await _snapshotStore.saveSnapshot(prunedTasks);
     return prunedTasks;
   }
 
@@ -33,7 +41,7 @@ class TaskLocalSnapshotCoordinator {
   }
 
   Future<List<TaskModel>> clearSnapshot() async {
-    await _repository.clearTasks();
+    await _snapshotStore.clearSnapshot();
     return const <TaskModel>[];
   }
 

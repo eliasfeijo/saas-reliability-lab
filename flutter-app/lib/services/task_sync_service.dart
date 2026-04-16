@@ -14,6 +14,26 @@ import '../repositories/tasks_repository.dart';
 typedef ConnectivityCheck = Future<List<ConnectivityResult>> Function();
 typedef SessionCheck = bool Function();
 
+class TaskSyncRunResult {
+  const TaskSyncRunResult({
+    this.acknowledgedTasks = const <TaskModel>[],
+    this.hadRecoverableErrors = false,
+  });
+
+  final List<TaskModel> acknowledgedTasks;
+  final bool hadRecoverableErrors;
+}
+
+abstract class TaskSyncGateway {
+  Future<TaskSyncRunResult> syncTasks(List<TaskModel> tasks);
+
+  void syncIfLoggedIn(
+    TaskModel task,
+    Function()? beforeSync,
+    Function(TaskSyncRunResult result) callback,
+  );
+}
+
 abstract class TaskRemoteDataSource {
   Future<void> deleteTask(String taskId);
   Future<TaskModel?> fetchTaskById(String taskId);
@@ -70,7 +90,7 @@ class SupabaseTaskRemoteDataSource implements TaskRemoteDataSource {
   }
 }
 
-class TaskSyncService {
+class TaskSyncService implements TaskSyncGateway {
   final TasksRepository repository;
   final TaskRemoteDataSource _remote;
   final ConnectivityCheck _checkConnectivity;
@@ -115,7 +135,8 @@ class TaskSyncService {
            DebounceController(debounceDuration: const Duration(seconds: 3)),
        _runtimeDebug = runtimeDebug;
 
-  Future<List<TaskModel>> syncAllTasks(List<TaskModel> tasks) async {
+  @override
+  Future<TaskSyncRunResult> syncTasks(List<TaskModel> tasks) async {
     final connectivityResult = await _checkConnectivity();
     _runtimeDebug?.setConnectivityResults(connectivityResult, logEvent: false);
     _runtimeDebug?.updateTaskCounts(tasks);
@@ -126,7 +147,7 @@ class TaskSyncService {
         message: 'No internet connection. Skipping sync.',
       );
       debugPrint('No internet connection. Skipping sync.');
-      return [];
+      return const TaskSyncRunResult();
     }
 
     if (!_hasActiveSession()) {
@@ -135,7 +156,7 @@ class TaskSyncService {
         message: 'No authenticated session. Skipping sync.',
       );
       debugPrint('No user session. Skipping sync.');
-      return [];
+      return const TaskSyncRunResult();
     }
 
     _runtimeDebug?.markSyncStarted(
@@ -247,32 +268,42 @@ class TaskSyncService {
 
       debugPrint('Sync completed. Synced ${syncedTasks.length} tasks.');
 
-      return syncedTasks;
+      return TaskSyncRunResult(
+        acknowledgedTasks: syncedTasks,
+        hadRecoverableErrors: hadRecoverableErrors,
+      );
     } catch (e) {
       _runtimeDebug?.markSyncFailure('Sync failed: $e');
       rethrow;
     }
   }
 
+  Future<List<TaskModel>> syncAllTasks(List<TaskModel> tasks) async {
+    final result = await syncTasks(tasks);
+    return result.acknowledgedTasks;
+  }
+
+  @override
   void debouncedSync(
     TaskModel task,
     Function()? beforeSync,
-    Function(List<TaskModel> syncedTasks) callback,
+    Function(TaskSyncRunResult result) callback,
   ) {
     _debouncedSync.trigger(() async {
       if (beforeSync != null) {
         beforeSync();
       }
       final tasks = await repository.loadTasks();
-      final syncedTasks = await syncAllTasks(tasks);
-      callback(syncedTasks);
+      final result = await syncTasks(tasks);
+      callback(result);
     });
   }
 
+  @override
   void syncIfLoggedIn(
     TaskModel task,
     Function()? beforeSync,
-    Function(List<TaskModel> syncedTasks) callback,
+    Function(TaskSyncRunResult result) callback,
   ) async {
     if (_hasActiveSession()) {
       debouncedSync(task, beforeSync, callback);

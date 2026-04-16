@@ -32,28 +32,48 @@ class AgendaProvider extends ChangeNotifier {
   bool _isLoading = false;
 
   // Constructor
-  AgendaProvider(
-    TasksRepository repository,
-    TaskSyncService taskSyncService, {
-    TaskSyncCoordinator? taskSyncCoordinator,
-    TaskLocalSnapshotCoordinator? localSnapshotCoordinator,
+  AgendaProvider({
+    required TaskSyncCoordinator taskSyncCoordinator,
+    required TaskLocalSnapshotCoordinator localSnapshotCoordinator,
     TaskMutationCoordinator? taskMutationCoordinator,
     TaskWorkspaceInteractionController? interactionController,
     RuntimeDebugProvider? runtimeDebug,
-  }) : _taskSyncCoordinator =
-           taskSyncCoordinator ??
-           TaskSyncCoordinator(
-             repository,
-             taskSyncService,
-             runtimeDebug: runtimeDebug,
-           ),
-       _localSnapshotCoordinator =
-           localSnapshotCoordinator ?? TaskLocalSnapshotCoordinator(repository),
+  }) : _taskSyncCoordinator = taskSyncCoordinator,
+       _localSnapshotCoordinator = localSnapshotCoordinator,
        _taskMutationCoordinator =
            taskMutationCoordinator ?? const TaskMutationCoordinator(),
        _interactionController =
            interactionController ?? TaskWorkspaceInteractionController(),
        _runtimeDebug = runtimeDebug;
+
+  factory AgendaProvider.fromDependencies(
+    TasksRepository repository,
+    TaskSyncGateway taskSyncGateway, {
+    TaskSyncCoordinator? taskSyncCoordinator,
+    TaskLocalSnapshotCoordinator? localSnapshotCoordinator,
+    TaskMutationCoordinator? taskMutationCoordinator,
+    TaskWorkspaceInteractionController? interactionController,
+    RuntimeDebugProvider? runtimeDebug,
+  }) {
+    final resolvedLocalSnapshotCoordinator =
+        localSnapshotCoordinator ??
+        TaskLocalSnapshotCoordinator.fromRepository(repository);
+    final resolvedTaskSyncCoordinator =
+        taskSyncCoordinator ??
+        TaskSyncCoordinator(
+          resolvedLocalSnapshotCoordinator,
+          taskSyncGateway,
+          runtimeDebug: runtimeDebug,
+        );
+
+    return AgendaProvider(
+      taskSyncCoordinator: resolvedTaskSyncCoordinator,
+      localSnapshotCoordinator: resolvedLocalSnapshotCoordinator,
+      taskMutationCoordinator: taskMutationCoordinator,
+      interactionController: interactionController,
+      runtimeDebug: runtimeDebug,
+    );
+  }
 
   // Getters
 
