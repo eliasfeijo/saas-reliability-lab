@@ -7,8 +7,10 @@ import 'package:todo_flutter/providers/agenda_provider.dart';
 import 'package:todo_flutter/providers/runtime_debug_provider.dart';
 import 'package:todo_flutter/repositories/tasks_repository.dart';
 import 'package:todo_flutter/screens/lab_shell.dart';
+import 'package:todo_flutter/services/task_list_state_coordinator.dart';
 import 'package:todo_flutter/services/task_local_snapshot_coordinator.dart';
 import 'package:todo_flutter/services/task_sync_coordinator.dart';
+import 'package:todo_flutter/services/task_sync_flow_coordinator.dart';
 import 'package:todo_flutter/services/task_sync_service.dart';
 import 'package:todo_flutter/services/user_session_service.dart';
 import 'package:todo_flutter/services/workspace_session_coordinator.dart';
@@ -101,11 +103,20 @@ class _MyAppState extends State<MyApp> {
           value: _workspaceSessionCoordinator,
         ),
         ChangeNotifierProvider(
-          create: (context) => AgendaProvider(
-            taskSyncCoordinator: _taskSyncCoordinator,
-            localSnapshotCoordinator: _taskLocalSnapshotCoordinator,
-            runtimeDebug: _runtimeDebugProvider,
-          ),
+          create: (context) {
+            final taskListStateCoordinator = TaskListStateCoordinator(
+              _taskLocalSnapshotCoordinator,
+              runtimeDebug: _runtimeDebugProvider,
+            );
+
+            return AgendaProvider(
+              taskListStateCoordinator: taskListStateCoordinator,
+              taskSyncFlowCoordinator: TaskSyncFlowCoordinator(
+                taskListStateCoordinator,
+                _taskSyncCoordinator,
+              ),
+            );
+          },
         ),
       ],
       child: MaterialApp(

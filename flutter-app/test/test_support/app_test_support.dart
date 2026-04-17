@@ -10,8 +10,10 @@ import 'package:todo_flutter/providers/agenda_provider.dart';
 import 'package:todo_flutter/providers/runtime_debug_provider.dart';
 import 'package:todo_flutter/repositories/tasks_repository.dart';
 import 'package:todo_flutter/screens/lab_shell.dart';
+import 'package:todo_flutter/services/task_list_state_coordinator.dart';
 import 'package:todo_flutter/services/task_local_snapshot_coordinator.dart';
 import 'package:todo_flutter/services/task_sync_coordinator.dart';
+import 'package:todo_flutter/services/task_sync_flow_coordinator.dart';
 import 'package:todo_flutter/services/task_sync_service.dart';
 import 'package:todo_flutter/services/user_session_service.dart';
 import 'package:todo_flutter/services/workspace_session_coordinator.dart';
@@ -27,15 +29,22 @@ AgendaProvider buildAgendaProviderForTesting(
   final snapshotCoordinator = TaskLocalSnapshotCoordinator.fromRepository(
     repository,
   );
+  final taskListStateCoordinator = TaskListStateCoordinator(
+    snapshotCoordinator,
+    runtimeDebug: runtimeDebug,
+  );
+  final taskSyncCoordinator = TaskSyncCoordinator(
+    snapshotCoordinator,
+    taskSyncGateway,
+    runtimeDebug: runtimeDebug,
+  );
 
   return AgendaProvider(
-    taskSyncCoordinator: TaskSyncCoordinator(
-      snapshotCoordinator,
-      taskSyncGateway,
-      runtimeDebug: runtimeDebug,
+    taskListStateCoordinator: taskListStateCoordinator,
+    taskSyncFlowCoordinator: TaskSyncFlowCoordinator(
+      taskListStateCoordinator,
+      taskSyncCoordinator,
     ),
-    localSnapshotCoordinator: snapshotCoordinator,
-    runtimeDebug: runtimeDebug,
   );
 }
 

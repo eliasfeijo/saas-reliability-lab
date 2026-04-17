@@ -5,9 +5,11 @@ import 'package:todo_flutter/controllers/task_workspace_interaction_controller.d
 import 'package:todo_flutter/models/task.dart';
 import 'package:todo_flutter/providers/runtime_debug_provider.dart';
 import 'package:todo_flutter/repositories/tasks_repository.dart';
+import 'package:todo_flutter/services/task_list_state_coordinator.dart';
 import 'package:todo_flutter/services/task_local_snapshot_coordinator.dart';
 import 'package:todo_flutter/services/task_mutation_coordinator.dart';
 import 'package:todo_flutter/services/task_sync_coordinator.dart';
+import 'package:todo_flutter/services/task_sync_flow_coordinator.dart';
 import 'package:todo_flutter/services/task_sync_service.dart';
 
 class AgendaProvider extends ChangeNotifier {
@@ -15,10 +17,8 @@ class AgendaProvider extends ChangeNotifier {
 
   // Task sync service for managing task synchronization
   // This service handles syncing tasks with the cloud and local storage.
-  final TaskSyncCoordinator _taskSyncCoordinator;
-  final RuntimeDebugProvider? _runtimeDebug;
-
-  final TaskLocalSnapshotCoordinator _localSnapshotCoordinator;
+  final TaskListStateCoordinator _taskListStateCoordinator;
+  final TaskSyncFlowCoordinator _taskSyncFlowCoordinator;
   final TaskMutationCoordinator _taskMutationCoordinator;
   final TaskWorkspaceInteractionController _interactionController;
 
@@ -33,23 +33,22 @@ class AgendaProvider extends ChangeNotifier {
 
   // Constructor
   AgendaProvider({
-    required TaskSyncCoordinator taskSyncCoordinator,
-    required TaskLocalSnapshotCoordinator localSnapshotCoordinator,
+    required TaskListStateCoordinator taskListStateCoordinator,
+    required TaskSyncFlowCoordinator taskSyncFlowCoordinator,
     TaskMutationCoordinator? taskMutationCoordinator,
     TaskWorkspaceInteractionController? interactionController,
-    RuntimeDebugProvider? runtimeDebug,
-  }) : _taskSyncCoordinator = taskSyncCoordinator,
-       _localSnapshotCoordinator = localSnapshotCoordinator,
+  }) : _taskListStateCoordinator = taskListStateCoordinator,
+       _taskSyncFlowCoordinator = taskSyncFlowCoordinator,
        _taskMutationCoordinator =
            taskMutationCoordinator ?? const TaskMutationCoordinator(),
        _interactionController =
-           interactionController ?? TaskWorkspaceInteractionController(),
-       _runtimeDebug = runtimeDebug;
+           interactionController ?? TaskWorkspaceInteractionController();
 
   factory AgendaProvider.fromDependencies(
     TasksRepository repository,
     TaskSyncGateway taskSyncGateway, {
     TaskSyncCoordinator? taskSyncCoordinator,
+    TaskListStateCoordinator? taskListStateCoordinator,
     TaskLocalSnapshotCoordinator? localSnapshotCoordinator,
     TaskMutationCoordinator? taskMutationCoordinator,
     TaskWorkspaceInteractionController? interactionController,
@@ -65,13 +64,22 @@ class AgendaProvider extends ChangeNotifier {
           taskSyncGateway,
           runtimeDebug: runtimeDebug,
         );
+    final resolvedTaskListStateCoordinator =
+        taskListStateCoordinator ??
+        TaskListStateCoordinator(
+          resolvedLocalSnapshotCoordinator,
+          runtimeDebug: runtimeDebug,
+        );
+    final resolvedTaskSyncFlowCoordinator = TaskSyncFlowCoordinator(
+      resolvedTaskListStateCoordinator,
+      resolvedTaskSyncCoordinator,
+    );
 
     return AgendaProvider(
-      taskSyncCoordinator: resolvedTaskSyncCoordinator,
-      localSnapshotCoordinator: resolvedLocalSnapshotCoordinator,
+      taskListStateCoordinator: resolvedTaskListStateCoordinator,
+      taskSyncFlowCoordinator: resolvedTaskSyncFlowCoordinator,
       taskMutationCoordinator: taskMutationCoordinator,
       interactionController: interactionController,
-      runtimeDebug: runtimeDebug,
     );
   }
 
@@ -130,11 +138,7 @@ class AgendaProvider extends ChangeNotifier {
 
   // Sets the list of tasks and notifies listeners.
   set tasks(List<TaskModel> tasks) {
-    _tasks.clear();
-    _tasks.addAll(tasks);
-    _pruneInteractionState();
-    _publishTaskDebugState();
-    notifyListeners();
+    _applyTasks(tasks);
   }
 
   set userId(String? userId) {
@@ -146,13 +150,7 @@ class AgendaProvider extends ChangeNotifier {
 
   // Loading from repository
   Future<void> loadTasks() async {
-    final storedTasks = await _localSnapshotCoordinator.loadSnapshot();
-    _tasks
-      ..clear()
-      ..addAll(storedTasks);
-    _pruneInteractionState();
-    _publishTaskDebugState();
-    notifyListeners();
+    _applyTasks(await _taskListStateCoordinator.loadTasks());
   }
 
   // Task Management Methods
@@ -229,12 +227,7 @@ class AgendaProvider extends ChangeNotifier {
   }
 
   Future<void> clearAllTasks() async {
-    final clearedTasks = await _localSnapshotCoordinator.clearSnapshot();
-    _tasks
-      ..clear()
-      ..addAll(clearedTasks);
-    _publishTaskDebugState();
-    notifyListeners();
+    _applyTasks(await _taskListStateCoordinator.clearTasks());
   }
 
   // Selected Task Management
@@ -339,8 +332,7 @@ class AgendaProvider extends ChangeNotifier {
   // Bulk Operations
   void markAllAsCompleted() {
     final result = _taskMutationCoordinator.markAllCompleted(_tasks);
-    _replaceTasks(result.tasks);
-    notifyListeners();
+    _applyTasks(result.tasks);
   }
 
   void clearCompletedTasks() {
@@ -350,9 +342,7 @@ class AgendaProvider extends ChangeNotifier {
     }
 
     final result = _taskMutationCoordinator.clearCompletedTasks(_tasks);
-    _replaceTasks(result.tasks);
-    _publishTaskDebugState();
-    notifyListeners();
+    _applyTasks(result.tasks);
   }
 
   // Utility Methods
@@ -393,48 +383,27 @@ class AgendaProvider extends ChangeNotifier {
 
   // Sync all tasks (e.g.: on user login)
   Future<void> syncAllTasks() async {
-    await _taskSyncCoordinator.syncAllTasks(
+    await _taskSyncFlowCoordinator.syncAllTasks(
       tasks: _tasks,
       userId: _userId,
       hasPendingAnonymousReview: hasPendingAnonymousReview,
       isLoading: _isLoading,
       setLoading: _setLoading,
-      onTasksReloaded: _replaceTasksAfterSync,
-    );
-  }
-
-  // Trigger sync for a specific task
-  void _triggerSync(TaskModel task) {
-    _taskSyncCoordinator.triggerTaskSync(
-      task: task,
-      userId: _userId,
-      hasPendingAnonymousReview: hasPendingAnonymousReview,
-      isLoading: _isLoading,
-      setLoading: _setLoading,
-      onTasksReloaded: _replaceTasksAfterSync,
+      applyTasks: _applyTasks,
     );
   }
 
   Future<void> removeFromLocalStorage(List<TaskModel> tasks) async {
-    final nextTasks = await _localSnapshotCoordinator.removeTaskIds(
-      _tasks,
-      tasks.map((task) => task.id),
+    _applyTasks(
+      await _taskListStateCoordinator.removeTaskIds(
+        _tasks,
+        tasks.map((task) => task.id),
+      ),
     );
-    _tasks
-      ..clear()
-      ..addAll(nextTasks);
-    _pruneInteractionState();
-    _publishTaskDebugState();
-    notifyListeners();
   }
 
   Future<void> clearAllTasksFromLocalStorage() async {
-    final clearedTasks = await _localSnapshotCoordinator.clearSnapshot();
-    _tasks
-      ..clear()
-      ..addAll(clearedTasks);
-    _publishTaskDebugState();
-    notifyListeners();
+    _applyTasks(await _taskListStateCoordinator.clearTasks());
   }
 
   Future<void> discardAnonymousTasks() async {
@@ -443,11 +412,15 @@ class AgendaProvider extends ChangeNotifier {
       return;
     }
 
-    await removeFromLocalStorage(tasksToDiscard);
-
-    if (_userId != null && _userId!.isNotEmpty) {
-      await syncAllTasks();
-    }
+    await _taskSyncFlowCoordinator.discardAnonymousTasks(
+      tasks: _tasks,
+      taskIds: tasksToDiscard.map((task) => task.id),
+      userId: _userId,
+      hasPendingAnonymousReview: hasPendingAnonymousReview,
+      isLoading: _isLoading,
+      setLoading: _setLoading,
+      applyTasks: _applyTasks,
+    );
   }
 
   Future<void> takeOwnershipOfAnonymousTasks() async {
@@ -462,20 +435,15 @@ class AgendaProvider extends ChangeNotifier {
     if (!result.didChange) {
       return;
     }
-    _replaceTasks(result.tasks);
-    await _saveTasks();
-    // Trigger sync for all tasks after taking ownership
-    await syncAllTasks();
-  }
 
-  Future<void> _saveTasks() async {
-    final storedTasks = await _localSnapshotCoordinator.saveSnapshot(_tasks);
-    _tasks
-      ..clear()
-      ..addAll(storedTasks);
-    _pruneInteractionState();
-    _publishTaskDebugState();
-    notifyListeners();
+    await _taskSyncFlowCoordinator.takeOwnershipOfAnonymousTasks(
+      result,
+      userId: _userId,
+      hasPendingAnonymousReview: hasPendingAnonymousReview,
+      isLoading: _isLoading,
+      setLoading: _setLoading,
+      applyTasks: _applyTasks,
+    );
   }
 
   void _setLoading(bool isLoading) {
@@ -487,30 +455,28 @@ class AgendaProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> _replaceTasksAfterSync(List<TaskModel> tasks) async {
-    _replaceTasks(tasks);
-    _pruneInteractionState();
-    _publishTaskDebugState();
-    notifyListeners();
-  }
-
   void _replaceTasks(List<TaskModel> tasks) {
     _tasks
       ..clear()
       ..addAll(tasks);
   }
 
+  void _applyTasks(List<TaskModel> tasks) {
+    _replaceTasks(tasks);
+    _pruneInteractionState();
+    _taskListStateCoordinator.publishTaskCounts(_tasks);
+    notifyListeners();
+  }
+
   Future<void> _persistMutationResult(TaskMutationResult result) async {
-    if (!result.didChange) {
-      return;
-    }
-
-    _replaceTasks(result.tasks);
-    await _saveTasks();
-
-    if (result.syncTask != null) {
-      _triggerSync(result.syncTask!);
-    }
+    await _taskSyncFlowCoordinator.persistMutationResult(
+      result,
+      userId: _userId,
+      hasPendingAnonymousReview: hasPendingAnonymousReview,
+      isLoading: _isLoading,
+      setLoading: _setLoading,
+      applyTasks: _applyTasks,
+    );
   }
 
   void _pruneInteractionState() {
@@ -532,9 +498,5 @@ class AgendaProvider extends ChangeNotifier {
     await _persistMutationResult(
       _taskMutationCoordinator.deleteTasks(_tasks, targetIds),
     );
-  }
-
-  void _publishTaskDebugState() {
-    _runtimeDebug?.updateTaskCounts(_tasks);
   }
 }

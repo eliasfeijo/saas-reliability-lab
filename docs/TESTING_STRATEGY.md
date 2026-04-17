@@ -32,6 +32,8 @@ Current files:
 
 - `flutter-app\test\sync_logic_test.dart`
 - `flutter-app\test\agenda_provider_test.dart`
+- `flutter-app\test\task_list_state_coordinator_test.dart`
+- `flutter-app\test\task_sync_flow_coordinator_test.dart`
 - `flutter-app\test\task_local_snapshot_coordinator_test.dart`
 - `flutter-app\test\task_mutation_coordinator_test.dart`
 - `flutter-app\test\task_sync_coordinator_test.dart`
@@ -48,6 +50,8 @@ What they currently cover:
 
 - sync reconciliation rules
 - anonymous-task adoption and deletion behavior
+- provider-facing task-list persistence and debug-count publication
+- provider-facing sync sequencing for anonymous-task keep/discard flows
 - local snapshot pruning and snapshot persistence helpers
 - task-mutation rules for completion, deletion, and anonymous-task adoption
 - sync gating and post-sync reload orchestration
@@ -97,6 +101,8 @@ Current state:
 
 - Flutter sync reconciliation logic
 - Flutter agenda-provider behavior for anonymous-task review, deletion semantics, batch selection, and queue sorting
+- Flutter provider-facing task-list state persistence and diagnostics-count publication
+- Flutter provider-facing sync sequencing for persisted mutation results and anonymous-task keep/discard paths
 - Flutter shell ownership and direct rail rendering coverage
 - Flutter task-workspace workflow regressions
 - Flutter task-workspace responsive behavior at fixed viewport sizes
