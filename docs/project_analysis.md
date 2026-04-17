@@ -91,13 +91,15 @@ LabShell
 TaskWorkspace + LabLeftRail
   -> AgendaProvider
   -> TaskWorkspaceInteractionController
+  -> TaskListStateCoordinator
+  -> TaskSyncFlowCoordinator
   -> TaskLocalSnapshotCoordinator
   -> TaskMutationCoordinator
   -> TaskSyncCoordinator
   -> WorkspaceSessionCoordinator
   -> RuntimeDebugProvider
-  -> SharedPreferences task store
-  -> TaskSyncService
+  -> TaskSnapshotStore
+  -> TaskSyncGateway / TaskSyncService
   -> UserSessionService
   -> web push helper
   -> Supabase Auth / Postgres / Edge Functions
@@ -119,6 +121,8 @@ The shell already thinks in terms of explicit runtime states, but the underlying
 | `lib/providers/agenda_provider.dart` | task orchestration | active implementation |
 | `lib/controllers/task_workspace_interaction_controller.dart` | workspace interaction state and batch-mode rules | active implementation |
 | `lib/providers/runtime_debug_provider.dart` | runtime evidence model | active implementation |
+| `lib/services/task_list_state_coordinator.dart` | provider-facing local task-list persistence and debug-count publication | active implementation |
+| `lib/services/task_sync_flow_coordinator.dart` | provider-facing sync sequencing around mutation save and anonymous-task review flows | active implementation |
 | `lib/services/task_local_snapshot_coordinator.dart` | local snapshot orchestration | active implementation |
 | `lib/services/task_mutation_coordinator.dart` | task-list mutation rules | active implementation |
 | `lib/services/task_sync_coordinator.dart` | sync gating and post-sync reload orchestration | active implementation |
@@ -142,12 +146,25 @@ Current state:
 
 - Supabase initialization is straightforward and explicit.
 - `RuntimeDebugProvider` is now a first-class dependency.
-- `AgendaProvider` is now wired together with explicit coordination seams for workspace interaction state, local snapshot, task mutation, sync, and session flow.
+- `AgendaProvider` is now wired together with explicit coordination seams for workspace interaction state, provider-facing task-list state, provider-facing sync flow, local snapshot, task mutation, sync, and session flow.
 - The app now launches `LabShell` directly.
 
 Assessment:
 
 The bootstrap layer is now aligned with the lab identity, although the app title and some platform branding are still generic and should be cleaned up later.
+
+### Provider cleanup status note
+
+Current state:
+
+- `AgendaProvider` still owns widget-facing task state and intent handling
+- task-list persistence and task-count publication now run through `TaskListStateCoordinator`
+- provider-facing sync sequencing now runs through `TaskSyncFlowCoordinator`
+- sync entry and reload sequencing remain behind `TaskSyncCoordinator`
+
+Assessment:
+
+This is the right Objective 0 direction because it keeps one widget-facing provider while moving provider-internal sequencing behind explicit collaborators.
 
 ### 2. UI shell and interaction model
 
@@ -211,11 +228,18 @@ Primary file:
 Current state:
 
 - `TaskSyncCoordinator` now gates sync entry and reloads local state around the sync engine.
+- the app now depends on an app-facing sync gateway, with `TaskSyncService` as the current implementation
 - verifies connectivity and authenticated session presence
 - replays tombstoned deletions
 - reconciles dirty tasks with remote state using timestamps
 - fetches the remote canonical set and merges back locally
 - publishes coarse runtime outcomes into the diagnostics model
+
+Current backend contract:
+
+- task sync still uses direct table CRUD against `tasks`
+- push subscription save and delete flows already use Edge Functions
+- the long-term backend mutation gateway is still intentionally unresolved
 
 Assessment:
 
@@ -275,6 +299,8 @@ Current state:
 - push permission and subscription state are visible in the diagnostics rail
 - subscriptions are saved and removed through backend functions
 - the Cloudflare Worker dispatches due notifications every five minutes
+- the worker fetches due notifications through the `get_pending_notifications` RPC
+- successful sends are recorded by updating `tasks.notification_sent`
 - stale subscriptions are deleted when the provider rejects them as gone
 
 Assessment:
@@ -290,6 +316,7 @@ There is still no user-facing history of delivery attempts, and the notification
 Current state:
 
 - the Flutter suite includes at least one meaningful sync regression test
+- the Flutter suite now includes direct widget coverage for `LabShell`, `LabLeftRail`, and `SyncDebugPanel`
 - the worker suite includes stale-subscription cleanup coverage
 - the root docs now describe the current shell instead of the old task-list shape
 - deployment behavior is now documented explicitly, including GitHub Pages, the deploy workflows, and the runtime environment matrix
@@ -300,7 +327,7 @@ The repository is moving in the right direction, but documentation quality is cu
 
 Remaining gap:
 
-- the new rails and diagnostics model still need targeted widget tests
+- broader end-to-end reliability scenarios still need targeted integration-style coverage
 - the future outbox contract will need much stronger unit and integration coverage
 
 ## Current strengths
@@ -327,7 +354,7 @@ Remaining gap:
 2. define the explicit outbox model and connect it to the placeholder operation states already reserved in the shell
 3. decide where conflict visibility belongs between the diagnostics rail and the task workspace
 4. add structured logs and metrics that complement, rather than duplicate, the in-app diagnostics panel
-5. add targeted widget tests for the operator rail and diagnostics rail
+5. keep expanding verification from the new shell widget tests toward richer auth, reconnect, and backend-boundary scenarios
 6. introduce fault-injection controls only after the runtime model can represent their effects faithfully
 
 ## Final assessment

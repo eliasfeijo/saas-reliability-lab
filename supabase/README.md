@@ -39,6 +39,25 @@ From inside `supabase\`:
 - the worker depends on RPC-backed pending-notification queries, so migration changes should be reviewed with delivery behavior in mind
 - edge functions here are part of the backend surface, but the scheduled production notification path currently runs from the Cloudflare worker project
 
+## Current contract boundaries
+
+Implemented now:
+
+- the Flutter app still syncs task mutations by talking directly to the `tasks` table through the Supabase client
+- browser push subscription save and delete flows go through the `save_subscription` and `delete_subscription` Edge Functions
+- the Cloudflare worker fetches due reminders through the `get_pending_notifications` RPC and then updates `tasks.notification_sent`
+
+What this means right now:
+
+- the repository does not yet have one backend-owned mutation gateway for all task sync behavior
+- task sync and push-subscription management already use different backend paths on purpose
+- schema changes to `tasks`, `push_subscriptions`, or the pending-notification RPC can affect the frontend and worker differently
+
+Still transitional:
+
+- the long-term task sync surface is still open between direct table access, RPC, Edge Function, or another backend boundary
+- audit-oriented history for sync and delivery outcomes is not implemented yet
+
 ## Related docs
 
 - [`..\README.md`](../README.md)

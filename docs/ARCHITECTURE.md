@@ -114,6 +114,7 @@ flowchart TD
     SyncCoord["TaskSyncCoordinator"]
     Interaction["TaskWorkspaceInteractionController"]
     Mutation["TaskMutationCoordinator"]
+    State["TaskListStateCoordinator"]
     Snapshot["TaskLocalSnapshotCoordinator"]
     Sync["TaskSyncGateway / TaskSyncService"]
     Local["TaskSnapshotStore / SharedPreferences task snapshot"]
@@ -126,7 +127,8 @@ flowchart TD
     Bootstrap --> SyncCoord
     Agenda --> Interaction
     Agenda --> Mutation
-    Mutation --> Snapshot
+    Agenda --> State
+    State --> Snapshot
     Agenda --> SyncCoord
     Session --> Agenda
     Session --> PushReg
@@ -149,12 +151,13 @@ Primary files:
 - `lib/theme/lab_theme.dart`
 - `lib/services/workspace_session_coordinator.dart`
 - `lib/services/task_sync_coordinator.dart`
+- `lib/services/task_list_state_coordinator.dart`
 
 Responsibilities:
 
 - initialize Supabase
 - construct the shared dependency graph
-- construct the current snapshot and sync boundaries explicitly before wiring `AgendaProvider`
+- construct the current task-list state, snapshot, and sync boundaries explicitly before wiring `AgendaProvider`
 - provide `AgendaProvider`, `RuntimeDebugProvider`, and the coordination seams that sit between workspace widgets and lower-level services
 - launch the lab shell instead of the legacy centered screen
 
@@ -293,6 +296,52 @@ Architectural significance:
 
 The current sync engine is still task-based, but the rest of the app no longer needs to depend directly on the concrete service shape to start or reload a sync pass.
 
+### 9. Current backend contract boundary
+
+Primary files:
+
+- `lib/services/task_sync_service.dart`
+- `lib/helpers/web_push_helper_web.dart`
+- `supabase/functions/save_subscription/index.ts`
+- `supabase/functions/delete_subscription/index.ts`
+- `supabase/migrations/*.sql`
+
+Responsibilities:
+
+- keep the current task sync path explicit as direct `tasks` table CRUD through the Supabase client
+- keep push subscription save and delete flows behind backend-owned Edge Functions
+- expose worker-facing pending-notification selection through a small RPC surface
+
+Current boundary:
+
+- the app-side sync gateway is `TaskSyncGateway`, implemented today by `TaskSyncService`
+- the backend-side task sync contract is still direct table access on `tasks`, not a dedicated RPC or Edge Function mutation gateway
+- push subscription management already uses a different backend contract on purpose
+
+Architectural significance:
+
+Objective 0 now has a clearer frontend-facing sync boundary, but the long-term backend mutation surface is still intentionally undecided. The repository should describe that as a transitional contract rather than pretending the final backend shape already exists.
+
+### 10. Scheduled delivery boundary
+
+Primary files:
+
+- `notify-worker/src/index.ts`
+- `supabase/migrations/20250627024942_get_pending_notification_function.sql`
+- `supabase/functions/save_subscription/index.ts`
+- `supabase/functions/delete_subscription/index.ts`
+
+Responsibilities:
+
+- fetch due notifications through the `get_pending_notifications` RPC
+- send web push payloads from the worker runtime
+- mark successful sends by updating `tasks.notification_sent`
+- clean up stale rows in `push_subscriptions`
+
+Architectural significance:
+
+The notify worker is a separate scheduled delivery surface, not a hidden extension of the interactive client. The frontend does not own delivery timing and does not call the worker directly.
+
 ## Core application layers
 
 ### 1. Local persistence layer
@@ -340,6 +389,8 @@ Primary file:
 
 - `lib/providers/agenda_provider.dart`
 - `lib/controllers/task_workspace_interaction_controller.dart`
+- `lib/services/task_list_state_coordinator.dart`
+- `lib/services/task_sync_flow_coordinator.dart`
 
 Responsibilities:
 
@@ -354,12 +405,15 @@ Responsibilities:
 Current boundary:
 
 - `AgendaProvider` no longer owns sync gating, post-sync reload, or startup/auth session flow
-- `AgendaProvider` also no longer owns raw snapshot load/save/remove/clear orchestration against `TasksRepository`
+- `AgendaProvider` also no longer owns raw snapshot load/save/remove/clear orchestration or direct task-count publication against the runtime diagnostics model
 - `AgendaProvider` also no longer owns the task-list mutation rules for completion, deletion, and anonymous-task adoption
+- `AgendaProvider` also no longer owns most provider-facing sync sequencing around mutation save, anonymous-task review, and sync-trigger choreography
 - `AgendaProvider` also no longer owns the direct view-reset and selection-pruning rules for workspace interaction state
 - `TaskWorkspaceInteractionController` now composes `TaskFilterController` and `TaskSelectionController` with explicit batch-mode rules so queue state can evolve without further inflating the provider
 - `TaskLocalSnapshotCoordinator` now owns the local snapshot orchestration seam around `TasksRepository`
+- `TaskListStateCoordinator` now owns the provider-facing local task-list load/save/remove/clear path together with task-count publication into `RuntimeDebugProvider`
 - `TaskMutationCoordinator` now owns task-list mutation rules while leaving persistence and sync triggering to the provider
+- `TaskSyncFlowCoordinator` now owns the provider-facing sequencing around persisted mutation results, anonymous-task keep/discard flows, and sync-trigger handoff into `TaskSyncCoordinator`
 - `TaskSyncCoordinator` now owns sync-entry checks and reload wiring around `TaskSyncService`
 - `WorkspaceSessionCoordinator` now owns startup/session bootstrap, auth reactions, and push-registration sequencing
 

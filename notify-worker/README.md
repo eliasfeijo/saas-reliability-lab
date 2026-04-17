@@ -44,6 +44,25 @@ The current cron schedule in `wrangler.jsonc` is `*/5 * * * *`.
 - stale push endpoints are treated as a cleanup signal rather than a retry-only failure
 - production deploys run through GitHub Actions and Wrangler, not through the Flutter deployment path
 
+## Current delivery contract
+
+Implemented now:
+
+- the worker reads due notifications through the `get_pending_notifications` RPC
+- successful sends are recorded by updating `tasks.notification_sent`
+- stale endpoints are deleted from `push_subscriptions` when the push provider returns `404` or `410`
+
+Current boundary:
+
+- the frontend does not trigger scheduled delivery directly
+- the worker depends on Supabase data shape and RPC behavior, but remains a separate operational runtime
+- the worker is the current owner of notification dispatch timing in production
+
+Still missing:
+
+- delivery-attempt history beyond logs and the sent flag
+- a stronger explicit guarantee model such as at-least-once or at-most-once delivery
+
 ## Related docs
 
 - [`..\README.md`](../README.md)
