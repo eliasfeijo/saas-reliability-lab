@@ -48,7 +48,18 @@ This roadmap follows the repo's current documented framing:
 
 ## Short term
 
-### Objective 0: refactor the system foundation before deeper reliability semantics
+### Objective 0: completed foundation cleanup before deeper reliability semantics
+
+Completed now:
+
+- the visible lab shell stayed stable while the app moved onto clearer interaction, mutation, task-list state, sync-flow, and sync-entry seams
+- backend and scheduled-delivery boundaries are now documented explicitly enough for the next phase
+- Objective 0 now closes as a historical record and handoff in [`docs/OBJECTIVE_0_FOUNDATION_PLAN.md`](docs/OBJECTIVE_0_FOUNDATION_PLAN.md)
+
+What this means:
+
+- Objective 1 is now the next active implementation focus
+- Objective 0 should only be reopened if later changes regress the completed foundation seams
 
 Recommended focus:
 
@@ -80,9 +91,11 @@ Concrete outcomes to target:
 - a more stable base for later outbox, conflict, observability, and fault-injection work
 - reduced structural coupling between prototype-era assumptions and the next reliability-lab phases
 
-Detailed execution planning and the live Objective 0 status tracker now live in [`docs/OBJECTIVE_0_FOUNDATION_PLAN.md`](docs/OBJECTIVE_0_FOUNDATION_PLAN.md).
+The completed Objective 0 execution record and the Objective 1 handoff now live in [`docs/OBJECTIVE_0_FOUNDATION_PLAN.md`](docs/OBJECTIVE_0_FOUNDATION_PLAN.md) and [`docs/OBJECTIVE_1_OUTBOX_ENTRY_PLAN.md`](docs/OBJECTIVE_1_OUTBOX_ENTRY_PLAN.md).
 
 ### Objective 1: make sync semantics explicit
+
+This is now the next active objective.
 
 Recommended focus:
 
