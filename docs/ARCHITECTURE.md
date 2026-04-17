@@ -453,6 +453,11 @@ Current reconciliation rule:
 - local changes win only when `lastModifiedAt` is newer than the remote timestamp
 - otherwise the remote copy replaces the local one
 
+Backend timestamp requirement:
+
+- this rule depends on the remote `tasks.updated_at` value being refreshed on every task update
+- the Supabase schema now maintains that timestamp with a database trigger so the client-side comparison is not relying on insert-time defaults alone
+
 Important constraint:
 
 This is still a task-based reconciliation pass, not a true outbox or per-operation replay protocol.

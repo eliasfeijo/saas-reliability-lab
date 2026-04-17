@@ -179,6 +179,11 @@ Verify that a stale local dirty task does not overwrite a fresher remote version
 - automated Flutter regression coverage in the Flutter app test suite for sync and reconciliation behavior
 - a completed sync outcome in the diagnostics rail
 
+Backend dependency:
+
+- this experiment depends on the backend maintaining a fresh `tasks.updated_at` value on every remote update
+- without that timestamp discipline, the client can incorrectly treat a stale local edit as the newer version
+
 ### Current gaps
 
 - the user is still not told explicitly that a local change lost to remote state

@@ -58,6 +58,10 @@ Still transitional:
 - the long-term task sync surface is still open between direct table access, RPC, Edge Function, or another backend boundary
 - audit-oriented history for sync and delivery outcomes is not implemented yet
 
+Current schema note:
+
+- `tasks.updated_at` is maintained by a database trigger on updates because the current client-side reconciliation logic depends on remote timestamps being trustworthy
+
 ## Related docs
 
 - [`..\README.md`](../README.md)
