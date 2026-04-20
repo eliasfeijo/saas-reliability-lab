@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:connectivity_plus_platform_interface/connectivity_plus_platform_interface.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:todo_flutter/models/fault_injection_scenario.dart';
@@ -117,6 +119,68 @@ void main() {
         runtimeDebug.state.lastSyncMessage,
         'Connectivity loss scenario is active. Cloud sync is being forced offline.',
       );
+    },
+  );
+
+  test(
+    'syncTasks holds the sync phase open when delayed sync is injected',
+    () async {
+      final localTask = buildTask(
+        id: 'task-delayed-sync',
+        title: 'Delayed convergence',
+        beginsAt: DateTime(2026, 1, 12, 9),
+        estimatedDuration: const Duration(hours: 1),
+        syncStatus: SyncStatus.dirty,
+        userId: 'user-1',
+      );
+
+      final repository = InMemoryTasksRepository([localTask]);
+      final remote = FakeTaskRemoteDataSource([]);
+      final runtimeDebug = RuntimeDebugProvider();
+      addTearDown(runtimeDebug.dispose);
+      final delayCompleter = Completer<void>();
+      Duration? delayedBy;
+
+      final service = TaskSyncService.forTesting(
+        repository,
+        remote: remote,
+        connectivityCheck: () async => [ConnectivityResult.wifi],
+        hasActiveSession: () => true,
+        runtimeDebug: runtimeDebug,
+        faultInjectionPolicy: FaultInjectionPolicy(
+          readState: () => const FaultInjectionState(
+            activeScenario: FaultInjectionScenario.delayedSync,
+            isEnabled: true,
+            delayMs: 5000,
+          ),
+        ),
+        delayExecution: (duration) {
+          delayedBy = duration;
+          return delayCompleter.future;
+        },
+      );
+
+      final syncFuture = service.syncTasks(await repository.loadTasks());
+      await Future<void>.delayed(Duration.zero);
+
+      expect(delayedBy, const Duration(seconds: 5));
+      expect(runtimeDebug.state.syncPhase, RuntimeSyncPhase.syncing);
+      expect(runtimeDebug.state.lastSyncResult, RuntimeSyncResult.none);
+      expect(
+        runtimeDebug.state.lastSyncMessage,
+        'Delayed sync scenario is active. Holding remote replay for 5 s before synchronizing 1 local task(s).',
+      );
+      expect(
+        runtimeDebug.state.recentEvents.first.message,
+        'Delayed sync scenario is holding the sync pass for 5 s before remote replay begins.',
+      );
+
+      delayCompleter.complete();
+      final result = await syncFuture;
+
+      expect(result.acknowledgedTasks, hasLength(1));
+      expect(remote.insertedTaskIds, ['task-delayed-sync']);
+      expect(runtimeDebug.state.lastSyncResult, RuntimeSyncResult.success);
     },
   );
 }

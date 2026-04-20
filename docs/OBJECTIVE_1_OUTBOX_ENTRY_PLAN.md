@@ -48,6 +48,21 @@ These are the decisions Objective 1 should answer explicitly:
 3. Define the sync and auth state-machine language that the product and docs will use.
 4. Add the first integration-style verification path for offline create -> reconnect -> sync.
 
+## Why Objective 1 matters for delayed-sync realism
+
+The current delayed-sync scenario is intentionally a first-slice demonstration.
+It delays the sync pass before remote replay begins, which is viewer-friendly and honest to the current task-based engine, but it does not yet simulate a true transport or backend slowdown.
+
+Objective 1 is the architectural step that changes that.
+
+Once the outbox exists, the lab can delay real operation states such as:
+
+- queued operations waiting to leave the client
+- sending operations whose backend acknowledgement is late
+- partially acknowledged batches where one operation completes and another remains pending
+
+That evolution matters because it lets the lab show a more realistic SaaS symptom: the local mutation is already durable in the client, but remote truth is still behind because transport or backend work has not finished yet.
+
 ## Verification baseline
 
 Use the existing repo verification commands:

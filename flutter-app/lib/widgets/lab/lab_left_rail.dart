@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:todo_flutter/helpers/web_push_helper.dart';
 import 'package:todo_flutter/models/fault_injection_scenario.dart';
+import 'package:todo_flutter/models/fault_injection_state.dart';
 import 'package:todo_flutter/models/runtime_debug_state.dart';
 import 'package:todo_flutter/models/runtime_event.dart';
 import 'package:todo_flutter/models/task.dart';
@@ -547,9 +548,38 @@ class _LabLeftRailState extends State<LabLeftRail> {
                       faultState.isActive
                           ? faultState.activeSummary ??
                                 faultState.activeScenario.summary
-                          : 'Connectivity loss is available now. Delayed sync, expired auth, and partial replay drop are the next planned operator scenarios.',
+                          : 'Connectivity loss and delayed sync are available now. Expired auth and partial replay drop are the next planned operator scenarios.',
                       style: theme.textTheme.bodyMedium,
                     ),
+                    if (faultState.activeScenario ==
+                        FaultInjectionScenario.delayedSync) ...[
+                      const SizedBox(height: 12),
+                      Text('Delay preset', style: theme.textTheme.titleSmall),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: faultState.availableDelayPresets.map((
+                          delayMs,
+                        ) {
+                          final label = formatFaultInjectionDuration(delayMs);
+                          return ChoiceChip(
+                            label: Text(label),
+                            selected: faultState.effectiveDelayMs == delayMs,
+                            onSelected: (_) async {
+                              await faultInjection.setDelayedSyncDuration(
+                                delayMs,
+                              );
+                            },
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Use 5 s for most live walkthroughs. Use 10 s when you want extra narration time without making the behavior feel artificial.',
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ],
                     const SizedBox(height: 12),
                     Container(
                       width: double.infinity,
@@ -590,7 +620,6 @@ class _LabLeftRailState extends State<LabLeftRail> {
                         spacing: 8,
                         runSpacing: 8,
                         children: const [
-                          Chip(label: Text('Delayed sync (planned)')),
                           Chip(label: Text('Expired auth (planned)')),
                           Chip(label: Text('Partial replay drop (planned)')),
                         ],

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:todo_flutter/models/fault_injection_scenario.dart';
 import 'package:todo_flutter/models/runtime_debug_state.dart';
 import 'package:todo_flutter/models/runtime_event.dart';
 import 'package:todo_flutter/providers/fault_injection_provider.dart';
@@ -209,6 +210,14 @@ class SyncDebugPanel extends StatelessWidget {
                             state.activeFaultInjectionMessage ??
                             'No summary recorded.',
                       ),
+                      if (faultInjection.state.activeScenario ==
+                              FaultInjectionScenario.delayedSync &&
+                          faultInjection.state.delayLabel != null)
+                        _statusRow(
+                          context,
+                          label: 'Injected delay',
+                          value: faultInjection.state.delayLabel!,
+                        ),
                       const SizedBox(height: 8),
                       Text('How to operate', style: theme.textTheme.titleSmall),
                       const SizedBox(height: 6),

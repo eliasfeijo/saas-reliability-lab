@@ -3,8 +3,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:todo_flutter/models/fault_injection_scenario.dart';
+import 'package:todo_flutter/models/fault_injection_state.dart';
+import 'package:todo_flutter/models/runtime_debug_state.dart';
 import 'package:todo_flutter/models/task.dart';
 import 'package:todo_flutter/providers/agenda_provider.dart';
+import 'package:todo_flutter/providers/fault_injection_provider.dart';
 import 'package:todo_flutter/providers/runtime_debug_provider.dart';
 import 'package:todo_flutter/services/workspace_session_coordinator.dart';
 import 'package:todo_flutter/widgets/bottomsheets/login.dart';
@@ -207,15 +211,99 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
   }
 
   Widget _buildLoadingIndicator() {
-    return Consumer<AgendaProvider>(
-      builder: (context, agenda, child) {
+    return Consumer3<
+      AgendaProvider,
+      RuntimeDebugProvider,
+      FaultInjectionProvider
+    >(
+      builder: (context, agenda, runtimeDebug, faultInjection, child) {
         if (!agenda.isLoading) {
           return const SizedBox.shrink();
         }
 
-        return ColoredBox(
-          color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.72),
-          child: const Center(child: CircularProgressIndicator()),
+        final theme = Theme.of(context);
+        final faultState = faultInjection.state;
+        final statusMessage = runtimeDebug.state.lastSyncMessage;
+        final helperMessage = statusMessage != null && statusMessage.isNotEmpty
+            ? statusMessage
+            : 'Sync is in progress. The workspace stays interactive while remote replay continues.';
+        final showDeterministicDelay =
+            faultState.isActive &&
+            faultState.activeScenario == FaultInjectionScenario.delayedSync &&
+            runtimeDebug.state.syncPhase == RuntimeSyncPhase.syncing &&
+            runtimeDebug.state.lastSyncStartedAt != null &&
+            faultState.effectiveDelayMs != null;
+
+        return IgnorePointer(
+          ignoring: true,
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 640),
+                child: Container(
+                  key: const ValueKey('task-workspace-sync-activity'),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surface.withValues(alpha: 0.96),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: theme.colorScheme.outlineVariant),
+                    boxShadow: [
+                      BoxShadow(
+                        color: theme.colorScheme.shadow.withValues(alpha: 0.08),
+                        blurRadius: 18,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.4,
+                              color: theme.colorScheme.primary,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'Sync in progress',
+                              style: theme.textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(helperMessage, style: theme.textTheme.bodyMedium),
+                      const SizedBox(height: 10),
+                      if (showDeterministicDelay)
+                        _DeterministicSyncDelayIndicator(
+                          startAt: runtimeDebug.state.lastSyncStartedAt!,
+                          totalDelayMs: faultState.effectiveDelayMs!,
+                        )
+                      else
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(999),
+                          child: const LinearProgressIndicator(minHeight: 4),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
         );
       },
     );
@@ -1803,6 +1891,76 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
       spacedChildren.add(children[index]);
     }
     return spacedChildren;
+  }
+}
+
+class _DeterministicSyncDelayIndicator extends StatelessWidget {
+  const _DeterministicSyncDelayIndicator({
+    required this.startAt,
+    required this.totalDelayMs,
+  });
+
+  final DateTime startAt;
+  final int totalDelayMs;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final totalDuration = Duration(milliseconds: totalDelayMs);
+    final elapsed = DateTime.now().difference(startAt);
+    final clampedElapsedMs = elapsed.inMilliseconds.clamp(0, totalDelayMs);
+    final begin = totalDelayMs == 0 ? 1.0 : clampedElapsedMs / totalDelayMs;
+    final remainingDuration = Duration(
+      milliseconds: (totalDelayMs - clampedElapsedMs).clamp(0, totalDelayMs),
+    );
+
+    return TweenAnimationBuilder<double>(
+      key: ValueKey(
+        'deterministic-sync-delay-${startAt.millisecondsSinceEpoch}-$totalDelayMs',
+      ),
+      tween: Tween<double>(begin: begin, end: 1),
+      duration: remainingDuration,
+      builder: (context, progress, child) {
+        final remainingMs = ((1 - progress) * totalDelayMs).ceil().clamp(
+          0,
+          totalDelayMs,
+        );
+        final remainingLabel = formatFaultInjectionDuration(remainingMs);
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    remainingMs > 0
+                        ? 'Delay remaining: $remainingLabel'
+                        : 'Delay complete. Finishing remote replay...',
+                    key: const ValueKey('task-workspace-sync-delay-label'),
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  formatFaultInjectionDuration(totalDuration.inMilliseconds),
+                  style: theme.textTheme.labelSmall,
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(999),
+              child: LinearProgressIndicator(
+                key: const ValueKey('task-workspace-sync-delay-progress'),
+                minHeight: 4,
+                value: progress,
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 }
 

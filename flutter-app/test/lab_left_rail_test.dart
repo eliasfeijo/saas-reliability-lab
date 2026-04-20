@@ -196,4 +196,65 @@ void main() {
       expect(runtimeDebug.state.activeFaultInjectionLabel, isNull);
     },
   );
+
+  testWidgets(
+    'scenario controls activate delayed sync with live-demo presets',
+    (tester) async {
+      final repository = InMemoryTasksRepository([]);
+      final runtimeDebug = RuntimeDebugProvider();
+      addTearDown(runtimeDebug.dispose);
+      final faultInjection = FaultInjectionProvider(runtimeDebug: runtimeDebug);
+      addTearDown(faultInjection.dispose);
+      final agenda = buildAgendaProviderForTesting(
+        repository,
+        TaskSyncService.forTesting(
+          repository,
+          remote: FakeTaskRemoteDataSource([]),
+          connectivityCheck: () async => [ConnectivityResult.wifi],
+          hasActiveSession: () => true,
+          runtimeDebug: runtimeDebug,
+        ),
+        runtimeDebug: runtimeDebug,
+      );
+      addTearDown(agenda.dispose);
+
+      await tester.pumpWidget(
+        RailHarness(
+          agenda: agenda,
+          runtimeDebug: runtimeDebug,
+          faultInjection: faultInjection,
+          child: const LabLeftRail(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.scrollUntilVisible(find.text('Delayed sync'), 300);
+      await faultInjection.activateScenario(FaultInjectionScenario.delayedSync);
+      await tester.pumpAndSettle();
+
+      expect(
+        runtimeDebug.state.activeFaultInjectionLabel,
+        'Delayed sync (5 s)',
+      );
+      expect(find.text('Delay preset'), findsOneWidget);
+      expect(find.widgetWithText(ChoiceChip, '5 s'), findsOneWidget);
+      expect(
+        find.textContaining('Use 5 s for most live walkthroughs'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('make a small task change'), findsOneWidget);
+
+      await tester.scrollUntilVisible(
+        find.widgetWithText(ChoiceChip, '10 s'),
+        300,
+      );
+      await tester.tap(find.widgetWithText(ChoiceChip, '10 s'));
+      await tester.pumpAndSettle();
+
+      expect(
+        runtimeDebug.state.activeFaultInjectionLabel,
+        'Delayed sync (10 s)',
+      );
+    },
+  );
 }

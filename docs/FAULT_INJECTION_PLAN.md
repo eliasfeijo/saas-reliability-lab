@@ -5,7 +5,7 @@
 This document defines the recommended end-to-end implementation plan for fault injection in the SaaS Reliability Lab.
 
 It is a planning document.
-It does not claim that fault injection is implemented today.
+It does not claim that every scenario below is implemented today.
 
 The goal is to turn the current shell and runtime diagnostics into a real experiment harness without pretending the repository already has deeper sync semantics than it actually does.
 
@@ -18,7 +18,7 @@ Implemented today:
 - a stable lab shell with a durable operator rail
 - a stable runtime diagnostics surface for connectivity, auth, sync, push, and local task counts
 - a task-based sync boundary with explicit entry gating and visible sync outcomes
-- reserved UI space for scenario controls and future operation states
+- operator-facing connectivity-loss and delayed-sync scenarios, including delay presets tuned for live demonstrations
 
 Still missing today:
 
@@ -263,6 +263,18 @@ Delay the whole sync pass.
 
 Do not begin with per-step delay injection.
 
+Current implementation status:
+
+- full-pass delayed sync is now implemented with `500 ms`, `2 s`, `5 s`, and `10 s` presets
+- the `5 s` preset is the default because it is the clearest live-demo cadence for future videos
+- per-step delay injection remains planned work
+
+Important current boundary:
+
+- the implemented delayed-sync slice is still client-owned and holds the sync pass before remote replay begins
+- this is good enough for a clear first demonstration of delayed convergence, but it is not yet the same as transport latency or backend acknowledgement delay
+- Objective 1 outbox work is the step that will make transport-shaped and backend-shaped delay scenarios honest because operations will have explicit queued, sending, acknowledged, failed, and conflict states
+
 ### Why this is the right first version
 
 - it is simpler to demonstrate and understand
@@ -305,6 +317,12 @@ Once the global-delay version is stable, add optional per-step delay targets suc
 - remote insert
 - remote update
 - remote fetch-all merge
+
+After Objective 1 outbox semantics land, evolve delayed sync again so the delay can move from a pre-replay client hold into a more realistic transport or backend-shaped condition, such as:
+
+- queued operations waiting to leave the client
+- operations stuck in `sending` while backend acknowledgement is late
+- partial replay where one operation is acknowledged and another remains pending
 
 That second version should be treated as a later enhancement, not as part of the first delivery slice.
 

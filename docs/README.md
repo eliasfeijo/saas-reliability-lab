@@ -19,7 +19,7 @@ The point is to study what breaks, what recovers, and what remains visible when 
 - Local-first task CRUD with SharedPreferences persistence
 - Supabase authentication and per-user task sync
 - Runtime diagnostics state for connectivity, auth, sync, push, and local task counts
-- Operator-rail fault injection for controlled connectivity-loss experiments
+- Operator-rail fault injection for controlled connectivity-loss and delayed-sync experiments
 - Browser push registration for signed-in profiles
 - Scheduled notification dispatch through a Cloudflare Worker
 - Anonymous-to-authenticated task adoption or discard flow
@@ -33,7 +33,7 @@ The next major goals are:
 
 - replace task-level dirty-object sync with an explicit operation outbox
 - surface conflict and blocked-sync states as first-class UI states
-- add fault-injection controls to the operator shell
+- expand fault-injection controls beyond connectivity loss and delayed sync
 - strengthen observability beyond the in-app runtime panel
 - grow automated coverage for reliability-critical paths
 
@@ -58,7 +58,7 @@ flowchart TD
 - manual sync trigger
 - persistent task filters
 - anonymous-task review controls
-- live scenario controls for connectivity loss, plus planned space for the next fault-injection scenarios
+- live scenario controls for connectivity loss and delayed sync, plus planned space for the next fault-injection scenarios
 
 ### Task Workspace
 

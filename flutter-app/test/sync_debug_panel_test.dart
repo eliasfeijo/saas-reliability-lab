@@ -171,4 +171,62 @@ void main() {
       expect(find.text('Anonymous', skipOffstage: false), findsOneWidget);
     },
   );
+
+  testWidgets(
+    'debug panel shows delayed sync evidence and injected delay details',
+    (tester) async {
+      final runtimeDebug = RuntimeDebugProvider();
+      addTearDown(runtimeDebug.dispose);
+      final faultInjection = FaultInjectionProvider(runtimeDebug: runtimeDebug);
+      addTearDown(faultInjection.dispose);
+      runtimeDebug.setConnectivityResults(const [
+        ConnectivityResult.wifi,
+      ], logEvent: false);
+
+      await faultInjection.activateScenario(FaultInjectionScenario.delayedSync);
+
+      final repository = InMemoryTasksRepository([]);
+      final agenda = buildAgendaProviderForTesting(
+        repository,
+        TaskSyncService.forTesting(
+          repository,
+          remote: FakeTaskRemoteDataSource([]),
+          connectivityCheck: () async => [ConnectivityResult.wifi],
+          hasActiveSession: () => true,
+          runtimeDebug: runtimeDebug,
+        ),
+        runtimeDebug: runtimeDebug,
+      );
+      addTearDown(agenda.dispose);
+
+      await tester.pumpWidget(
+        RailHarness(
+          agenda: agenda,
+          runtimeDebug: runtimeDebug,
+          faultInjection: faultInjection,
+          child: const SyncDebugPanel(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.scrollUntilVisible(find.text('Fault Injection'), 300);
+
+      expect(
+        find.text('Delayed sync (5 s)', skipOffstage: false),
+        findsWidgets,
+      );
+      expect(find.text('Injected delay'), findsOneWidget);
+      expect(find.text('5 s', skipOffstage: false), findsWidgets);
+      expect(find.textContaining('make a small task change'), findsOneWidget);
+
+      await faultInjection.setDelayedSyncDuration(10000);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Delayed sync (10 s)', skipOffstage: false),
+        findsWidgets,
+      );
+      expect(find.text('10 s', skipOffstage: false), findsWidgets);
+    },
+  );
 }

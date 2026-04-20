@@ -27,12 +27,12 @@ class FaultInjectionProvider extends ChangeNotifier {
       return;
     }
 
-    _state = FaultInjectionState(activeScenario: scenario, isEnabled: true);
-    _runtimeDebug?.setActiveFaultInjection(
-      label: scenario.label,
-      message: scenario.summary,
-      instruction: scenario.operatorInstruction,
+    _state = FaultInjectionState(
+      activeScenario: scenario,
+      isEnabled: true,
+      delayMs: scenario == FaultInjectionScenario.delayedSync ? 5000 : null,
     );
+    _publishRuntimeState();
 
     if (scenario == FaultInjectionScenario.connectivityLoss) {
       _runtimeDebug?.setConnectivityResults(
@@ -44,8 +44,25 @@ class FaultInjectionProvider extends ChangeNotifier {
 
     _runtimeDebug?.addEvent(
       category: RuntimeEventCategory.sync,
-      message: scenario.activationEventMessage,
+      message: _state.activationEventMessage,
       level: RuntimeEventLevel.warning,
+    );
+    notifyListeners();
+  }
+
+  Future<void> setDelayedSyncDuration(int delayMs) async {
+    if (!_state.isActive ||
+        _state.activeScenario != FaultInjectionScenario.delayedSync ||
+        _state.effectiveDelayMs == delayMs) {
+      return;
+    }
+
+    _state = _state.copyWith(delayMs: delayMs);
+    _publishRuntimeState();
+    _runtimeDebug?.addEvent(
+      category: RuntimeEventCategory.sync,
+      message:
+          'Fault injection updated: delayed sync now holds the sync pass for ${_state.delayLabel}.',
     );
     notifyListeners();
   }
@@ -65,8 +82,25 @@ class FaultInjectionProvider extends ChangeNotifier {
 
     _runtimeDebug?.addEvent(
       category: RuntimeEventCategory.sync,
-      message: activeScenario.resetEventMessage,
+      message: _state
+          .copyWith(activeScenario: activeScenario, isEnabled: true)
+          .resetEventMessage,
     );
     notifyListeners();
+  }
+
+  void _publishRuntimeState() {
+    if (!_state.isActive) {
+      _runtimeDebug?.clearActiveFaultInjection();
+      return;
+    }
+
+    _runtimeDebug?.setActiveFaultInjection(
+      label: _state.activeLabel,
+      message: _state.activeSummary ?? _state.activeScenario.summary,
+      instruction:
+          _state.operatorInstruction ??
+          _state.activeScenario.operatorInstruction,
+    );
   }
 }

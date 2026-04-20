@@ -10,6 +10,7 @@ enum FaultInjectionScenario {
 
 const implementedFaultInjectionScenarios = <FaultInjectionScenario>[
   FaultInjectionScenario.connectivityLoss,
+  FaultInjectionScenario.delayedSync,
 ];
 
 extension FaultInjectionScenarioPresentation on FaultInjectionScenario {
@@ -60,7 +61,7 @@ extension FaultInjectionScenarioPresentation on FaultInjectionScenario {
       case FaultInjectionScenario.connectivityLoss:
         return 'Connectivity loss is active. Leave the browser online, then run Sync now. The lab will force the sync boundary offline, record a skipped sync outcome, and show Waiting for Network in diagnostics. Reset the scenario to restore live connectivity behavior.';
       case FaultInjectionScenario.delayedSync:
-        return 'Delayed sync is planned but not implemented yet.';
+        return 'Delay the full sync pass so local state changes immediately while remote convergence stays intentionally behind.';
       case FaultInjectionScenario.expiredAuth:
         return 'Expired auth is planned but not implemented yet.';
       case FaultInjectionScenario.partialReplayDrop:
@@ -79,7 +80,7 @@ extension FaultInjectionScenarioPresentation on FaultInjectionScenario {
       case FaultInjectionScenario.connectivityLoss:
         return 'Fault injection activated: connectivity loss. Run Sync now to observe a forced offline sync boundary.';
       case FaultInjectionScenario.delayedSync:
-        return 'Fault injection activated: delayed sync.';
+        return 'Fault injection activated: delayed sync. Run Sync now to observe a controlled hold before remote replay begins.';
       case FaultInjectionScenario.expiredAuth:
         return 'Fault injection activated: expired auth.';
       case FaultInjectionScenario.partialReplayDrop:

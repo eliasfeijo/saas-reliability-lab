@@ -14,6 +14,7 @@ import '../repositories/tasks_repository.dart';
 
 typedef ConnectivityCheck = Future<List<ConnectivityResult>> Function();
 typedef SessionCheck = bool Function();
+typedef DelayExecution = Future<void> Function(Duration duration);
 
 class TaskSyncRunResult {
   const TaskSyncRunResult({
@@ -99,6 +100,7 @@ class TaskSyncService implements TaskSyncGateway {
   final DebounceController _debouncedSync;
   final RuntimeDebugProvider? _runtimeDebug;
   final FaultInjectionPolicy _faultInjectionPolicy;
+  final DelayExecution _delayExecution;
 
   TaskSyncService(
     this.repository,
@@ -109,6 +111,7 @@ class TaskSyncService implements TaskSyncGateway {
     DebounceController? debounceController,
     RuntimeDebugProvider? runtimeDebug,
     FaultInjectionPolicy? faultInjectionPolicy,
+    DelayExecution? delayExecution,
   }) : _remote = remote ?? SupabaseTaskRemoteDataSource(supabase),
        _checkConnectivity =
            connectivityCheck ?? Connectivity().checkConnectivity,
@@ -122,7 +125,8 @@ class TaskSyncService implements TaskSyncGateway {
            debounceController ??
            DebounceController(debounceDuration: const Duration(seconds: 3)),
        _runtimeDebug = runtimeDebug,
-       _faultInjectionPolicy = faultInjectionPolicy ?? FaultInjectionPolicy();
+       _faultInjectionPolicy = faultInjectionPolicy ?? FaultInjectionPolicy(),
+       _delayExecution = delayExecution ?? Future<void>.delayed;
 
   TaskSyncService.forTesting(
     this.repository, {
@@ -132,6 +136,7 @@ class TaskSyncService implements TaskSyncGateway {
     DebounceController? debounceController,
     RuntimeDebugProvider? runtimeDebug,
     FaultInjectionPolicy? faultInjectionPolicy,
+    DelayExecution? delayExecution,
   }) : _remote = remote,
        _checkConnectivity = connectivityCheck,
        _hasActiveSession = hasActiveSession,
@@ -139,7 +144,8 @@ class TaskSyncService implements TaskSyncGateway {
            debounceController ??
            DebounceController(debounceDuration: const Duration(seconds: 3)),
        _runtimeDebug = runtimeDebug,
-       _faultInjectionPolicy = faultInjectionPolicy ?? FaultInjectionPolicy();
+       _faultInjectionPolicy = faultInjectionPolicy ?? FaultInjectionPolicy(),
+       _delayExecution = delayExecution ?? Future<void>.delayed;
 
   @override
   Future<TaskSyncRunResult> syncTasks(List<TaskModel> tasks) async {
@@ -170,9 +176,13 @@ class TaskSyncService implements TaskSyncGateway {
       return const TaskSyncRunResult();
     }
 
-    _runtimeDebug?.markSyncStarted(
-      'Synchronizing ${tasks.length} local task(s).',
-    );
+    final delayedSyncLabel = _faultInjectionPolicy.delayedSyncDurationLabel;
+    final startMessage = delayedSyncLabel == null
+        ? 'Synchronizing ${tasks.length} local task(s).'
+        : 'Delayed sync scenario is active. Holding remote replay for $delayedSyncLabel before synchronizing ${tasks.length} local task(s).';
+
+    _runtimeDebug?.markSyncStarted(startMessage);
+    await _applyInjectedPreSyncDelay();
 
     try {
       final syncedTasks = <TaskModel>[];
@@ -349,5 +359,23 @@ class TaskSyncService implements TaskSyncGateway {
     }
 
     tasks[index] = replacement;
+  }
+
+  Future<void> _applyInjectedPreSyncDelay() async {
+    final delay = _faultInjectionPolicy.delayedSyncDuration;
+    final delayLabel = _faultInjectionPolicy.delayedSyncDurationLabel;
+    if (delay == null || delayLabel == null) {
+      return;
+    }
+
+    final message =
+        'Delayed sync scenario is holding the sync pass for $delayLabel before remote replay begins.';
+    _runtimeDebug?.addEvent(
+      category: RuntimeEventCategory.sync,
+      message: message,
+      level: RuntimeEventLevel.warning,
+    );
+    debugPrint(message);
+    await _delayExecution(delay);
   }
 }

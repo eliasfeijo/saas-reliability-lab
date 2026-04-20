@@ -358,14 +358,24 @@ Implementation planning for this area now lives in [`FAULT_INJECTION_PLAN.md`](F
 Implemented now:
 
 - operator-rail activation for a controlled connectivity-loss scenario
+- operator-rail activation for a full-pass delayed-sync scenario with demo-friendly 500 ms, 2 s, 5 s, and 10 s presets
 - operator-facing instructions that explain how to run the scenario
 - runtime diagnostics evidence for the active scenario
+- a deterministic workspace sync progress bar for delayed sync, including the remaining hold time
 - reset controls in both the operator rail and the diagnostics rail
 - event-timeline output when the scenario is activated, reset, and used during sync
 
+Viewer-friendly live walkthrough for delayed sync:
+
+- keep the browser online and signed in
+- choose `Delayed sync` with the `5 s` preset for the clearest default pacing
+- make a small task change that is easy to spot in the workspace
+- run sync while the Runtime Diagnostics rail is visible and narrate the `Syncing` hold before success arrives
+- reset the scenario after the delayed success and timeline evidence are visible
+
 ### What is still needed
 
-- real operator-rail toggles for delayed sync, expired auth, duplicate replay, and conflict simulation
+- real operator-rail toggles for expired auth, duplicate replay, and conflict simulation
 - runtime state capable of representing injected failures clearly
 - documentation for expected evidence per injected scenario
 

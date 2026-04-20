@@ -15,6 +15,20 @@ class FaultInjectionPolicy {
       state.isActive &&
       state.activeScenario == FaultInjectionScenario.connectivityLoss;
 
+  bool get isDelayedSyncActive =>
+      state.isActive &&
+      state.activeScenario == FaultInjectionScenario.delayedSync;
+
+  Duration? get delayedSyncDuration =>
+      isDelayedSyncActive && state.effectiveDelayMs != null
+      ? Duration(milliseconds: state.effectiveDelayMs!)
+      : null;
+
+  String? get delayedSyncDurationLabel =>
+      delayedSyncDuration == null || state.effectiveDelayMs == null
+      ? null
+      : formatFaultInjectionDuration(state.effectiveDelayMs!);
+
   List<ConnectivityResult> applyConnectivityResults(
     List<ConnectivityResult> actualResults,
   ) {

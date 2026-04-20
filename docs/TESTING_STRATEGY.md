@@ -50,6 +50,7 @@ What they currently cover:
 
 - sync reconciliation rules
 - connectivity-loss fault injection at the sync boundary
+- delayed-sync fault injection at the sync boundary
 - anonymous-task adoption and deletion behavior
 - provider-facing task-list persistence and debug-count publication
 - provider-facing sync sequencing for anonymous-task keep/discard flows

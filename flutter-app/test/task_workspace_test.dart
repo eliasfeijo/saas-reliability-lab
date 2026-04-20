@@ -1,9 +1,14 @@
+import 'dart:async';
+
 import 'package:connectivity_plus_platform_interface/connectivity_plus_platform_interface.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:todo_flutter/models/fault_injection_scenario.dart';
 import 'package:todo_flutter/models/task.dart';
+import 'package:todo_flutter/providers/fault_injection_provider.dart';
 import 'package:todo_flutter/providers/runtime_debug_provider.dart';
+import 'package:todo_flutter/services/fault_injection_policy.dart';
 import 'package:todo_flutter/services/task_sync_service.dart';
 
 import 'test_support/app_test_support.dart';
@@ -182,4 +187,93 @@ void main() {
       expect(find.text('Done selecting'), findsOneWidget);
     },
   );
+
+  testWidgets('delayed sync notice does not block workspace interaction', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1.0;
+    tester.view.physicalSize = const Size(1600, 1400);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+
+    final seededTask = TaskModel(
+      id: 'task-delayed-workspace',
+      title: 'Interactive delay task',
+      beginsAt: DateTime(2026, 2, 23, 9),
+      estimatedDuration: const Duration(hours: 1),
+      syncStatus: SyncStatus.dirty,
+      userId: 'user-1',
+    );
+
+    final repository = InMemoryTasksRepository([seededTask]);
+    final runtimeDebug = RuntimeDebugProvider();
+    addTearDown(runtimeDebug.dispose);
+    final faultInjection = FaultInjectionProvider(runtimeDebug: runtimeDebug);
+    addTearDown(faultInjection.dispose);
+    final delayCompleter = Completer<void>();
+
+    final syncService = TaskSyncService.forTesting(
+      repository,
+      remote: FakeTaskRemoteDataSource([]),
+      connectivityCheck: () async => [ConnectivityResult.wifi],
+      hasActiveSession: () => true,
+      runtimeDebug: runtimeDebug,
+      faultInjectionPolicy: FaultInjectionPolicy(
+        readState: () => faultInjection.state,
+      ),
+      delayExecution: (_) => delayCompleter.future,
+    );
+
+    final agenda = buildAgendaProviderForTesting(
+      repository,
+      syncService,
+      runtimeDebug: runtimeDebug,
+    );
+    agenda.tasks = [seededTask];
+    addTearDown(agenda.dispose);
+
+    await tester.pumpWidget(
+      LabWorkspaceHarness(
+        agenda: agenda,
+        runtimeDebug: runtimeDebug,
+        faultInjection: faultInjection,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    agenda.userId = 'user-1';
+    runtimeDebug.setUserState(
+      cachedUserId: 'user-1',
+      activeUserId: 'user-1',
+      hasAuthenticatedSession: true,
+    );
+    await faultInjection.activateScenario(FaultInjectionScenario.delayedSync);
+    await tester.pump();
+
+    unawaited(agenda.syncAllTasks());
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(
+      find.byKey(const ValueKey('task-workspace-sync-activity')),
+      findsOneWidget,
+    );
+    expect(find.text('Sync in progress'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('task-workspace-sync-delay-label')),
+      findsOneWidget,
+    );
+
+    final progressIndicator = tester.widget<LinearProgressIndicator>(
+      find.byKey(const ValueKey('task-workspace-sync-delay-progress')),
+    );
+    expect(progressIndicator.value, isNotNull);
+
+    await tester.tap(find.text('Interactive delay task').first);
+    await tester.pump();
+
+    expect(agenda.selectedTask?.title, 'Interactive delay task');
+
+    delayCompleter.complete();
+    await tester.pumpAndSettle();
+  });
 }

@@ -37,6 +37,11 @@ Why:
 - the shell needed runtime evidence before a true operation model could be rendered responsibly
 - the next backend and data-model step is explicit outbox semantics, not more UI churn
 
+Current implication:
+
+- the implemented delayed-sync scenario is currently a client-owned pre-replay hold, not a true transport-latency or backend-acknowledgement delay
+- the outbox planned in Objective 1 is the architectural step that will allow delay, retry, duplicate, partial, and conflict scenarios to be modeled at an operation boundary instead of only at the whole-pass level
+
 ### 4. Runtime evidence must be visible in the product UI
 
 The lab now treats sync, auth, push, and local-state visibility as part of the system, not as optional debug logging.
@@ -198,7 +203,7 @@ Responsibilities:
 - manual sync trigger
 - persistent task filters
 - anonymous-task review and reconciliation controls
-- active scenario-control surface for connectivity-loss injection, with the same rail reserved for later delayed-sync, auth-expiry, and replay scenarios
+- active scenario-control surface for connectivity-loss and delayed-sync injection, with the same rail reserved for later auth-expiry and replay scenarios
 
 Architectural significance:
 
