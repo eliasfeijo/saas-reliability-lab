@@ -19,6 +19,7 @@ The point is to study what breaks, what recovers, and what remains visible when 
 - Local-first task CRUD with SharedPreferences persistence
 - Supabase authentication and per-user task sync
 - Runtime diagnostics state for connectivity, auth, sync, push, and local task counts
+- Operator-rail fault injection for controlled connectivity-loss experiments
 - Browser push registration for signed-in profiles
 - Scheduled notification dispatch through a Cloudflare Worker
 - Anonymous-to-authenticated task adoption or discard flow
@@ -57,7 +58,7 @@ flowchart TD
 - manual sync trigger
 - persistent task filters
 - anonymous-task review controls
-- reserved space for future fault injection and experiment toggles
+- live scenario controls for connectivity loss, plus planned space for the next fault-injection scenarios
 
 ### Task Workspace
 
@@ -201,6 +202,7 @@ The goal is to make reliability behavior inspectable.
 - [`ARCHITECTURE.md`](ARCHITECTURE.md): implemented topology, state ownership, and evolution path
 - [`OBJECTIVE_0_FOUNDATION_PLAN.md`](OBJECTIVE_0_FOUNDATION_PLAN.md): completed Objective 0 execution record and handoff for the finished foundation refactor
 - [`OBJECTIVE_1_OUTBOX_ENTRY_PLAN.md`](OBJECTIVE_1_OUTBOX_ENTRY_PLAN.md): active Objective 1 entry plan for the next outbox-focused phase
+- [`FAULT_INJECTION_PLAN.md`](FAULT_INJECTION_PLAN.md): end-to-end plan for turning scenario placeholders into real fault-injection controls, starting with connectivity loss and delayed sync
 - [`DEPLOYMENT.md`](DEPLOYMENT.md): GitHub Actions workflows, GitHub Pages integration, worker deployment, and environment matrix
 - [`LOCAL_DEVELOPMENT.md`](LOCAL_DEVELOPMENT.md): repository-root workflow, local commands, and developer setup for running the projects locally
 - [`AI_ASSISTED_DEVELOPMENT.md`](AI_ASSISTED_DEVELOPMENT.md): intended human-and-agent development loop, Copilot workflow, and low-friction lifecycle expectations

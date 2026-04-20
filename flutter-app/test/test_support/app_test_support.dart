@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:todo_flutter/models/task.dart';
 import 'package:todo_flutter/providers/agenda_provider.dart';
+import 'package:todo_flutter/providers/fault_injection_provider.dart';
 import 'package:todo_flutter/providers/runtime_debug_provider.dart';
 import 'package:todo_flutter/repositories/tasks_repository.dart';
 import 'package:todo_flutter/screens/lab_shell.dart';
@@ -79,10 +80,12 @@ class LabWorkspaceHarness extends StatelessWidget {
     super.key,
     required this.agenda,
     required this.runtimeDebug,
+    this.faultInjection,
   });
 
   final AgendaProvider agenda;
   final RuntimeDebugProvider runtimeDebug;
+  final FaultInjectionProvider? faultInjection;
 
   @override
   Widget build(BuildContext context) {
@@ -95,6 +98,14 @@ class LabWorkspaceHarness extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider<RuntimeDebugProvider>.value(value: runtimeDebug),
+        if (faultInjection != null)
+          ChangeNotifierProvider<FaultInjectionProvider>.value(
+            value: faultInjection!,
+          )
+        else
+          ChangeNotifierProvider<FaultInjectionProvider>(
+            create: (_) => FaultInjectionProvider(runtimeDebug: runtimeDebug),
+          ),
         Provider<WorkspaceSessionCoordinator>.value(value: sessionCoordinator),
         ChangeNotifierProvider<AgendaProvider>.value(value: agenda),
       ],
@@ -120,10 +131,12 @@ class NotebookWorkspaceHarness extends StatelessWidget {
     super.key,
     required this.agenda,
     required this.runtimeDebug,
+    this.faultInjection,
   });
 
   final AgendaProvider agenda;
   final RuntimeDebugProvider runtimeDebug;
+  final FaultInjectionProvider? faultInjection;
 
   @override
   Widget build(BuildContext context) {
@@ -136,6 +149,14 @@ class NotebookWorkspaceHarness extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider<RuntimeDebugProvider>.value(value: runtimeDebug),
+        if (faultInjection != null)
+          ChangeNotifierProvider<FaultInjectionProvider>.value(
+            value: faultInjection!,
+          )
+        else
+          ChangeNotifierProvider<FaultInjectionProvider>(
+            create: (_) => FaultInjectionProvider(runtimeDebug: runtimeDebug),
+          ),
         Provider<WorkspaceSessionCoordinator>.value(value: sessionCoordinator),
         ChangeNotifierProvider<AgendaProvider>.value(value: agenda),
       ],
@@ -155,10 +176,12 @@ class CompactWorkspaceHarness extends StatelessWidget {
     super.key,
     required this.agenda,
     required this.runtimeDebug,
+    this.faultInjection,
   });
 
   final AgendaProvider agenda;
   final RuntimeDebugProvider runtimeDebug;
+  final FaultInjectionProvider? faultInjection;
 
   @override
   Widget build(BuildContext context) {
@@ -171,6 +194,14 @@ class CompactWorkspaceHarness extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider<RuntimeDebugProvider>.value(value: runtimeDebug),
+        if (faultInjection != null)
+          ChangeNotifierProvider<FaultInjectionProvider>.value(
+            value: faultInjection!,
+          )
+        else
+          ChangeNotifierProvider<FaultInjectionProvider>(
+            create: (_) => FaultInjectionProvider(runtimeDebug: runtimeDebug),
+          ),
         Provider<WorkspaceSessionCoordinator>.value(value: sessionCoordinator),
         ChangeNotifierProvider<AgendaProvider>.value(value: agenda),
       ],
@@ -190,10 +221,12 @@ class LabShellHarness extends StatelessWidget {
     super.key,
     required this.agenda,
     required this.runtimeDebug,
+    this.faultInjection,
   });
 
   final AgendaProvider agenda;
   final RuntimeDebugProvider runtimeDebug;
+  final FaultInjectionProvider? faultInjection;
 
   @override
   Widget build(BuildContext context) {
@@ -206,6 +239,14 @@ class LabShellHarness extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider<RuntimeDebugProvider>.value(value: runtimeDebug),
+        if (faultInjection != null)
+          ChangeNotifierProvider<FaultInjectionProvider>.value(
+            value: faultInjection!,
+          )
+        else
+          ChangeNotifierProvider<FaultInjectionProvider>(
+            create: (_) => FaultInjectionProvider(runtimeDebug: runtimeDebug),
+          ),
         Provider<WorkspaceSessionCoordinator>.value(value: sessionCoordinator),
         ChangeNotifierProvider<AgendaProvider>.value(value: agenda),
       ],
@@ -224,17 +265,27 @@ class RailHarness extends StatelessWidget {
     required this.agenda,
     required this.runtimeDebug,
     required this.child,
+    this.faultInjection,
   });
 
   final AgendaProvider agenda;
   final RuntimeDebugProvider runtimeDebug;
   final Widget child;
+  final FaultInjectionProvider? faultInjection;
 
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider<RuntimeDebugProvider>.value(value: runtimeDebug),
+        if (faultInjection != null)
+          ChangeNotifierProvider<FaultInjectionProvider>.value(
+            value: faultInjection!,
+          )
+        else
+          ChangeNotifierProvider<FaultInjectionProvider>(
+            create: (_) => FaultInjectionProvider(runtimeDebug: runtimeDebug),
+          ),
         ChangeNotifierProvider<AgendaProvider>.value(value: agenda),
       ],
       child: MaterialApp(

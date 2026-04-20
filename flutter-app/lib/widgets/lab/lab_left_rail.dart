@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:todo_flutter/helpers/web_push_helper.dart';
+import 'package:todo_flutter/models/fault_injection_scenario.dart';
 import 'package:todo_flutter/models/runtime_debug_state.dart';
 import 'package:todo_flutter/models/runtime_event.dart';
 import 'package:todo_flutter/models/task.dart';
 import 'package:todo_flutter/providers/agenda_provider.dart';
+import 'package:todo_flutter/providers/fault_injection_provider.dart';
 import 'package:todo_flutter/providers/runtime_debug_provider.dart';
 import 'package:todo_flutter/widgets/bottomsheets/login.dart';
 import 'package:todo_flutter/widgets/debug/debug_status_card.dart';
@@ -33,6 +35,7 @@ class _LabLeftRailState extends State<LabLeftRail> {
 
   Future<void> _syncNow() async {
     final agenda = context.read<AgendaProvider>();
+    final faultInjection = context.read<FaultInjectionProvider>();
     final runtimeDebug = context.read<RuntimeDebugProvider>();
 
     if (agenda.userId == null || agenda.userId!.isEmpty) {
@@ -70,9 +73,36 @@ class _LabLeftRailState extends State<LabLeftRail> {
     await agenda.syncAllTasks();
 
     if (!mounted) return;
+    final syncMessage =
+        faultInjection.state.activeScenario ==
+            FaultInjectionScenario.connectivityLoss
+        ? 'Connectivity loss scenario applied. Check diagnostics for the skipped sync outcome.'
+        : 'Sync requested.';
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(const SnackBar(content: Text('Sync requested.')));
+    ).showSnackBar(SnackBar(content: Text(syncMessage)));
+  }
+
+  Future<void> _activateScenario(FaultInjectionScenario scenario) async {
+    final faultInjection = context.read<FaultInjectionProvider>();
+
+    await faultInjection.activateScenario(scenario);
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('${scenario.label} activated.')));
+  }
+
+  Future<void> _clearScenario() async {
+    final faultInjection = context.read<FaultInjectionProvider>();
+
+    await faultInjection.clearScenario();
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Scenario reset.')));
   }
 
   Future<void> _logout() async {
@@ -230,9 +260,14 @@ class _LabLeftRailState extends State<LabLeftRail> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Consumer2<AgendaProvider, RuntimeDebugProvider>(
-      builder: (context, agenda, runtimeDebug, child) {
+    return Consumer3<
+      AgendaProvider,
+      RuntimeDebugProvider,
+      FaultInjectionProvider
+    >(
+      builder: (context, agenda, runtimeDebug, faultInjection, child) {
         final state = runtimeDebug.state;
+        final faultState = faultInjection.state;
 
         return Container(
           decoration: BoxDecoration(
@@ -452,29 +487,115 @@ class _LabLeftRailState extends State<LabLeftRail> {
               const SizedBox(height: 16),
               DebugStatusCard(
                 title: 'Scenario Controls',
-                subtitle:
-                    'Reserved for fault injection and reliability experiments.',
+                subtitle: faultState.isActive
+                    ? 'A controlled failure scenario is active. Use the normal lab controls to observe its effect.'
+                    : 'Activate a controlled failure scenario here, then observe the resulting evidence in diagnostics and the event timeline.',
                 leading: const Icon(Icons.science_outlined),
-                accentColor: theme.colorScheme.primary,
+                accentColor: faultState.isActive
+                    ? theme.colorScheme.error
+                    : theme.colorScheme.primary,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
-                      children: const [
-                        Chip(label: Text('Connectivity loss')),
-                        Chip(label: Text('Delayed sync')),
-                        Chip(label: Text('Expired auth')),
-                        Chip(label: Text('Duplicate replay')),
-                        Chip(label: Text('Conflict view')),
-                      ],
+                      children: faultInjection.availableScenarios.map((
+                        scenario,
+                      ) {
+                        final isActive =
+                            faultState.isActive &&
+                            faultState.activeScenario == scenario;
+                        if (isActive) {
+                          return InputChip(
+                            avatar: Icon(
+                              Icons.science_outlined,
+                              size: 18,
+                              color: theme.colorScheme.error,
+                            ),
+                            label: Text(scenario.label),
+                            selected: true,
+                            showCheckmark: false,
+                            deleteIcon: Icon(
+                              Icons.close,
+                              size: 18,
+                              color: theme.colorScheme.error,
+                            ),
+                            onDeleted: _clearScenario,
+                            selectedColor: theme.colorScheme.error.withValues(
+                              alpha: 0.14,
+                            ),
+                            side: BorderSide(
+                              color: theme.colorScheme.error.withValues(
+                                alpha: 0.28,
+                              ),
+                            ),
+                          );
+                        }
+
+                        return ChoiceChip(
+                          label: Text(scenario.label),
+                          selected: false,
+                          onSelected: (_) async {
+                            await _activateScenario(scenario);
+                          },
+                        );
+                      }).toList(),
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      'These controls are intentionally reserved so fault injection can land in a stable part of the shell instead of being bolted into the task workspace later.',
+                      faultState.isActive
+                          ? faultState.activeSummary ??
+                                faultState.activeScenario.summary
+                          : 'Connectivity loss is available now. Delayed sync, expired auth, and partial replay drop are the next planned operator scenarios.',
                       style: theme.textTheme.bodyMedium,
                     ),
+                    const SizedBox(height: 12),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surfaceContainer,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            faultState.isActive
+                                ? 'How to operate this scenario'
+                                : 'How fault injection works here',
+                            style: theme.textTheme.titleSmall,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            faultState.isActive
+                                ? faultState.operatorInstruction ?? ''
+                                : 'Select a scenario chip to activate it. The active scenario keeps normal product controls in place, adds explicit evidence to runtime diagnostics, and writes a matching event to the timeline.',
+                            style: theme.textTheme.bodyMedium,
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (faultState.isActive) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        'Tap the active red chip to clear the scenario instantly.',
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ],
+                    if (!faultState.isActive) ...[
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: const [
+                          Chip(label: Text('Delayed sync (planned)')),
+                          Chip(label: Text('Expired auth (planned)')),
+                          Chip(label: Text('Partial replay drop (planned)')),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
               ),

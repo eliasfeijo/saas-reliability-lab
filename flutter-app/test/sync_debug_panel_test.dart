@@ -1,8 +1,11 @@
 import 'package:connectivity_plus_platform_interface/connectivity_plus_platform_interface.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:todo_flutter/models/fault_injection_scenario.dart';
 import 'package:todo_flutter/models/runtime_debug_state.dart';
 import 'package:todo_flutter/models/runtime_event.dart';
 import 'package:todo_flutter/models/task.dart';
+import 'package:todo_flutter/providers/fault_injection_provider.dart';
 import 'package:todo_flutter/providers/runtime_debug_provider.dart';
 import 'package:todo_flutter/services/task_sync_service.dart';
 import 'package:todo_flutter/widgets/debug/sync_debug_panel.dart';
@@ -37,6 +40,8 @@ void main() {
     (tester) async {
       final runtimeDebug = RuntimeDebugProvider();
       addTearDown(runtimeDebug.dispose);
+      final faultInjection = FaultInjectionProvider(runtimeDebug: runtimeDebug);
+      addTearDown(faultInjection.dispose);
       runtimeDebug.setConnectivityResults(const [
         ConnectivityResult.wifi,
       ], logEvent: false);
@@ -73,6 +78,9 @@ void main() {
       runtimeDebug.markSyncPartial(
         'Sync completed. Some operations need review.',
       );
+      await faultInjection.activateScenario(
+        FaultInjectionScenario.connectivityLoss,
+      );
       runtimeDebug.setPushPermission(
         PushPermissionState.granted,
         logEvent: false,
@@ -104,6 +112,7 @@ void main() {
         RailHarness(
           agenda: agenda,
           runtimeDebug: runtimeDebug,
+          faultInjection: faultInjection,
           child: const SyncDebugPanel(),
         ),
       );
@@ -111,6 +120,34 @@ void main() {
 
       expect(find.text('Runtime Diagnostics'), findsOneWidget);
       expect(find.text('Online'), findsWidgets);
+
+      await tester.scrollUntilVisible(find.text('Fault Injection'), 300);
+
+      expect(find.text('Fault Injection'), findsOneWidget);
+      expect(find.text('Connectivity loss', skipOffstage: false), findsWidgets);
+      expect(
+        find.textContaining(
+          'Leave the browser online, then run Sync now',
+          skipOffstage: false,
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Reset failure scenario'), findsOneWidget);
+
+      final resetButton = find.widgetWithText(
+        OutlinedButton,
+        'Reset failure scenario',
+      );
+      expect(resetButton, findsOneWidget);
+
+      await faultInjection.clearScenario();
+      await tester.pumpAndSettle();
+
+      expect(runtimeDebug.state.activeFaultInjectionLabel, isNull);
+      expect(
+        find.text('No controlled failure scenario is active right now.'),
+        findsOneWidget,
+      );
 
       await tester.scrollUntilVisible(find.text('Push State'), 300);
 

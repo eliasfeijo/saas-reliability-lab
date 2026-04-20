@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:todo_flutter/models/runtime_debug_state.dart';
 import 'package:todo_flutter/models/runtime_event.dart';
+import 'package:todo_flutter/providers/fault_injection_provider.dart';
 import 'package:todo_flutter/providers/runtime_debug_provider.dart';
 import 'package:todo_flutter/widgets/debug/debug_status_card.dart';
 
@@ -14,8 +15,8 @@ class SyncDebugPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Consumer<RuntimeDebugProvider>(
-      builder: (context, runtimeDebug, child) {
+    return Consumer2<RuntimeDebugProvider, FaultInjectionProvider>(
+      builder: (context, runtimeDebug, faultInjection, child) {
         final state = runtimeDebug.state;
 
         return Container(
@@ -141,6 +142,100 @@ class SyncDebugPanel extends StatelessWidget {
                       accent: theme.colorScheme.error,
                       isLast: true,
                     ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              DebugStatusCard(
+                title: 'Fault Injection',
+                subtitle: state.activeFaultInjectionLabel == null
+                    ? 'No controlled failure scenario is active right now.'
+                    : 'The current runtime state is being influenced by an active controlled scenario.',
+                leading: const Icon(Icons.science_outlined),
+                accentColor: state.activeFaultInjectionLabel == null
+                    ? theme.colorScheme.outline
+                    : theme.colorScheme.error,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (state.activeFaultInjectionLabel == null)
+                      Text(
+                        'Use Scenario Controls in the operator rail to activate a controlled failure and observe its evidence here.',
+                        style: theme.textTheme.bodyMedium,
+                      )
+                    else ...[
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          InputChip(
+                            avatar: Icon(
+                              Icons.science_outlined,
+                              size: 18,
+                              color: theme.colorScheme.error,
+                            ),
+                            label: Text(state.activeFaultInjectionLabel!),
+                            selected: true,
+                            showCheckmark: false,
+                            deleteIcon: Icon(
+                              Icons.close,
+                              size: 18,
+                              color: theme.colorScheme.error,
+                            ),
+                            onDeleted: () async {
+                              await faultInjection.clearScenario();
+                            },
+                            selectedColor: theme.colorScheme.error.withValues(
+                              alpha: 0.14,
+                            ),
+                            side: BorderSide(
+                              color: theme.colorScheme.error.withValues(
+                                alpha: 0.28,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      _statusRow(
+                        context,
+                        label: 'Scenario',
+                        value: state.activeFaultInjectionLabel!,
+                      ),
+                      _statusRow(
+                        context,
+                        label: 'Summary',
+                        value:
+                            state.activeFaultInjectionMessage ??
+                            'No summary recorded.',
+                      ),
+                      const SizedBox(height: 8),
+                      Text('How to operate', style: theme.textTheme.titleSmall),
+                      const SizedBox(height: 6),
+                      Text(
+                        state.activeFaultInjectionInstruction ??
+                            'No operator instruction recorded.',
+                        style: theme.textTheme.bodyMedium,
+                      ),
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          OutlinedButton.icon(
+                            onPressed: () async {
+                              await faultInjection.clearScenario();
+                            },
+                            icon: const Icon(Icons.refresh),
+                            label: const Text('Reset failure scenario'),
+                          ),
+                          Text(
+                            'Use this rail when you want to narrate the evidence and clear the scenario without jumping back to the operator controls.',
+                            style: theme.textTheme.bodySmall,
+                          ),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
               ),

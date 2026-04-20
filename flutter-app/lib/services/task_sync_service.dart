@@ -7,6 +7,7 @@ import 'package:todo_flutter/controllers/debounce_controller.dart';
 import 'package:todo_flutter/models/runtime_debug_state.dart';
 import 'package:todo_flutter/models/runtime_event.dart';
 import 'package:todo_flutter/providers/runtime_debug_provider.dart';
+import 'package:todo_flutter/services/fault_injection_policy.dart';
 
 import '../models/task.dart';
 import '../repositories/tasks_repository.dart';
@@ -97,6 +98,7 @@ class TaskSyncService implements TaskSyncGateway {
   final SessionCheck _hasActiveSession;
   final DebounceController _debouncedSync;
   final RuntimeDebugProvider? _runtimeDebug;
+  final FaultInjectionPolicy _faultInjectionPolicy;
 
   TaskSyncService(
     this.repository,
@@ -106,6 +108,7 @@ class TaskSyncService implements TaskSyncGateway {
     SessionCheck? hasActiveSession,
     DebounceController? debounceController,
     RuntimeDebugProvider? runtimeDebug,
+    FaultInjectionPolicy? faultInjectionPolicy,
   }) : _remote = remote ?? SupabaseTaskRemoteDataSource(supabase),
        _checkConnectivity =
            connectivityCheck ?? Connectivity().checkConnectivity,
@@ -118,7 +121,8 @@ class TaskSyncService implements TaskSyncGateway {
        _debouncedSync =
            debounceController ??
            DebounceController(debounceDuration: const Duration(seconds: 3)),
-       _runtimeDebug = runtimeDebug;
+       _runtimeDebug = runtimeDebug,
+       _faultInjectionPolicy = faultInjectionPolicy ?? FaultInjectionPolicy();
 
   TaskSyncService.forTesting(
     this.repository, {
@@ -127,26 +131,33 @@ class TaskSyncService implements TaskSyncGateway {
     required SessionCheck hasActiveSession,
     DebounceController? debounceController,
     RuntimeDebugProvider? runtimeDebug,
+    FaultInjectionPolicy? faultInjectionPolicy,
   }) : _remote = remote,
        _checkConnectivity = connectivityCheck,
        _hasActiveSession = hasActiveSession,
        _debouncedSync =
            debounceController ??
            DebounceController(debounceDuration: const Duration(seconds: 3)),
-       _runtimeDebug = runtimeDebug;
+       _runtimeDebug = runtimeDebug,
+       _faultInjectionPolicy = faultInjectionPolicy ?? FaultInjectionPolicy();
 
   @override
   Future<TaskSyncRunResult> syncTasks(List<TaskModel> tasks) async {
-    final connectivityResult = await _checkConnectivity();
+    final connectivityResult = _faultInjectionPolicy.applyConnectivityResults(
+      await _checkConnectivity(),
+    );
     _runtimeDebug?.setConnectivityResults(connectivityResult, logEvent: false);
     _runtimeDebug?.updateTaskCounts(tasks);
 
     if (_hasNoConnectivity(connectivityResult)) {
+      final message = _faultInjectionPolicy.isConnectivityLossActive
+          ? 'Connectivity loss scenario is active. Cloud sync is being forced offline.'
+          : 'No internet connection. Skipping sync.';
       _runtimeDebug?.markSyncSkipped(
         phase: RuntimeSyncPhase.offline,
-        message: 'No internet connection. Skipping sync.',
+        message: message,
       );
-      debugPrint('No internet connection. Skipping sync.');
+      debugPrint(message);
       return const TaskSyncRunResult();
     }
 

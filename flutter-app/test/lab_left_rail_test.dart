@@ -1,6 +1,9 @@
 import 'package:connectivity_plus_platform_interface/connectivity_plus_platform_interface.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:todo_flutter/models/fault_injection_scenario.dart';
 import 'package:todo_flutter/models/task.dart';
+import 'package:todo_flutter/providers/fault_injection_provider.dart';
 import 'package:todo_flutter/providers/runtime_debug_provider.dart';
 import 'package:todo_flutter/services/task_sync_service.dart';
 import 'package:todo_flutter/widgets/lab/lab_left_rail.dart';
@@ -73,7 +76,7 @@ void main() {
 
     expect(find.text('Open auth'), findsOneWidget);
     expect(find.text('Sign in to review'), findsOneWidget);
-    expect(find.text('Conflict view', skipOffstage: false), findsOneWidget);
+    expect(find.text('Connectivity loss', skipOffstage: false), findsOneWidget);
     expect(textValue(tester, 'anonymous-review-count-value'), '1');
     expect(textValue(tester, 'task-scope-total-value'), '1');
   });
@@ -130,4 +133,67 @@ void main() {
     expect(find.text('Discard local'), findsOneWidget);
     expect(find.text('Authenticated'), findsOneWidget);
   });
+
+  testWidgets(
+    'scenario controls activate connectivity loss with operator instructions',
+    (tester) async {
+      final repository = InMemoryTasksRepository([]);
+      final runtimeDebug = RuntimeDebugProvider();
+      addTearDown(runtimeDebug.dispose);
+      final faultInjection = FaultInjectionProvider(runtimeDebug: runtimeDebug);
+      addTearDown(faultInjection.dispose);
+      final agenda = buildAgendaProviderForTesting(
+        repository,
+        TaskSyncService.forTesting(
+          repository,
+          remote: FakeTaskRemoteDataSource([]),
+          connectivityCheck: () async => [ConnectivityResult.wifi],
+          hasActiveSession: () => true,
+          runtimeDebug: runtimeDebug,
+        ),
+        runtimeDebug: runtimeDebug,
+      );
+      addTearDown(agenda.dispose);
+
+      await tester.pumpWidget(
+        RailHarness(
+          agenda: agenda,
+          runtimeDebug: runtimeDebug,
+          faultInjection: faultInjection,
+          child: const LabLeftRail(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.scrollUntilVisible(find.text('Connectivity loss'), 300);
+      expect(
+        find.widgetWithText(ChoiceChip, 'Connectivity loss'),
+        findsOneWidget,
+      );
+
+      await faultInjection.activateScenario(
+        FaultInjectionScenario.connectivityLoss,
+      );
+      await tester.pumpAndSettle();
+
+      expect(runtimeDebug.state.activeFaultInjectionLabel, 'Connectivity loss');
+      await tester.scrollUntilVisible(
+        find.textContaining('Leave the browser online'),
+        300,
+      );
+
+      expect(find.byIcon(Icons.close), findsWidgets);
+      expect(find.text('How to operate this scenario'), findsOneWidget);
+      expect(
+        find.text('Tap the active red chip to clear the scenario instantly.'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('Leave the browser online'), findsOneWidget);
+
+      await tester.tap(find.byIcon(Icons.close).first);
+      await tester.pumpAndSettle();
+
+      expect(runtimeDebug.state.activeFaultInjectionLabel, isNull);
+    },
+  );
 }

@@ -4,9 +4,11 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:todo_flutter/helpers/app_mode_helper.dart';
 import 'package:todo_flutter/keys.dart';
 import 'package:todo_flutter/providers/agenda_provider.dart';
+import 'package:todo_flutter/providers/fault_injection_provider.dart';
 import 'package:todo_flutter/providers/runtime_debug_provider.dart';
 import 'package:todo_flutter/repositories/tasks_repository.dart';
 import 'package:todo_flutter/screens/lab_shell.dart';
+import 'package:todo_flutter/services/fault_injection_policy.dart';
 import 'package:todo_flutter/services/task_list_state_coordinator.dart';
 import 'package:todo_flutter/services/task_local_snapshot_coordinator.dart';
 import 'package:todo_flutter/services/task_sync_coordinator.dart';
@@ -55,6 +57,8 @@ class _MyAppState extends State<MyApp> {
   late final TasksRepository _tasksRepository;
   late final TaskLocalSnapshotCoordinator _taskLocalSnapshotCoordinator;
   late final RuntimeDebugProvider _runtimeDebugProvider;
+  late final FaultInjectionProvider _faultInjectionProvider;
+  late final FaultInjectionPolicy _faultInjectionPolicy;
   late final TaskSyncService _taskSyncService;
   late final TaskSyncCoordinator _taskSyncCoordinator;
   late final UserSessionService _userSessionService;
@@ -68,10 +72,17 @@ class _MyAppState extends State<MyApp> {
       _tasksRepository,
     );
     _runtimeDebugProvider = RuntimeDebugProvider();
+    _faultInjectionProvider = FaultInjectionProvider(
+      runtimeDebug: _runtimeDebugProvider,
+    );
+    _faultInjectionPolicy = FaultInjectionPolicy(
+      readState: () => _faultInjectionProvider.state,
+    );
     _taskSyncService = TaskSyncService(
       _tasksRepository,
       Supabase.instance.client,
       runtimeDebug: _runtimeDebugProvider,
+      faultInjectionPolicy: _faultInjectionPolicy,
     );
     _taskSyncCoordinator = TaskSyncCoordinator(
       _taskLocalSnapshotCoordinator,
@@ -88,6 +99,7 @@ class _MyAppState extends State<MyApp> {
 
   @override
   void dispose() {
+    _faultInjectionProvider.dispose();
     _runtimeDebugProvider.dispose();
     super.dispose();
   }
@@ -98,6 +110,9 @@ class _MyAppState extends State<MyApp> {
       providers: [
         ChangeNotifierProvider<RuntimeDebugProvider>.value(
           value: _runtimeDebugProvider,
+        ),
+        ChangeNotifierProvider<FaultInjectionProvider>.value(
+          value: _faultInjectionProvider,
         ),
         Provider<WorkspaceSessionCoordinator>.value(
           value: _workspaceSessionCoordinator,

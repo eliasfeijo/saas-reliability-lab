@@ -17,6 +17,7 @@ class RuntimeDebugProvider extends ChangeNotifier {
 
   final Connectivity _connectivity;
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
+  List<ConnectivityResult> _lastObservedConnectivityResults = const [];
 
   RuntimeDebugState _state = const RuntimeDebugState();
 
@@ -30,7 +31,12 @@ class RuntimeDebugProvider extends ChangeNotifier {
   void setConnectivityResults(
     List<ConnectivityResult> results, {
     bool logEvent = true,
+    bool updateObservedCache = true,
   }) {
+    if (updateObservedCache) {
+      _lastObservedConnectivityResults = List<ConnectivityResult>.from(results);
+    }
+
     final nextStatus =
         results.isEmpty ||
             results.every((result) => result == ConnectivityResult.none)
@@ -54,6 +60,14 @@ class RuntimeDebugProvider extends ChangeNotifier {
             : RuntimeEventLevel.warning,
       );
     }
+  }
+
+  void restoreObservedConnectivity({bool logEvent = false}) {
+    setConnectivityResults(
+      _lastObservedConnectivityResults,
+      logEvent: logEvent,
+      updateObservedCache: false,
+    );
   }
 
   void startInitialLoad(String message) {
@@ -235,6 +249,36 @@ class RuntimeDebugProvider extends ChangeNotifier {
       category: RuntimeEventCategory.sync,
       message: message,
       level: RuntimeEventLevel.error,
+    );
+  }
+
+  void setActiveFaultInjection({
+    required String label,
+    required String message,
+    required String instruction,
+  }) {
+    _replace(
+      _state.copyWith(
+        activeFaultInjectionLabel: label,
+        activeFaultInjectionMessage: message,
+        activeFaultInjectionInstruction: instruction,
+      ),
+    );
+  }
+
+  void clearActiveFaultInjection() {
+    if (_state.activeFaultInjectionLabel == null &&
+        _state.activeFaultInjectionMessage == null &&
+        _state.activeFaultInjectionInstruction == null) {
+      return;
+    }
+
+    _replace(
+      _state.copyWith(
+        activeFaultInjectionLabel: null,
+        activeFaultInjectionMessage: null,
+        activeFaultInjectionInstruction: null,
+      ),
     );
   }
 

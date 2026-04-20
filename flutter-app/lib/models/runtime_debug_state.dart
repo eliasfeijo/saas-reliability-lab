@@ -59,6 +59,9 @@ class RuntimeDebugState {
     this.dirtyTaskCount = 0,
     this.deletedTaskCount = 0,
     this.anonymousTaskCount = 0,
+    this.activeFaultInjectionLabel,
+    this.activeFaultInjectionMessage,
+    this.activeFaultInjectionInstruction,
     this.pushPermissionState = PushPermissionState.unknown,
     this.pushSubscriptionState = PushSubscriptionState.unknown,
     this.lastPushMessage,
@@ -87,6 +90,9 @@ class RuntimeDebugState {
   final int dirtyTaskCount;
   final int deletedTaskCount;
   final int anonymousTaskCount;
+  final String? activeFaultInjectionLabel;
+  final String? activeFaultInjectionMessage;
+  final String? activeFaultInjectionInstruction;
   final PushPermissionState pushPermissionState;
   final PushSubscriptionState pushSubscriptionState;
   final String? lastPushMessage;
@@ -115,6 +121,9 @@ class RuntimeDebugState {
     int? dirtyTaskCount,
     int? deletedTaskCount,
     int? anonymousTaskCount,
+    Object? activeFaultInjectionLabel = _runtimeDebugUnset,
+    Object? activeFaultInjectionMessage = _runtimeDebugUnset,
+    Object? activeFaultInjectionInstruction = _runtimeDebugUnset,
     PushPermissionState? pushPermissionState,
     PushSubscriptionState? pushSubscriptionState,
     Object? lastPushMessage = _runtimeDebugUnset,
@@ -174,6 +183,18 @@ class RuntimeDebugState {
       dirtyTaskCount: dirtyTaskCount ?? this.dirtyTaskCount,
       deletedTaskCount: deletedTaskCount ?? this.deletedTaskCount,
       anonymousTaskCount: anonymousTaskCount ?? this.anonymousTaskCount,
+      activeFaultInjectionLabel:
+          identical(activeFaultInjectionLabel, _runtimeDebugUnset)
+          ? this.activeFaultInjectionLabel
+          : activeFaultInjectionLabel as String?,
+      activeFaultInjectionMessage:
+          identical(activeFaultInjectionMessage, _runtimeDebugUnset)
+          ? this.activeFaultInjectionMessage
+          : activeFaultInjectionMessage as String?,
+      activeFaultInjectionInstruction:
+          identical(activeFaultInjectionInstruction, _runtimeDebugUnset)
+          ? this.activeFaultInjectionInstruction
+          : activeFaultInjectionInstruction as String?,
       pushPermissionState: pushPermissionState ?? this.pushPermissionState,
       pushSubscriptionState:
           pushSubscriptionState ?? this.pushSubscriptionState,

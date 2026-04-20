@@ -198,7 +198,7 @@ Responsibilities:
 - manual sync trigger
 - persistent task filters
 - anonymous-task review and reconciliation controls
-- reserved scenario-control surface for future fault injection
+- active scenario-control surface for connectivity-loss injection, with the same rail reserved for later delayed-sync, auth-expiry, and replay scenarios
 
 Architectural significance:
 

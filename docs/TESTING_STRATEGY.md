@@ -49,6 +49,7 @@ Current files:
 What they currently cover:
 
 - sync reconciliation rules
+- connectivity-loss fault injection at the sync boundary
 - anonymous-task adoption and deletion behavior
 - provider-facing task-list persistence and debug-count publication
 - provider-facing sync sequencing for anonymous-task keep/discard flows
@@ -60,6 +61,7 @@ What they currently cover:
 - shell ownership across wide and narrow layouts
 - operator rail rendering for anonymous and authenticated states
 - diagnostics rail rendering for explicit sync, push, local-state, and timeline evidence
+- diagnostics rail rendering for active fault-injection evidence
 - provider-level queue and batch behavior
 - workflow-style widget regressions in the task workspace
 - responsive widget behavior at fixed viewport sizes

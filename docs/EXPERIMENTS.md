@@ -19,6 +19,7 @@ What the UI can already expose today:
 - authenticated versus anonymous session state
 - cached identity versus live auth identity
 - manual sync initiation from the operator rail
+- controlled connectivity-loss injection from the operator rail
 - sync lifecycle and last outcome summaries
 - local dirty, deleted, and anonymous task counts
 - selected-task details through a persistent inspector on wide screens and an inline inspector on narrower layouts
@@ -31,7 +32,7 @@ What the UI intentionally reserves but does not yet truly implement:
 - sending and acknowledged operation states
 - failed operations with retry policy
 - conflict capture and resolution
-- fault injection controls
+- delayed sync, expired auth, partial replay drop, duplicate replay, and conflict-oriented fault injection
 
 ## Experiment format
 
@@ -352,9 +353,19 @@ Study how the client behaves when a sync pass partially succeeds and then loses 
 
 Turn the lab from a passive observer into an active experiment harness.
 
+Implementation planning for this area now lives in [`FAULT_INJECTION_PLAN.md`](FAULT_INJECTION_PLAN.md).
+
+Implemented now:
+
+- operator-rail activation for a controlled connectivity-loss scenario
+- operator-facing instructions that explain how to run the scenario
+- runtime diagnostics evidence for the active scenario
+- reset controls in both the operator rail and the diagnostics rail
+- event-timeline output when the scenario is activated, reset, and used during sync
+
 ### What is still needed
 
-- real operator-rail toggles for connectivity loss, delayed sync, expired auth, duplicate replay, and conflict simulation
+- real operator-rail toggles for delayed sync, expired auth, duplicate replay, and conflict simulation
 - runtime state capable of representing injected failures clearly
 - documentation for expected evidence per injected scenario
 
