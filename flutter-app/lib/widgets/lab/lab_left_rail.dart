@@ -12,6 +12,7 @@ import 'package:todo_flutter/providers/fault_injection_provider.dart';
 import 'package:todo_flutter/providers/runtime_debug_provider.dart';
 import 'package:todo_flutter/widgets/bottomsheets/login.dart';
 import 'package:todo_flutter/widgets/debug/debug_status_card.dart';
+import 'package:todo_flutter/widgets/lab/reset_controls_card.dart';
 
 class LabLeftRail extends StatefulWidget {
   const LabLeftRail({super.key, this.compact = false});
@@ -670,6 +671,13 @@ class _LabLeftRailState extends State<LabLeftRail> {
                     ],
                   ],
                 ),
+              ),
+              const SizedBox(height: 16),
+              ResetControlsCard(
+                agenda: agenda,
+                runtimeDebug: runtimeDebug,
+                faultInjection: faultInjection,
+                hasAuthenticatedSession: state.hasAuthenticatedSession,
               ),
             ],
           ),

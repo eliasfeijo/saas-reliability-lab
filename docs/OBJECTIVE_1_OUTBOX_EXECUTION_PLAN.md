@@ -147,8 +147,8 @@ Current implemented limit:
 - the first slice keeps up to 10 recent acknowledgements in local outbox storage
 - there is no time-based expiry yet
 - Runtime Diagnostics now exposes a manual clear action for recording, demos, or other cases where the operator wants a clean acknowledgement history without wiping tasks or active outbox entries
-- Runtime Diagnostics now exposes a soft demo reset action that clears retained acknowledgements plus transient diagnostics surfaces such as sync outcome history, fault-injection UI state, and timeline events while preserving auth state, push state truth, local tasks, and active outbox entries
-- Runtime Diagnostics also exposes a hard reset action that first replays delete operations for authenticated remote-backed tasks, then wipes all local task and outbox state after the remote deletions are confirmed
+- the Operator Rail now exposes a soft demo reset action that clears retained acknowledgements plus transient diagnostics surfaces such as sync outcome history, fault-injection UI state, and timeline events while preserving auth state, push state truth, local tasks, and active outbox entries
+- the Operator Rail also exposes a hard reset action that first replays delete operations for authenticated remote-backed tasks, then wipes all local task and outbox state after the remote deletions are confirmed
 
 ## First-slice target behavior
 

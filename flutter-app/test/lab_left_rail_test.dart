@@ -2,9 +2,19 @@ import 'package:connectivity_plus_platform_interface/connectivity_plus_platform_
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:todo_flutter/models/fault_injection_scenario.dart';
+import 'package:todo_flutter/models/outbox_entry.dart';
+import 'package:todo_flutter/models/runtime_debug_state.dart';
+import 'package:todo_flutter/models/runtime_event.dart';
 import 'package:todo_flutter/models/task.dart';
+import 'package:todo_flutter/providers/agenda_provider.dart';
 import 'package:todo_flutter/providers/fault_injection_provider.dart';
 import 'package:todo_flutter/providers/runtime_debug_provider.dart';
+import 'package:todo_flutter/repositories/outbox_repository.dart';
+import 'package:todo_flutter/services/task_list_state_coordinator.dart';
+import 'package:todo_flutter/services/task_local_snapshot_coordinator.dart';
+import 'package:todo_flutter/services/task_local_state_coordinator.dart';
+import 'package:todo_flutter/services/task_sync_coordinator.dart';
+import 'package:todo_flutter/services/task_sync_flow_coordinator.dart';
 import 'package:todo_flutter/services/task_sync_service.dart';
 import 'package:todo_flutter/widgets/lab/lab_left_rail.dart';
 
@@ -190,7 +200,18 @@ void main() {
       );
       expect(find.textContaining('Leave the browser online'), findsOneWidget);
 
-      await tester.tap(find.byIcon(Icons.close).first);
+      final activeScenarioChip = find.widgetWithText(
+        InputChip,
+        'Connectivity loss',
+      );
+      final activeScenarioDeleteIcon = find.descendant(
+        of: activeScenarioChip,
+        matching: find.byIcon(Icons.close),
+      );
+
+      await tester.ensureVisible(activeScenarioChip);
+      await tester.pumpAndSettle();
+      await tester.tap(activeScenarioDeleteIcon);
       await tester.pumpAndSettle();
 
       expect(runtimeDebug.state.activeFaultInjectionLabel, isNull);
@@ -254,6 +275,162 @@ void main() {
       expect(
         runtimeDebug.state.activeFaultInjectionLabel,
         'Delayed sync (10 s)',
+      );
+    },
+  );
+
+  testWidgets(
+    'reset controls live below scenario controls in the operator rail and soft reset preserves live state',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1200, 1800));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final runtimeDebug = RuntimeDebugProvider();
+      addTearDown(runtimeDebug.dispose);
+      final faultInjection = FaultInjectionProvider(runtimeDebug: runtimeDebug);
+      addTearDown(faultInjection.dispose);
+      final repository = InMemoryTasksRepository([]);
+      final outboxRepository = InMemoryOutboxRepository();
+      final snapshotCoordinator = TaskLocalSnapshotCoordinator.fromRepository(
+        repository,
+      );
+      final localStateCoordinator = TaskLocalStateCoordinator(
+        snapshotCoordinator,
+        outboxRepository,
+        runtimeDebug: runtimeDebug,
+      );
+      final syncService = TaskSyncService.forTesting(
+        repository,
+        remote: FakeTaskRemoteDataSource([]),
+        connectivityCheck: () async => [ConnectivityResult.wifi],
+        hasActiveSession: () => true,
+        runtimeDebug: runtimeDebug,
+        localStateCoordinator: localStateCoordinator,
+      );
+      final taskListStateCoordinator = TaskListStateCoordinator(
+        snapshotCoordinator,
+        runtimeDebug: runtimeDebug,
+        localStateCoordinator: localStateCoordinator,
+      );
+      final agenda = AgendaProvider(
+        taskListStateCoordinator: taskListStateCoordinator,
+        taskSyncFlowCoordinator: TaskSyncFlowCoordinator(
+          taskListStateCoordinator,
+          TaskSyncCoordinator(
+            snapshotCoordinator,
+            syncService,
+            runtimeDebug: runtimeDebug,
+            localStateCoordinator: localStateCoordinator,
+          ),
+        ),
+      );
+      addTearDown(agenda.dispose);
+
+      runtimeDebug.setUserState(
+        cachedUserId: 'cached-user-123456',
+        activeUserId: 'active-user-123456',
+        hasAuthenticatedSession: true,
+      );
+      runtimeDebug.markSyncPartial(
+        'Sync completed. Some operations need review.',
+      );
+      runtimeDebug.setPushPermission(
+        PushPermissionState.granted,
+        logEvent: false,
+      );
+      runtimeDebug.setPushSubscriptionState(
+        PushSubscriptionState.registered,
+        message: 'Push registration is active.',
+      );
+      runtimeDebug.addEvent(
+        category: RuntimeEventCategory.sync,
+        message: 'Timeline event for diagnostics.',
+      );
+      await faultInjection.activateScenario(
+        FaultInjectionScenario.connectivityLoss,
+      );
+
+      await localStateCoordinator.saveOutboxState(
+        OutboxStorageState(
+          isInitialized: true,
+          activeEntries: [
+            OutboxEntry(
+              taskId: 'task-queued',
+              operationType: OutboxOperationType.upsert,
+              state: OutboxEntryState.queued,
+              ownerScope: OutboxOwnerScope.authenticated,
+              taskPayload: const {'id': 'task-queued'},
+            ),
+          ],
+          recentAcknowledgements: [
+            OutboxEntry(
+              taskId: 'task-ack',
+              operationType: OutboxOperationType.upsert,
+              state: OutboxEntryState.acknowledged,
+              ownerScope: OutboxOwnerScope.authenticated,
+              taskPayload: const {'id': 'task-ack'},
+            ),
+          ],
+        ),
+      );
+
+      await tester.pumpWidget(
+        RailHarness(
+          agenda: agenda,
+          runtimeDebug: runtimeDebug,
+          faultInjection: faultInjection,
+          child: const LabLeftRail(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.scrollUntilVisible(find.text('Reset Controls'), 300);
+
+      expect(find.text('Reset Controls'), findsOneWidget);
+      expect(find.text('Soft demo reset'), findsOneWidget);
+      expect(find.text('Hard reset'), findsOneWidget);
+      expect(
+        top(tester, 'Reset Controls') > top(tester, 'Scenario Controls'),
+        isTrue,
+      );
+      expect(
+        tester
+            .getSize(find.widgetWithText(OutlinedButton, 'Soft demo reset'))
+            .width,
+        tester.getSize(find.widgetWithText(FilledButton, 'Hard reset')).width,
+      );
+
+      final softResetButton = find.widgetWithText(
+        OutlinedButton,
+        'Soft demo reset',
+      );
+      await tester.ensureVisible(softResetButton);
+      await tester.pumpAndSettle();
+      await tester.tap(softResetButton);
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Soft reset'));
+      await tester.pumpAndSettle();
+
+      expect(runtimeDebug.state.hasAuthenticatedSession, isTrue);
+      expect(runtimeDebug.state.activeUserId, 'active-user-123456');
+      expect(runtimeDebug.state.queuedEntryCount, 1);
+      expect(runtimeDebug.state.acknowledgedEntryCount, 0);
+      expect(runtimeDebug.state.lastSyncResult, RuntimeSyncResult.none);
+      expect(runtimeDebug.state.lastSyncMessage, isNull);
+      expect(
+        runtimeDebug.state.pushSubscriptionState,
+        PushSubscriptionState.registered,
+      );
+      expect(
+        runtimeDebug.state.lastPushMessage,
+        'Push registration is active.',
+      );
+      expect(runtimeDebug.state.activeFaultInjectionLabel, isNull);
+      expect(runtimeDebug.state.recentEvents, isEmpty);
+      expect(find.text('upsert task-ack', skipOffstage: false), findsNothing);
+      expect(
+        find.text('Timeline event for diagnostics.', skipOffstage: false),
+        findsNothing,
       );
     },
   );

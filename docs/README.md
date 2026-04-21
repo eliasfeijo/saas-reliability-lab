@@ -165,7 +165,7 @@ That target shape is described in more detail in [`ARCHITECTURE.md`](ARCHITECTUR
 - runtime state is modeled explicitly through `RuntimeDebugProvider` and `RuntimeDebugState`
 - the client now routes workspace interaction state, session flow, sync entry, local snapshot handling, and task mutation rules through dedicated seams around `TaskWorkspace` and `AgendaProvider`
 - the client now replays an explicit local outbox with per-operation queued, sending, acknowledged, failed, conflict, blocked-review, and blocked-session states
-- diagnostics now expose first-slice conflict resolution actions and demo-safe reset controls alongside retained acknowledgement evidence
+- diagnostics now expose first-slice conflict resolution actions alongside retained acknowledgement evidence, while the operator rail owns demo-safe reset controls
 - sync, auth, connectivity, local counts, and push state are visible in the UI
 - push notifications work end to end for signed-in browser profiles
 

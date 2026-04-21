@@ -43,8 +43,8 @@ Current implication:
 - explicit outbox replay now exists when the runtime is using the coordinated local task-plus-outbox state layer
 - failed, blocked, conflict, queued, sending, and recent acknowledgement evidence now surface through runtime diagnostics and workspace notices
 - recent acknowledgements are currently retained as a rolling local history of up to 10 entries, and the diagnostics rail exposes a manual clear action for clean recording or demo setup
-- the diagnostics rail also exposes a soft demo reset action that clears transient diagnostics history, retained acknowledgements, sync outcome surfaces, and fault-injection UI state while preserving auth state, push state truth, local tasks, and active outbox entries
-- the diagnostics rail also exposes a hard reset action that confirms the remote deletion replay for authenticated remote-backed tasks before wiping all local task and outbox state on the current device
+- the operator rail now exposes a soft demo reset action that clears transient diagnostics history, retained acknowledgements, sync outcome surfaces, and fault-injection UI state while preserving auth state, push state truth, local tasks, and active outbox entries
+- the operator rail now exposes a hard reset action that confirms the remote deletion replay for authenticated remote-backed tasks before wiping all local task and outbox state on the current device
 - older task-shaped sync seams still exist as a fallback path for flows that are not yet running through the coordinated outbox state layer
 
 Current Objective 1 implication:
