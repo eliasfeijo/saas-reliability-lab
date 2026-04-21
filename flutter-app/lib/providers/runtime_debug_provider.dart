@@ -2,9 +2,11 @@ import 'dart:async';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
+import 'package:todo_flutter/models/outbox_entry.dart';
 import 'package:todo_flutter/models/runtime_debug_state.dart';
 import 'package:todo_flutter/models/runtime_event.dart';
 import 'package:todo_flutter/models/task.dart';
+import 'package:todo_flutter/repositories/outbox_repository.dart';
 import 'package:uuid/uuid.dart';
 
 class RuntimeDebugProvider extends ChangeNotifier {
@@ -24,6 +26,29 @@ class RuntimeDebugProvider extends ChangeNotifier {
   RuntimeDebugState _state = const RuntimeDebugState();
 
   RuntimeDebugState get state => _state;
+
+  bool _sameEntryList(List<OutboxEntry> left, List<OutboxEntry> right) {
+    if (identical(left, right)) {
+      return true;
+    }
+
+    if (left.length != right.length) {
+      return false;
+    }
+
+    for (var index = 0; index < left.length; index++) {
+      final leftEntry = left[index];
+      final rightEntry = right[index];
+      if (leftEntry.id != rightEntry.id ||
+          leftEntry.state != rightEntry.state ||
+          leftEntry.updatedAt != rightEntry.updatedAt ||
+          leftEntry.lastError != rightEntry.lastError) {
+        return false;
+      }
+    }
+
+    return true;
+  }
 
   Future<void> refreshConnectivity() async {
     final results = await _connectivity.checkConnectivity();
@@ -228,6 +253,88 @@ class RuntimeDebugProvider extends ChangeNotifier {
     }
 
     _replace(nextState);
+  }
+
+  void updateOutboxState(OutboxStorageState state) {
+    final queuedEntryCount = state.activeEntries
+        .where((entry) => entry.state == OutboxEntryState.queued)
+        .length;
+    final sendingEntryCount = state.activeEntries
+        .where((entry) => entry.state == OutboxEntryState.sending)
+        .length;
+    final failedEntryCount = state.activeEntries
+        .where((entry) => entry.state == OutboxEntryState.failed)
+        .length;
+    final conflictEntryCount = state.activeEntries
+        .where((entry) => entry.state == OutboxEntryState.conflict)
+        .length;
+    final blockedNoSessionEntryCount = state.activeEntries
+        .where((entry) => entry.state == OutboxEntryState.blockedNoSession)
+        .length;
+    final blockedAnonymousReviewEntryCount = state.activeEntries
+        .where(
+          (entry) => entry.state == OutboxEntryState.blockedAnonymousReview,
+        )
+        .length;
+    final conflictEntries = state.activeEntries
+        .where((entry) => entry.state == OutboxEntryState.conflict)
+        .toList(growable: false);
+    final recentAcknowledgements = List<OutboxEntry>.from(
+      state.recentAcknowledgements,
+    );
+
+    final nextState = _state.copyWith(
+      queuedEntryCount: queuedEntryCount,
+      sendingEntryCount: sendingEntryCount,
+      acknowledgedEntryCount: state.recentAcknowledgements.length,
+      failedEntryCount: failedEntryCount,
+      conflictEntryCount: conflictEntryCount,
+      blockedNoSessionEntryCount: blockedNoSessionEntryCount,
+      blockedAnonymousReviewEntryCount: blockedAnonymousReviewEntryCount,
+      conflictEntries: conflictEntries,
+      recentAcknowledgements: recentAcknowledgements,
+    );
+
+    if (nextState.queuedEntryCount == _state.queuedEntryCount &&
+        nextState.sendingEntryCount == _state.sendingEntryCount &&
+        nextState.acknowledgedEntryCount == _state.acknowledgedEntryCount &&
+        nextState.failedEntryCount == _state.failedEntryCount &&
+        nextState.conflictEntryCount == _state.conflictEntryCount &&
+        nextState.blockedNoSessionEntryCount ==
+            _state.blockedNoSessionEntryCount &&
+        nextState.blockedAnonymousReviewEntryCount ==
+            _state.blockedAnonymousReviewEntryCount &&
+        _sameEntryList(conflictEntries, _state.conflictEntries) &&
+        _sameEntryList(recentAcknowledgements, _state.recentAcknowledgements)) {
+      return;
+    }
+
+    _replace(nextState);
+  }
+
+  void resetDemoSurface() {
+    _replace(
+      _state.copyWith(
+        isInitialLoadRunning: false,
+        syncPhase: RuntimeSyncPhase.idle,
+        lastSyncResult: RuntimeSyncResult.none,
+        lastSyncMessage: null,
+        lastSyncStartedAt: null,
+        lastSyncCompletedAt: null,
+        lastSuccessfulSyncAt: null,
+        lastSuccessfulSyncMessage: null,
+        lastSkippedSyncAt: null,
+        lastSkippedSyncMessage: null,
+        lastPartialSyncAt: null,
+        lastPartialSyncMessage: null,
+        lastFailedSyncAt: null,
+        lastFailedSyncMessage: null,
+        activeFaultInjectionLabel: null,
+        activeFaultInjectionMessage: null,
+        activeFaultInjectionInstruction: null,
+        recentEvents: const <RuntimeEvent>[],
+      ),
+    );
   }
 
   void markSyncStarted(String message, {RuntimeEventPayload? payload}) {

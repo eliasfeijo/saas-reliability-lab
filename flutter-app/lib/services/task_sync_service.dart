@@ -4,10 +4,13 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:todo_flutter/controllers/debounce_controller.dart';
+import 'package:todo_flutter/models/outbox_entry.dart';
 import 'package:todo_flutter/models/runtime_debug_state.dart';
 import 'package:todo_flutter/models/runtime_event.dart';
 import 'package:todo_flutter/providers/runtime_debug_provider.dart';
+import 'package:todo_flutter/repositories/outbox_repository.dart';
 import 'package:todo_flutter/services/fault_injection_policy.dart';
+import 'package:todo_flutter/services/task_local_state_coordinator.dart';
 
 import '../models/task.dart';
 import '../repositories/tasks_repository.dart';
@@ -66,7 +69,9 @@ class SupabaseTaskRemoteDataSource implements TaskRemoteDataSource {
       return null;
     }
 
-    return TaskModel.fromJson(existing);
+    return TaskModel.fromJson(
+      existing,
+    ).copyWith(syncStatus: SyncStatus.synced, hasRemoteBackingRecord: true);
   }
 
   @override
@@ -87,7 +92,12 @@ class SupabaseTaskRemoteDataSource implements TaskRemoteDataSource {
         .order('start_date');
 
     return (remoteTasksRaw as List)
-        .map((json) => TaskModel.fromJson(json))
+        .map(
+          (json) => TaskModel.fromJson(json).copyWith(
+            syncStatus: SyncStatus.synced,
+            hasRemoteBackingRecord: true,
+          ),
+        )
         .toList();
   }
 }
@@ -101,6 +111,7 @@ class TaskSyncService implements TaskSyncGateway {
   final RuntimeDebugProvider? _runtimeDebug;
   final FaultInjectionPolicy _faultInjectionPolicy;
   final DelayExecution _delayExecution;
+  final TaskLocalStateCoordinator? _localStateCoordinator;
 
   TaskSyncService(
     this.repository,
@@ -112,6 +123,7 @@ class TaskSyncService implements TaskSyncGateway {
     RuntimeDebugProvider? runtimeDebug,
     FaultInjectionPolicy? faultInjectionPolicy,
     DelayExecution? delayExecution,
+    TaskLocalStateCoordinator? localStateCoordinator,
   }) : _remote = remote ?? SupabaseTaskRemoteDataSource(supabase),
        _checkConnectivity =
            connectivityCheck ?? Connectivity().checkConnectivity,
@@ -126,7 +138,8 @@ class TaskSyncService implements TaskSyncGateway {
            DebounceController(debounceDuration: const Duration(seconds: 3)),
        _runtimeDebug = runtimeDebug,
        _faultInjectionPolicy = faultInjectionPolicy ?? FaultInjectionPolicy(),
-       _delayExecution = delayExecution ?? Future<void>.delayed;
+       _delayExecution = delayExecution ?? Future<void>.delayed,
+       _localStateCoordinator = localStateCoordinator;
 
   TaskSyncService.forTesting(
     this.repository, {
@@ -137,6 +150,7 @@ class TaskSyncService implements TaskSyncGateway {
     RuntimeDebugProvider? runtimeDebug,
     FaultInjectionPolicy? faultInjectionPolicy,
     DelayExecution? delayExecution,
+    TaskLocalStateCoordinator? localStateCoordinator,
   }) : _remote = remote,
        _checkConnectivity = connectivityCheck,
        _hasActiveSession = hasActiveSession,
@@ -145,15 +159,24 @@ class TaskSyncService implements TaskSyncGateway {
            DebounceController(debounceDuration: const Duration(seconds: 3)),
        _runtimeDebug = runtimeDebug,
        _faultInjectionPolicy = faultInjectionPolicy ?? FaultInjectionPolicy(),
-       _delayExecution = delayExecution ?? Future<void>.delayed;
+       _delayExecution = delayExecution ?? Future<void>.delayed,
+       _localStateCoordinator = localStateCoordinator;
 
   @override
   Future<TaskSyncRunResult> syncTasks(List<TaskModel> tasks) async {
+    final localState = _localStateCoordinator == null
+        ? null
+        : await _localStateCoordinator.loadState();
+    final effectiveTasks = localState?.tasks ?? tasks;
+
     final connectivityResult = _faultInjectionPolicy.applyConnectivityResults(
       await _checkConnectivity(),
     );
     _runtimeDebug?.setConnectivityResults(connectivityResult, logEvent: false);
-    _runtimeDebug?.updateTaskCounts(tasks);
+    _runtimeDebug?.updateTaskCounts(effectiveTasks);
+    if (localState != null) {
+      _runtimeDebug?.updateOutboxState(localState.outboxState);
+    }
 
     if (_hasNoConnectivity(connectivityResult)) {
       final message = _faultInjectionPolicy.isConnectivityLossActive
@@ -166,7 +189,7 @@ class TaskSyncService implements TaskSyncGateway {
           stage: 'Replay skipped',
           summary:
               'The sync pass did not start because the cloud boundary is offline.',
-          tasks: tasks,
+          tasks: effectiveTasks,
           notes: [
             if (_faultInjectionPolicy.isConnectivityLossActive)
               'A controlled connectivity-loss scenario is currently forcing the sync boundary offline.',
@@ -178,6 +201,17 @@ class TaskSyncService implements TaskSyncGateway {
     }
 
     if (!_hasActiveSession()) {
+      if (localState != null) {
+        await _persistLocalState(
+          TaskLocalState(
+            tasks: localState.tasks,
+            outboxState: _updateEntriesForBlockedNoSession(
+              localState.outboxState,
+            ),
+            didMigrateLegacySyncState: localState.didMigrateLegacySyncState,
+          ),
+        );
+      }
       _runtimeDebug?.markSyncSkipped(
         phase: RuntimeSyncPhase.blockedNoSession,
         message: 'No authenticated session. Skipping sync.',
@@ -185,7 +219,7 @@ class TaskSyncService implements TaskSyncGateway {
           stage: 'Replay blocked',
           summary:
               'The sync pass is waiting for an authenticated session before any cloud replay can start.',
-          tasks: tasks,
+          tasks: effectiveTasks,
         ),
       );
       debugPrint('No user session. Skipping sync.');
@@ -194,8 +228,8 @@ class TaskSyncService implements TaskSyncGateway {
 
     final delayedSyncLabel = _faultInjectionPolicy.delayedSyncDurationLabel;
     final startMessage = delayedSyncLabel == null
-        ? 'Synchronizing ${tasks.length} local task(s).'
-        : 'Delayed sync scenario is active. Holding remote replay for $delayedSyncLabel before synchronizing ${tasks.length} local task(s).';
+        ? 'Synchronizing ${effectiveTasks.length} local task(s).'
+        : 'Delayed sync scenario is active. Holding remote replay for $delayedSyncLabel before synchronizing ${effectiveTasks.length} local task(s).';
 
     _runtimeDebug?.markSyncStarted(
       startMessage,
@@ -203,15 +237,23 @@ class TaskSyncService implements TaskSyncGateway {
         stage: 'Replay started',
         summary:
             'The runtime is preparing local task mutations for cloud replay.',
-        tasks: tasks,
+        tasks: effectiveTasks,
         notes: [
           if (delayedSyncLabel != null)
             'A deterministic delay is active before remote replay begins.',
         ],
       ),
     );
-    await _applyInjectedPreSyncDelay(tasks);
+    await _applyInjectedPreSyncDelay(effectiveTasks);
 
+    if (localState != null) {
+      return _syncTasksWithOutbox(localState);
+    }
+
+    return _syncTasksLegacy(effectiveTasks);
+  }
+
+  Future<TaskSyncRunResult> _syncTasksLegacy(List<TaskModel> tasks) async {
     try {
       final syncedTasks = <TaskModel>[];
       final acknowledgedTaskDetails = <RuntimeEventTaskDetail>[];
@@ -263,7 +305,7 @@ class TaskSyncService implements TaskSyncGateway {
           debugPrint('Delete error: $e');
         }
       }
-      await repository.saveTasks(workingTasks);
+      await _saveTasksLocally(workingTasks);
 
       final dirty = workingTasks
           .where((t) => t.syncStatus == SyncStatus.dirty)
@@ -275,6 +317,7 @@ class TaskSyncService implements TaskSyncGateway {
           if (remoteTask == null) {
             await _remote.insertTask(task);
             task.syncStatus = SyncStatus.synced;
+            task.hasRemoteBackingRecord = true;
             remotelyConfirmedTaskIds.add(task.id);
             syncedTasks.add(task);
             acknowledgedTaskDetails.add(
@@ -291,6 +334,7 @@ class TaskSyncService implements TaskSyncGateway {
           if (_isLocalTaskNewer(task, remoteTask)) {
             await _remote.updateTask(task);
             task.syncStatus = SyncStatus.synced;
+            task.hasRemoteBackingRecord = true;
             remotelyConfirmedTaskIds.add(task.id);
             syncedTasks.add(task);
             acknowledgedTaskDetails.add(
@@ -363,7 +407,7 @@ class TaskSyncService implements TaskSyncGateway {
           debugPrint('Sync error: $e');
         }
       }
-      await repository.saveTasks(workingTasks);
+      await _saveTasksLocally(workingTasks);
 
       final remoteTasks = await _remote.fetchAllTasks();
       final remoteTaskIds = remoteTasks.map((t) => t.id).toSet();
@@ -385,7 +429,7 @@ class TaskSyncService implements TaskSyncGateway {
       final mergedTasks = merged.values.toList()
         ..sort((a, b) => a.beginsAt.compareTo(b.beginsAt));
 
-      await repository.saveTasks(mergedTasks);
+      await _saveTasksLocally(mergedTasks);
       _runtimeDebug?.updateTaskCounts(mergedTasks);
 
       final summary =
@@ -464,6 +508,244 @@ class TaskSyncService implements TaskSyncGateway {
     }
   }
 
+  Future<TaskSyncRunResult> _syncTasksWithOutbox(
+    TaskLocalState localState,
+  ) async {
+    try {
+      final workingTasks = localState.tasks
+          .map((task) => task.copyWith())
+          .toList();
+      var outboxState = _resetBlockedEntriesForReplay(localState.outboxState);
+      final acknowledgedTasks = <TaskModel>[];
+      final acknowledgedTaskDetails = <RuntimeEventTaskDetail>[];
+      var hadRecoverableErrors = false;
+
+      final orderedEntries = [...outboxState.activeEntries]
+        ..sort((left, right) {
+          final leftTime = left.firstQueuedAt ?? left.createdAt;
+          final rightTime = right.firstQueuedAt ?? right.createdAt;
+          return leftTime.compareTo(rightTime);
+        });
+
+      for (final entry in orderedEntries) {
+        if (!_isReplayableEntry(entry)) {
+          continue;
+        }
+
+        final sendingEntry = entry.copyWith(
+          state: OutboxEntryState.sending,
+          updatedAt: DateTime.now().toUtc(),
+          lastAttemptAt: DateTime.now().toUtc(),
+          attemptCount: entry.attemptCount + 1,
+          lastError: null,
+        );
+        outboxState = _replaceActiveEntry(outboxState, sendingEntry);
+        await _persistLocalState(
+          TaskLocalState(tasks: workingTasks, outboxState: outboxState),
+        );
+
+        try {
+          if (entry.operationType == OutboxOperationType.delete) {
+            await _remote.deleteTask(entry.taskId);
+            workingTasks.removeWhere((task) => task.id == entry.taskId);
+            outboxState = _acknowledgeEntry(outboxState, sendingEntry);
+            acknowledgedTaskDetails.add(
+              RuntimeEventTaskDetail(
+                title: _taskTitleForEntry(entry),
+                taskId: entry.taskId,
+                syncStatus: 'Deleted',
+                outcome: 'Deleted remotely',
+                description:
+                    'A locally deleted task was confirmed and removed from the cloud record.',
+              ),
+            );
+            continue;
+          }
+
+          final localTask = _taskFromEntry(entry, workingTasks);
+          final remoteTask = await _remote.fetchTaskById(entry.taskId);
+
+          if (remoteTask == null) {
+            await _remote.insertTask(localTask);
+            final acknowledgedTask = localTask.copyWith(
+              syncStatus: SyncStatus.synced,
+              hasRemoteBackingRecord: true,
+            );
+            _replaceTask(workingTasks, acknowledgedTask);
+            acknowledgedTasks.add(acknowledgedTask);
+            acknowledgedTaskDetails.add(
+              _buildTaskDetail(
+                acknowledgedTask,
+                outcome: 'Created remotely',
+                description:
+                    'A local-only task was inserted into the remote task set.',
+              ),
+            );
+            outboxState = _acknowledgeEntry(outboxState, sendingEntry);
+            continue;
+          }
+
+          if (_isEntrySafeToApply(localTask, remoteTask, sendingEntry)) {
+            await _remote.updateTask(localTask);
+            final acknowledgedTask = localTask.copyWith(
+              syncStatus: SyncStatus.synced,
+              hasRemoteBackingRecord: true,
+            );
+            _replaceTask(workingTasks, acknowledgedTask);
+            acknowledgedTasks.add(acknowledgedTask);
+            acknowledgedTaskDetails.add(
+              _buildTaskDetail(
+                acknowledgedTask,
+                outcome: 'Updated remotely',
+                description:
+                    'The local task version was newer and replaced the remote copy.',
+                fieldDiffs: _buildTaskFieldDiffs(remoteTask, acknowledgedTask),
+              ),
+            );
+            outboxState = _acknowledgeEntry(outboxState, sendingEntry);
+            continue;
+          }
+
+          final conflictEntry = sendingEntry.copyWith(
+            state: OutboxEntryState.conflict,
+            updatedAt: DateTime.now().toUtc(),
+            lastError:
+                'Remote task changed since this outbox entry was queued.',
+            remoteSnapshot: remoteTask.toJson(),
+          );
+          outboxState = _replaceActiveEntry(outboxState, conflictEntry);
+          hadRecoverableErrors = true;
+          _runtimeDebug?.addEvent(
+            category: RuntimeEventCategory.sync,
+            message: 'Task ${localTask.title} requires conflict review.',
+            level: RuntimeEventLevel.warning,
+            payload: _buildSyncPayload(
+              stage: 'Conflict detected',
+              summary:
+                  'The remote task changed after this local outbox entry was queued, so the runtime blocked replay for review.',
+              tasks: workingTasks,
+              highlightedTasks: [
+                _buildTaskDetail(
+                  localTask,
+                  outcome: 'Conflict',
+                  description:
+                      'Local replay stopped because the remote version is newer than the queued base snapshot.',
+                  fieldDiffs: _buildTaskFieldDiffs(localTask, remoteTask),
+                ),
+              ],
+            ),
+          );
+        } catch (error) {
+          hadRecoverableErrors = true;
+          final failedEntry = sendingEntry.copyWith(
+            state: OutboxEntryState.failed,
+            updatedAt: DateTime.now().toUtc(),
+            lastError: error.toString(),
+          );
+          outboxState = _replaceActiveEntry(outboxState, failedEntry);
+          _runtimeDebug?.addEvent(
+            category: RuntimeEventCategory.sync,
+            message:
+                'Failed to replay ${entry.operationType.name} for ${_taskTitleForEntry(entry)}.',
+            level: RuntimeEventLevel.warning,
+            detail: error.toString(),
+            payload: _buildSyncPayload(
+              stage: 'Task replay failed',
+              summary:
+                  'The runtime could not replay this outbox entry to the remote store.',
+              tasks: workingTasks,
+              highlightedTasks: [
+                RuntimeEventTaskDetail(
+                  title: _taskTitleForEntry(entry),
+                  taskId: entry.taskId,
+                  syncStatus: sendingEntry.state.name,
+                  outcome: 'Replay failed',
+                  description:
+                      'The entry remains queued for later review or retry.',
+                ),
+              ],
+              notes: [error.toString()],
+            ),
+          );
+        }
+
+        await _persistLocalState(
+          TaskLocalState(tasks: workingTasks, outboxState: outboxState),
+        );
+      }
+
+      final remoteTasks = await _remote.fetchAllTasks();
+      final mergedTasks = _mergeRemoteTasksWithLocalState(
+        workingTasks,
+        remoteTasks,
+      );
+      await _persistLocalState(
+        TaskLocalState(tasks: mergedTasks, outboxState: outboxState),
+      );
+      _runtimeDebug?.updateTaskCounts(mergedTasks);
+
+      final summary =
+          'Sync completed. ${acknowledgedTasks.length} task(s) acknowledged.';
+      if (hadRecoverableErrors ||
+          outboxState.activeEntries.any(_isBlockingEntry)) {
+        _runtimeDebug?.markSyncPartial(
+          '$summary Some operations need review.',
+          payload: _buildSyncPayload(
+            stage: 'Replay completed with review needed',
+            summary:
+                'The outbox replay pass finished, but one or more operations still need operator review.',
+            tasks: mergedTasks,
+            highlightedTasks: acknowledgedTaskDetails,
+            extraMetrics: [
+              RuntimeEventMetric(
+                label: 'Acknowledged',
+                value: acknowledgedTasks.length.toString(),
+              ),
+              RuntimeEventMetric(
+                label: 'Remaining entries',
+                value: outboxState.activeEntries.length.toString(),
+              ),
+            ],
+          ),
+        );
+      } else {
+        _runtimeDebug?.markSyncSuccess(
+          summary,
+          payload: _buildSyncPayload(
+            stage: 'Replay completed',
+            summary:
+                'All replayable outbox entries in this pass were reconciled without warning-level issues.',
+            tasks: mergedTasks,
+            highlightedTasks: acknowledgedTaskDetails,
+            extraMetrics: [
+              RuntimeEventMetric(
+                label: 'Acknowledged',
+                value: acknowledgedTasks.length.toString(),
+              ),
+            ],
+          ),
+        );
+      }
+
+      return TaskSyncRunResult(
+        acknowledgedTasks: acknowledgedTasks,
+        hadRecoverableErrors: hadRecoverableErrors,
+      );
+    } catch (error) {
+      _runtimeDebug?.markSyncFailure(
+        'Sync failed: $error',
+        payload: _buildSyncPayload(
+          stage: 'Replay failed',
+          summary:
+              'The outbox replay pass stopped before completion because an unrecoverable error escaped the replay loop.',
+          tasks: localState.tasks,
+          notes: [error.toString()],
+        ),
+      );
+      rethrow;
+    }
+  }
+
   Future<List<TaskModel>> syncAllTasks(List<TaskModel> tasks) async {
     final result = await syncTasks(tasks);
     return result.acknowledgedTasks;
@@ -478,7 +760,7 @@ class TaskSyncService implements TaskSyncGateway {
       if (beforeSync != null) {
         beforeSync();
       }
-      final tasks = await repository.loadTasks();
+      final tasks = await _loadTasksLocally();
       final result = await syncTasks(tasks);
       callback(result);
     });
@@ -514,6 +796,163 @@ class TaskSyncService implements TaskSyncGateway {
     }
 
     return localModifiedAt.isAfter(remoteUpdatedAt.toLocal());
+  }
+
+  Future<List<TaskModel>> _loadTasksLocally() {
+    return _localStateCoordinator?.loadTaskSnapshot() ?? repository.loadTasks();
+  }
+
+  Future<void> _saveTasksLocally(List<TaskModel> tasks) {
+    return _localStateCoordinator?.saveTaskSnapshot(tasks) ??
+        repository.saveTasks(tasks);
+  }
+
+  Future<void> _persistLocalState(TaskLocalState state) async {
+    if (_localStateCoordinator != null) {
+      await _localStateCoordinator.saveState(state);
+      return;
+    }
+
+    await repository.saveTasks(state.tasks);
+  }
+
+  OutboxStorageState _updateEntriesForBlockedNoSession(
+    OutboxStorageState state,
+  ) {
+    return state.copyWith(
+      activeEntries: state.activeEntries
+          .map((entry) {
+            if (entry.ownerScope == OutboxOwnerScope.anonymous ||
+                entry.state == OutboxEntryState.conflict ||
+                entry.state == OutboxEntryState.blockedAnonymousReview) {
+              return entry;
+            }
+
+            return entry.copyWith(
+              state: OutboxEntryState.blockedNoSession,
+              updatedAt: DateTime.now().toUtc(),
+            );
+          })
+          .toList(growable: false),
+    );
+  }
+
+  OutboxStorageState _resetBlockedEntriesForReplay(OutboxStorageState state) {
+    return state.copyWith(
+      activeEntries: state.activeEntries
+          .map((entry) {
+            if (entry.state != OutboxEntryState.blockedNoSession &&
+                entry.state != OutboxEntryState.failed &&
+                entry.state != OutboxEntryState.sending) {
+              return entry;
+            }
+
+            return entry.copyWith(
+              state: OutboxEntryState.queued,
+              updatedAt: DateTime.now().toUtc(),
+              lastError: null,
+            );
+          })
+          .toList(growable: false),
+    );
+  }
+
+  bool _isReplayableEntry(OutboxEntry entry) {
+    return entry.state == OutboxEntryState.queued ||
+        entry.state == OutboxEntryState.failed ||
+        entry.state == OutboxEntryState.blockedNoSession ||
+        entry.state == OutboxEntryState.sending;
+  }
+
+  bool _isBlockingEntry(OutboxEntry entry) {
+    return entry.state == OutboxEntryState.failed ||
+        entry.state == OutboxEntryState.conflict ||
+        entry.state == OutboxEntryState.blockedAnonymousReview ||
+        entry.state == OutboxEntryState.blockedNoSession;
+  }
+
+  TaskModel _taskFromEntry(OutboxEntry entry, List<TaskModel> workingTasks) {
+    final existingTask = workingTasks
+        .where((task) => task.id == entry.taskId)
+        .firstOrNull;
+    if (existingTask != null) {
+      return existingTask;
+    }
+
+    return TaskModel.fromJson(entry.taskPayload);
+  }
+
+  String _taskTitleForEntry(OutboxEntry entry) {
+    return (entry.taskPayload['title'] as String?)?.trim().isNotEmpty == true
+        ? entry.taskPayload['title'] as String
+        : 'Untitled task';
+  }
+
+  bool _isEntrySafeToApply(
+    TaskModel localTask,
+    TaskModel remoteTask,
+    OutboxEntry entry,
+  ) {
+    final baseRemoteUpdatedAt = entry.baseRemoteUpdatedAt;
+    final remoteUpdatedAt = remoteTask.updatedAt ?? remoteTask.lastModifiedAt;
+    if (baseRemoteUpdatedAt != null && remoteUpdatedAt != null) {
+      return !remoteUpdatedAt.toUtc().isAfter(baseRemoteUpdatedAt.toUtc());
+    }
+
+    return _isLocalTaskNewer(localTask, remoteTask);
+  }
+
+  OutboxStorageState _replaceActiveEntry(
+    OutboxStorageState state,
+    OutboxEntry replacement,
+  ) {
+    return state.copyWith(
+      activeEntries: state.activeEntries
+          .map((entry) => entry.id == replacement.id ? replacement : entry)
+          .toList(growable: false),
+    );
+  }
+
+  OutboxStorageState _acknowledgeEntry(
+    OutboxStorageState state,
+    OutboxEntry entry,
+  ) {
+    final acknowledgedEntry = entry.copyWith(
+      state: OutboxEntryState.acknowledged,
+      updatedAt: DateTime.now().toUtc(),
+      lastError: null,
+    );
+
+    return state.copyWith(
+      activeEntries: state.activeEntries
+          .where((candidate) => candidate.id != entry.id)
+          .toList(growable: false),
+      recentAcknowledgements: [
+        acknowledgedEntry,
+        ...state.recentAcknowledgements.where(
+          (candidate) => candidate.id != acknowledgedEntry.id,
+        ),
+      ].take(10).toList(growable: false),
+    );
+  }
+
+  List<TaskModel> _mergeRemoteTasksWithLocalState(
+    List<TaskModel> workingTasks,
+    List<TaskModel> remoteTasks,
+  ) {
+    final merged = <String, TaskModel>{
+      for (final task in remoteTasks) task.id: task,
+    };
+
+    for (final task in workingTasks) {
+      if (task.syncStatus != SyncStatus.synced) {
+        merged[task.id] = task;
+      }
+    }
+
+    final mergedTasks = merged.values.toList(growable: false)
+      ..sort((left, right) => left.beginsAt.compareTo(right.beginsAt));
+    return mergedTasks;
   }
 
   void _replaceTask(List<TaskModel> tasks, TaskModel replacement) {

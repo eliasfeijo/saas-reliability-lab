@@ -5,8 +5,10 @@ import 'package:todo_flutter/models/runtime_debug_state.dart';
 import 'package:todo_flutter/models/runtime_event.dart';
 import 'package:todo_flutter/models/task.dart';
 import 'package:todo_flutter/providers/runtime_debug_provider.dart';
+import 'package:todo_flutter/repositories/outbox_repository.dart';
 import 'package:todo_flutter/repositories/tasks_repository.dart';
 import 'package:todo_flutter/services/task_local_snapshot_coordinator.dart';
+import 'package:todo_flutter/services/task_local_state_coordinator.dart';
 import 'package:todo_flutter/services/task_sync_service.dart';
 
 typedef SyncLoadingCallback = void Function(bool isLoading);
@@ -17,25 +19,43 @@ class TaskSyncCoordinator {
     this._localSnapshotCoordinator,
     this._taskSyncGateway, {
     RuntimeDebugProvider? runtimeDebug,
-  }) : _runtimeDebug = runtimeDebug;
+    TaskLocalStateCoordinator? localStateCoordinator,
+  }) : _runtimeDebug = runtimeDebug,
+       _localStateCoordinator = localStateCoordinator;
 
   factory TaskSyncCoordinator.fromRepository(
     TasksRepository repository,
     TaskSyncGateway taskSyncGateway, {
     RuntimeDebugProvider? runtimeDebug,
+    OutboxRepository? outboxRepository,
+    TaskLocalStateCoordinator? localStateCoordinator,
   }) {
+    final snapshotCoordinator = TaskLocalSnapshotCoordinator.fromRepository(
+      repository,
+    );
+
     return TaskSyncCoordinator(
-      TaskLocalSnapshotCoordinator.fromRepository(repository),
+      snapshotCoordinator,
       taskSyncGateway,
       runtimeDebug: runtimeDebug,
+      localStateCoordinator:
+          localStateCoordinator ??
+          (outboxRepository == null
+              ? null
+              : TaskLocalStateCoordinator(
+                  snapshotCoordinator,
+                  outboxRepository,
+                  runtimeDebug: runtimeDebug,
+                )),
     );
   }
 
   final TaskLocalSnapshotCoordinator _localSnapshotCoordinator;
   final TaskSyncGateway _taskSyncGateway;
   final RuntimeDebugProvider? _runtimeDebug;
+  final TaskLocalStateCoordinator? _localStateCoordinator;
 
-  Future<void> syncAllTasks({
+  Future<TaskSyncRunResult> syncAllTasks({
     required List<TaskModel> tasks,
     required String? userId,
     required bool hasPendingAnonymousReview,
@@ -48,16 +68,17 @@ class TaskSyncCoordinator {
       hasPendingAnonymousReview: hasPendingAnonymousReview,
       isLoading: isLoading,
     )) {
-      return;
+      return const TaskSyncRunResult();
     }
 
     setLoading(true);
 
     try {
       debugPrint('Syncing all tasks...');
-      await _taskSyncGateway.syncTasks(tasks);
+      final result = await _taskSyncGateway.syncTasks(tasks);
       await _reloadTasks(onTasksReloaded);
       debugPrint('All tasks synced.');
+      return result;
     } finally {
       setLoading(false);
     }
@@ -128,7 +149,9 @@ class TaskSyncCoordinator {
   }
 
   Future<void> _reloadTasks(SyncedTasksCallback onTasksReloaded) async {
-    final reloadedTasks = await _localSnapshotCoordinator.loadSnapshot();
+    final reloadedTasks =
+        await (_localStateCoordinator?.loadTaskSnapshot() ??
+            _localSnapshotCoordinator.loadSnapshot());
     await onTasksReloaded(reloadedTasks);
   }
 }

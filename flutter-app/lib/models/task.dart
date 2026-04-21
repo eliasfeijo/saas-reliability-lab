@@ -24,6 +24,7 @@ class TaskModel {
   // User ID for cloud sync
   // This is used to identify the user for cloud sync operations.
   String? userId;
+  bool hasRemoteBackingRecord;
 
   TaskModel({
     this.isCompleted = false,
@@ -40,6 +41,7 @@ class TaskModel {
     this.updatedAt,
     this.lastModifiedAt,
     this.userId,
+    this.hasRemoteBackingRecord = false,
   }) : id = id ?? const Uuid().v4(),
        beginsAt = beginsAt ?? DateTime.now();
 
@@ -164,6 +166,7 @@ class TaskModel {
     DateTime? updatedAt,
     DateTime? lastModifiedAt,
     String? userId,
+    bool? hasRemoteBackingRecord,
   }) {
     return TaskModel(
       id: id ?? this.id,
@@ -180,6 +183,8 @@ class TaskModel {
       updatedAt: updatedAt ?? this.updatedAt,
       lastModifiedAt: lastModifiedAt ?? this.lastModifiedAt,
       userId: userId ?? this.userId,
+      hasRemoteBackingRecord:
+          hasRemoteBackingRecord ?? this.hasRemoteBackingRecord,
     );
   }
 
@@ -193,7 +198,8 @@ class TaskModel {
       (completedAt?.hashCode ?? 0) ^
       (description?.hashCode ?? 0) ^
       priority.hashCode ^
-      tags.hashCode;
+      tags.hashCode ^
+      hasRemoteBackingRecord.hashCode;
 
   @override
   bool operator ==(Object other) {
@@ -208,7 +214,8 @@ class TaskModel {
         completedAt == otherTask.completedAt &&
         description == otherTask.description &&
         priority == otherTask.priority &&
-        _listEquals(tags, otherTask.tags);
+        _listEquals(tags, otherTask.tags) &&
+        hasRemoteBackingRecord == otherTask.hasRemoteBackingRecord;
   }
 
   bool _listEquals<T>(List<T> a, List<T> b) {
@@ -261,7 +268,10 @@ class TaskModel {
           : json['updated_at'] != null
           ? DateTime.parse(json['updated_at'])
           : null,
-      userId = json['user_id'];
+      userId = json['user_id'],
+      hasRemoteBackingRecord = json['has_remote_record'] == null
+          ? json['updated_at'] != null
+          : json['has_remote_record'] == true;
 
   // To JSON (for local storage)
   Map<String, dynamic> toJson() => {
@@ -275,8 +285,11 @@ class TaskModel {
     'priority': priority.index,
     'tags': tags,
     'sync_status': syncStatus.index,
+    'created_at': createdAt?.toUtc().toIso8601String(),
+    'updated_at': updatedAt?.toUtc().toIso8601String(),
     'modified_at': lastModifiedAt?.toUtc().toIso8601String(),
     'user_id': userId,
+    'has_remote_record': hasRemoteBackingRecord,
   };
   // To JSON (for cloud sync)
   Map<String, dynamic> toCloudJson() => {

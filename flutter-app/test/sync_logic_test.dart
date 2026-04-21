@@ -4,11 +4,15 @@ import 'package:connectivity_plus_platform_interface/connectivity_plus_platform_
 import 'package:flutter_test/flutter_test.dart';
 import 'package:todo_flutter/models/fault_injection_scenario.dart';
 import 'package:todo_flutter/models/fault_injection_state.dart';
+import 'package:todo_flutter/models/outbox_entry.dart';
 import 'package:todo_flutter/models/runtime_debug_state.dart';
 import 'package:todo_flutter/models/runtime_event.dart';
 import 'package:todo_flutter/models/task.dart';
 import 'package:todo_flutter/providers/runtime_debug_provider.dart';
+import 'package:todo_flutter/repositories/outbox_repository.dart';
 import 'package:todo_flutter/services/fault_injection_policy.dart';
+import 'package:todo_flutter/services/task_local_snapshot_coordinator.dart';
+import 'package:todo_flutter/services/task_local_state_coordinator.dart';
 import 'package:todo_flutter/services/task_sync_service.dart';
 
 import 'test_support/app_test_support.dart';
@@ -31,6 +35,150 @@ void main() {
     ConnectivityPlatform.instance = originalConnectivityPlatform;
     await connectivityPlatform.dispose();
   });
+
+  test(
+    'syncTasks replays queued outbox entries and retains recent acknowledgements',
+    () async {
+      final localTask = buildTask(
+        id: 'task-outbox-replay',
+        title: 'Queued outbox task',
+        beginsAt: DateTime(2026, 1, 9, 9),
+        estimatedDuration: const Duration(hours: 1),
+        lastModifiedAt: DateTime(2026, 1, 9, 10),
+        syncStatus: SyncStatus.dirty,
+        userId: 'user-1',
+        hasRemoteBackingRecord: false,
+      );
+
+      final repository = InMemoryTasksRepository([localTask]);
+      final outboxRepository = InMemoryOutboxRepository();
+      final runtimeDebug = RuntimeDebugProvider();
+      addTearDown(runtimeDebug.dispose);
+      final localStateCoordinator = TaskLocalStateCoordinator(
+        TaskLocalSnapshotCoordinator.fromRepository(repository),
+        outboxRepository,
+        runtimeDebug: runtimeDebug,
+      );
+
+      await localStateCoordinator.saveState(
+        TaskLocalState(
+          tasks: [localTask],
+          outboxState: OutboxStorageState(
+            isInitialized: true,
+            activeEntries: [
+              OutboxEntry(
+                taskId: localTask.id,
+                operationType: OutboxOperationType.upsert,
+                state: OutboxEntryState.queued,
+                ownerScope: OutboxOwnerScope.authenticated,
+                firstQueuedAt: localTask.lastModifiedAt?.toUtc(),
+                taskPayload: localTask.toJson(),
+              ),
+            ],
+          ),
+        ),
+      );
+
+      final remote = FakeTaskRemoteDataSource([]);
+      final service = TaskSyncService.forTesting(
+        repository,
+        remote: remote,
+        connectivityCheck: () async => [ConnectivityResult.wifi],
+        hasActiveSession: () => true,
+        runtimeDebug: runtimeDebug,
+        localStateCoordinator: localStateCoordinator,
+      );
+
+      final result = await service.syncTasks(await repository.loadTasks());
+      final savedTasks = await repository.loadTasks();
+      final outboxState = await outboxRepository.loadState();
+
+      expect(result.acknowledgedTasks, hasLength(1));
+      expect(remote.insertedTaskIds, ['task-outbox-replay']);
+      expect(savedTasks.single.syncStatus, SyncStatus.synced);
+      expect(savedTasks.single.hasRemoteBackingRecord, isTrue);
+      expect(outboxState.activeEntries, isEmpty);
+      expect(outboxState.recentAcknowledgements, hasLength(1));
+      expect(outboxState.recentAcknowledgements.single.taskId, localTask.id);
+    },
+  );
+
+  test(
+    'syncTasks marks queued outbox entries as conflict when remote changed after the base snapshot',
+    () async {
+      final localTask = buildTask(
+        id: 'task-outbox-conflict',
+        title: 'Conflict candidate',
+        beginsAt: DateTime(2026, 1, 13, 9),
+        estimatedDuration: const Duration(hours: 1),
+        lastModifiedAt: DateTime(2026, 1, 13, 10),
+        syncStatus: SyncStatus.dirty,
+        userId: 'user-1',
+        hasRemoteBackingRecord: true,
+      );
+      final remoteTask = buildTask(
+        id: localTask.id,
+        title: 'Remote changed later',
+        beginsAt: localTask.beginsAt,
+        estimatedDuration: localTask.estimatedDuration,
+        updatedAt: DateTime(2026, 1, 13, 12),
+        userId: 'user-1',
+        hasRemoteBackingRecord: true,
+      );
+
+      final repository = InMemoryTasksRepository([localTask]);
+      final outboxRepository = InMemoryOutboxRepository();
+      final runtimeDebug = RuntimeDebugProvider();
+      addTearDown(runtimeDebug.dispose);
+      final localStateCoordinator = TaskLocalStateCoordinator(
+        TaskLocalSnapshotCoordinator.fromRepository(repository),
+        outboxRepository,
+        runtimeDebug: runtimeDebug,
+      );
+
+      await localStateCoordinator.saveState(
+        TaskLocalState(
+          tasks: [localTask],
+          outboxState: OutboxStorageState(
+            isInitialized: true,
+            activeEntries: [
+              OutboxEntry(
+                taskId: localTask.id,
+                operationType: OutboxOperationType.upsert,
+                state: OutboxEntryState.queued,
+                ownerScope: OutboxOwnerScope.authenticated,
+                firstQueuedAt: localTask.lastModifiedAt?.toUtc(),
+                baseRemoteUpdatedAt: DateTime(2026, 1, 13, 11).toUtc(),
+                taskPayload: localTask.toJson(),
+              ),
+            ],
+          ),
+        ),
+      );
+
+      final remote = FakeTaskRemoteDataSource([remoteTask]);
+      final service = TaskSyncService.forTesting(
+        repository,
+        remote: remote,
+        connectivityCheck: () async => [ConnectivityResult.wifi],
+        hasActiveSession: () => true,
+        runtimeDebug: runtimeDebug,
+        localStateCoordinator: localStateCoordinator,
+      );
+
+      final result = await service.syncTasks(await repository.loadTasks());
+      final outboxState = await outboxRepository.loadState();
+
+      expect(result.acknowledgedTasks, isEmpty);
+      expect(remote.updatedTaskIds, isEmpty);
+      expect(outboxState.activeEntries, hasLength(1));
+      expect(outboxState.activeEntries.single.state, OutboxEntryState.conflict);
+      expect(outboxState.activeEntries.single.remoteSnapshot, isNotNull);
+      expect(runtimeDebug.state.lastSyncResult, RuntimeSyncResult.partial);
+      expect(runtimeDebug.state.conflictEntryCount, 1);
+      expect(runtimeDebug.state.conflictEntries, hasLength(1));
+    },
+  );
 
   test(
     'syncAllTasks keeps the fresher remote task when local state is stale',

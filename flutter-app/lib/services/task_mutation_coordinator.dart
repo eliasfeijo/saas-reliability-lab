@@ -4,11 +4,13 @@ class TaskMutationResult {
   const TaskMutationResult({
     required this.tasks,
     this.syncTask,
+    this.changedTaskIds = const <String>{},
     this.didChange = false,
   });
 
   final List<TaskModel> tasks;
   final TaskModel? syncTask;
+  final Set<String> changedTaskIds;
   final bool didChange;
 }
 
@@ -22,9 +24,11 @@ class TaskMutationCoordinator {
   }) {
     task.userId = userId;
     task.dirty();
+    task.hasRemoteBackingRecord = false;
     return TaskMutationResult(
       tasks: [...tasks, task],
       syncTask: task,
+      changedTaskIds: {task.id},
       didChange: true,
     );
   }
@@ -41,6 +45,7 @@ class TaskMutationCoordinator {
     return TaskMutationResult(
       tasks: nextTasks,
       syncTask: updatedTask,
+      changedTaskIds: {updatedTask.id},
       didChange: true,
     );
   }
@@ -83,11 +88,15 @@ class TaskMutationCoordinator {
     return TaskMutationResult(
       tasks: nextTasks,
       syncTask: syncTask,
+      changedTaskIds: targetIds,
       didChange: didChange,
     );
   }
 
-  TaskMutationResult deleteTasks(List<TaskModel> tasks, Iterable<String> taskIds) {
+  TaskMutationResult deleteTasks(
+    List<TaskModel> tasks,
+    Iterable<String> taskIds,
+  ) {
     final targetIds = taskIds.toSet();
     if (targetIds.isEmpty) {
       return TaskMutationResult(tasks: List<TaskModel>.from(tasks));
@@ -108,6 +117,11 @@ class TaskMutationCoordinator {
         continue;
       }
 
+      if (!task.hasRemoteBackingRecord) {
+        didChange = true;
+        continue;
+      }
+
       if (task.syncStatus == SyncStatus.deleted) {
         nextTasks.add(task);
         continue;
@@ -122,6 +136,7 @@ class TaskMutationCoordinator {
     return TaskMutationResult(
       tasks: nextTasks,
       syncTask: syncTask,
+      changedTaskIds: targetIds,
       didChange: didChange,
     );
   }
@@ -135,15 +150,21 @@ class TaskMutationCoordinator {
     }
 
     final nextTasks = List<TaskModel>.from(tasks);
+    final changedTaskIds = <String>{};
     var didChange = false;
 
     for (final task in nextTasks.where((task) => task.userId == null)) {
       task.userId = userId;
       task.dirty();
+      changedTaskIds.add(task.id);
       didChange = true;
     }
 
-    return TaskMutationResult(tasks: nextTasks, didChange: didChange);
+    return TaskMutationResult(
+      tasks: nextTasks,
+      changedTaskIds: changedTaskIds,
+      didChange: didChange,
+    );
   }
 
   TaskMutationResult markAllCompleted(List<TaskModel> tasks) {

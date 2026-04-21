@@ -6,11 +6,13 @@ import 'package:todo_flutter/keys.dart';
 import 'package:todo_flutter/providers/agenda_provider.dart';
 import 'package:todo_flutter/providers/fault_injection_provider.dart';
 import 'package:todo_flutter/providers/runtime_debug_provider.dart';
+import 'package:todo_flutter/repositories/outbox_repository.dart';
 import 'package:todo_flutter/repositories/tasks_repository.dart';
 import 'package:todo_flutter/screens/lab_shell.dart';
 import 'package:todo_flutter/services/fault_injection_policy.dart';
 import 'package:todo_flutter/services/task_list_state_coordinator.dart';
 import 'package:todo_flutter/services/task_local_snapshot_coordinator.dart';
+import 'package:todo_flutter/services/task_local_state_coordinator.dart';
 import 'package:todo_flutter/services/task_sync_coordinator.dart';
 import 'package:todo_flutter/services/task_sync_flow_coordinator.dart';
 import 'package:todo_flutter/services/task_sync_service.dart';
@@ -55,7 +57,9 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   late final TasksRepository _tasksRepository;
+  late final OutboxRepository _outboxRepository;
   late final TaskLocalSnapshotCoordinator _taskLocalSnapshotCoordinator;
+  late final TaskLocalStateCoordinator _taskLocalStateCoordinator;
   late final RuntimeDebugProvider _runtimeDebugProvider;
   late final FaultInjectionProvider _faultInjectionProvider;
   late final FaultInjectionPolicy _faultInjectionPolicy;
@@ -67,11 +71,17 @@ class _MyAppState extends State<MyApp> {
   @override
   void initState() {
     super.initState();
+    _runtimeDebugProvider = RuntimeDebugProvider();
     _tasksRepository = TasksSharedPreferencesRepository();
+    _outboxRepository = SharedPreferencesOutboxRepository();
     _taskLocalSnapshotCoordinator = TaskLocalSnapshotCoordinator.fromRepository(
       _tasksRepository,
     );
-    _runtimeDebugProvider = RuntimeDebugProvider();
+    _taskLocalStateCoordinator = TaskLocalStateCoordinator(
+      _taskLocalSnapshotCoordinator,
+      _outboxRepository,
+      runtimeDebug: _runtimeDebugProvider,
+    );
     _faultInjectionProvider = FaultInjectionProvider(
       runtimeDebug: _runtimeDebugProvider,
     );
@@ -83,11 +93,13 @@ class _MyAppState extends State<MyApp> {
       Supabase.instance.client,
       runtimeDebug: _runtimeDebugProvider,
       faultInjectionPolicy: _faultInjectionPolicy,
+      localStateCoordinator: _taskLocalStateCoordinator,
     );
     _taskSyncCoordinator = TaskSyncCoordinator(
       _taskLocalSnapshotCoordinator,
       _taskSyncService,
       runtimeDebug: _runtimeDebugProvider,
+      localStateCoordinator: _taskLocalStateCoordinator,
     );
     _userSessionService = UserSessionService(
       runtimeDebug: _runtimeDebugProvider,
@@ -122,6 +134,7 @@ class _MyAppState extends State<MyApp> {
             final taskListStateCoordinator = TaskListStateCoordinator(
               _taskLocalSnapshotCoordinator,
               runtimeDebug: _runtimeDebugProvider,
+              localStateCoordinator: _taskLocalStateCoordinator,
             );
 
             return AgendaProvider(

@@ -95,7 +95,9 @@ void main() {
         title: 'Account task',
         beginsAt: DateTime(2026, 3, 4, 9),
         estimatedDuration: const Duration(hours: 1),
+        syncStatus: SyncStatus.dirty,
         userId: 'user-1',
+        hasRemoteBackingRecord: true,
       );
 
       final repository = InMemoryTasksRepository([accountTask]);
@@ -136,6 +138,7 @@ void main() {
       expect(result.shouldClearSearch, isTrue);
       expect(agenda.userId, isNull);
       expect(agenda.tasks, isEmpty);
+      expect(runtimeDebug.state.blockedNoSessionEntryCount, 0);
       expect(await userSession.loadUserId(), isNull);
     },
   );

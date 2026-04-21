@@ -5,14 +5,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:todo_flutter/models/outbox_entry.dart';
 import 'package:todo_flutter/models/task.dart';
 import 'package:todo_flutter/providers/agenda_provider.dart';
 import 'package:todo_flutter/providers/fault_injection_provider.dart';
 import 'package:todo_flutter/providers/runtime_debug_provider.dart';
+import 'package:todo_flutter/repositories/outbox_repository.dart';
 import 'package:todo_flutter/repositories/tasks_repository.dart';
 import 'package:todo_flutter/screens/lab_shell.dart';
 import 'package:todo_flutter/services/task_list_state_coordinator.dart';
 import 'package:todo_flutter/services/task_local_snapshot_coordinator.dart';
+import 'package:todo_flutter/services/task_local_state_coordinator.dart';
 import 'package:todo_flutter/services/task_sync_coordinator.dart';
 import 'package:todo_flutter/services/task_sync_flow_coordinator.dart';
 import 'package:todo_flutter/services/task_sync_service.dart';
@@ -27,17 +30,25 @@ AgendaProvider buildAgendaProviderForTesting(
   TaskSyncGateway taskSyncGateway, {
   RuntimeDebugProvider? runtimeDebug,
 }) {
+  final outboxRepository = InMemoryOutboxRepository();
   final snapshotCoordinator = TaskLocalSnapshotCoordinator.fromRepository(
     repository,
+  );
+  final localStateCoordinator = TaskLocalStateCoordinator(
+    snapshotCoordinator,
+    outboxRepository,
+    runtimeDebug: runtimeDebug,
   );
   final taskListStateCoordinator = TaskListStateCoordinator(
     snapshotCoordinator,
     runtimeDebug: runtimeDebug,
+    localStateCoordinator: localStateCoordinator,
   );
   final taskSyncCoordinator = TaskSyncCoordinator(
     snapshotCoordinator,
     taskSyncGateway,
     runtimeDebug: runtimeDebug,
+    localStateCoordinator: localStateCoordinator,
   );
 
   return AgendaProvider(
@@ -338,6 +349,35 @@ class InMemoryTasksRepository implements TasksRepository {
   }
 }
 
+class InMemoryOutboxRepository implements OutboxRepository {
+  OutboxStorageState _state = const OutboxStorageState();
+
+  @override
+  Future<void> clearState() async {
+    _state = const OutboxStorageState();
+  }
+
+  @override
+  Future<OutboxStorageState> loadState() async {
+    return _state.copyWith(
+      activeEntries: List<OutboxEntry>.from(_state.activeEntries),
+      recentAcknowledgements: List<OutboxEntry>.from(
+        _state.recentAcknowledgements,
+      ),
+    );
+  }
+
+  @override
+  Future<void> saveState(OutboxStorageState state) async {
+    _state = state.copyWith(
+      activeEntries: List<OutboxEntry>.from(state.activeEntries),
+      recentAcknowledgements: List<OutboxEntry>.from(
+        state.recentAcknowledgements,
+      ),
+    );
+  }
+}
+
 class FakeTaskRemoteDataSource implements TaskRemoteDataSource {
   FakeTaskRemoteDataSource(List<TaskModel> tasks)
     : _tasksById = {for (final task in tasks) task.id: cloneTask(task)};
@@ -363,7 +403,7 @@ class FakeTaskRemoteDataSource implements TaskRemoteDataSource {
       return null;
     }
 
-    return cloneTask(task);
+    return cloneTask(task, hasRemoteBackingRecord: true);
   }
 
   @override
@@ -373,6 +413,7 @@ class FakeTaskRemoteDataSource implements TaskRemoteDataSource {
       task,
       syncStatus: SyncStatus.synced,
       updatedAt: task.lastModifiedAt ?? DateTime.now(),
+      hasRemoteBackingRecord: true,
     );
   }
 
@@ -383,6 +424,7 @@ class FakeTaskRemoteDataSource implements TaskRemoteDataSource {
       task,
       syncStatus: SyncStatus.synced,
       updatedAt: task.lastModifiedAt ?? DateTime.now(),
+      hasRemoteBackingRecord: true,
     );
   }
 }
@@ -425,6 +467,7 @@ TaskModel buildTask({
   DateTime? updatedAt,
   DateTime? lastModifiedAt,
   String? userId,
+  bool hasRemoteBackingRecord = false,
 }) {
   return TaskModel(
     id: id,
@@ -435,6 +478,7 @@ TaskModel buildTask({
     updatedAt: updatedAt,
     lastModifiedAt: lastModifiedAt,
     userId: userId,
+    hasRemoteBackingRecord: hasRemoteBackingRecord,
   );
 }
 
@@ -442,6 +486,7 @@ TaskModel cloneTask(
   TaskModel task, {
   SyncStatus? syncStatus,
   DateTime? updatedAt,
+  bool? hasRemoteBackingRecord,
 }) {
   return TaskModel(
     id: task.id,
@@ -458,5 +503,7 @@ TaskModel cloneTask(
     updatedAt: updatedAt ?? task.updatedAt,
     lastModifiedAt: task.lastModifiedAt,
     userId: task.userId,
+    hasRemoteBackingRecord:
+        hasRemoteBackingRecord ?? task.hasRemoteBackingRecord,
   );
 }

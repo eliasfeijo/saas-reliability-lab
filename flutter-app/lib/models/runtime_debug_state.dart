@@ -1,3 +1,4 @@
+import 'package:todo_flutter/models/outbox_entry.dart';
 import 'package:todo_flutter/models/runtime_event.dart';
 
 const Object _runtimeDebugUnset = Object();
@@ -59,6 +60,15 @@ class RuntimeDebugState {
     this.dirtyTaskCount = 0,
     this.deletedTaskCount = 0,
     this.anonymousTaskCount = 0,
+    this.queuedEntryCount = 0,
+    this.sendingEntryCount = 0,
+    this.acknowledgedEntryCount = 0,
+    this.failedEntryCount = 0,
+    this.conflictEntryCount = 0,
+    this.blockedNoSessionEntryCount = 0,
+    this.blockedAnonymousReviewEntryCount = 0,
+    this.conflictEntries = const [],
+    this.recentAcknowledgements = const [],
     this.activeFaultInjectionLabel,
     this.activeFaultInjectionMessage,
     this.activeFaultInjectionInstruction,
@@ -90,6 +100,15 @@ class RuntimeDebugState {
   final int dirtyTaskCount;
   final int deletedTaskCount;
   final int anonymousTaskCount;
+  final int queuedEntryCount;
+  final int sendingEntryCount;
+  final int acknowledgedEntryCount;
+  final int failedEntryCount;
+  final int conflictEntryCount;
+  final int blockedNoSessionEntryCount;
+  final int blockedAnonymousReviewEntryCount;
+  final List<OutboxEntry> conflictEntries;
+  final List<OutboxEntry> recentAcknowledgements;
   final String? activeFaultInjectionLabel;
   final String? activeFaultInjectionMessage;
   final String? activeFaultInjectionInstruction;
@@ -121,6 +140,15 @@ class RuntimeDebugState {
     int? dirtyTaskCount,
     int? deletedTaskCount,
     int? anonymousTaskCount,
+    int? queuedEntryCount,
+    int? sendingEntryCount,
+    int? acknowledgedEntryCount,
+    int? failedEntryCount,
+    int? conflictEntryCount,
+    int? blockedNoSessionEntryCount,
+    int? blockedAnonymousReviewEntryCount,
+    List<OutboxEntry>? conflictEntries,
+    List<OutboxEntry>? recentAcknowledgements,
     Object? activeFaultInjectionLabel = _runtimeDebugUnset,
     Object? activeFaultInjectionMessage = _runtimeDebugUnset,
     Object? activeFaultInjectionInstruction = _runtimeDebugUnset,
@@ -183,6 +211,20 @@ class RuntimeDebugState {
       dirtyTaskCount: dirtyTaskCount ?? this.dirtyTaskCount,
       deletedTaskCount: deletedTaskCount ?? this.deletedTaskCount,
       anonymousTaskCount: anonymousTaskCount ?? this.anonymousTaskCount,
+      queuedEntryCount: queuedEntryCount ?? this.queuedEntryCount,
+      sendingEntryCount: sendingEntryCount ?? this.sendingEntryCount,
+      acknowledgedEntryCount:
+          acknowledgedEntryCount ?? this.acknowledgedEntryCount,
+      failedEntryCount: failedEntryCount ?? this.failedEntryCount,
+      conflictEntryCount: conflictEntryCount ?? this.conflictEntryCount,
+      blockedNoSessionEntryCount:
+          blockedNoSessionEntryCount ?? this.blockedNoSessionEntryCount,
+      blockedAnonymousReviewEntryCount:
+          blockedAnonymousReviewEntryCount ??
+          this.blockedAnonymousReviewEntryCount,
+      conflictEntries: conflictEntries ?? this.conflictEntries,
+      recentAcknowledgements:
+          recentAcknowledgements ?? this.recentAcknowledgements,
       activeFaultInjectionLabel:
           identical(activeFaultInjectionLabel, _runtimeDebugUnset)
           ? this.activeFaultInjectionLabel

@@ -2,6 +2,7 @@ import 'package:todo_flutter/models/task.dart';
 import 'package:todo_flutter/services/task_list_state_coordinator.dart';
 import 'package:todo_flutter/services/task_mutation_coordinator.dart';
 import 'package:todo_flutter/services/task_sync_coordinator.dart';
+import 'package:todo_flutter/services/task_sync_service.dart';
 
 typedef TaskListApplyCallback = void Function(List<TaskModel> tasks);
 
@@ -14,7 +15,7 @@ class TaskSyncFlowCoordinator {
   final TaskListStateCoordinator _taskListStateCoordinator;
   final TaskSyncCoordinator _taskSyncCoordinator;
 
-  Future<void> syncAllTasks({
+  Future<TaskSyncRunResult> syncAllTasks({
     required List<TaskModel> tasks,
     required String? userId,
     required bool hasPendingAnonymousReview,
@@ -22,7 +23,7 @@ class TaskSyncFlowCoordinator {
     required SyncLoadingCallback setLoading,
     required TaskListApplyCallback applyTasks,
   }) async {
-    await _taskSyncCoordinator.syncAllTasks(
+    return _taskSyncCoordinator.syncAllTasks(
       tasks: tasks,
       userId: userId,
       hasPendingAnonymousReview: hasPendingAnonymousReview,
@@ -44,7 +45,10 @@ class TaskSyncFlowCoordinator {
       return;
     }
 
-    final storedTasks = await _taskListStateCoordinator.saveTasks(result.tasks);
+    final storedTasks = await _taskListStateCoordinator.saveTasks(
+      result.tasks,
+      changedTaskIds: result.changedTaskIds,
+    );
     applyTasks(storedTasks);
 
     final syncTask = result.syncTask;
@@ -103,7 +107,10 @@ class TaskSyncFlowCoordinator {
       return;
     }
 
-    final storedTasks = await _taskListStateCoordinator.saveTasks(result.tasks);
+    final storedTasks = await _taskListStateCoordinator.saveTasks(
+      result.tasks,
+      changedTaskIds: result.changedTaskIds,
+    );
     applyTasks(storedTasks);
 
     await syncAllTasks(
