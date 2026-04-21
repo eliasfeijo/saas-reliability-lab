@@ -42,12 +42,20 @@ class LabShell extends StatelessWidget {
           drawer: isWide
               ? null
               : const Drawer(
-                  child: SafeArea(child: LabLeftRail(compact: true)),
+                  child: SafeArea(
+                    child: _PanelSelectionScope(
+                      child: LabLeftRail(compact: true),
+                    ),
+                  ),
                 ),
           endDrawer: isWide
               ? null
               : const Drawer(
-                  child: SafeArea(child: SyncDebugPanel(compact: true)),
+                  child: SafeArea(
+                    child: _PanelSelectionScope(
+                      child: SyncDebugPanel(compact: true),
+                    ),
+                  ),
                 ),
           body: SafeArea(
             top: isWide,
@@ -56,24 +64,43 @@ class LabShell extends StatelessWidget {
                     padding: const EdgeInsets.all(20),
                     child: Row(
                       children: const [
-                        SizedBox(width: 280, child: LabLeftRail()),
-                        SizedBox(width: 20),
-                        Expanded(
-                          child: _WorkspaceCanvas(child: TaskWorkspace()),
+                        SizedBox(
+                          width: 280,
+                          child: _PanelSelectionScope(child: LabLeftRail()),
                         ),
                         SizedBox(width: 20),
-                        SizedBox(width: 360, child: SyncDebugPanel()),
+                        Expanded(
+                          child: _PanelSelectionScope(
+                            child: _WorkspaceCanvas(child: TaskWorkspace()),
+                          ),
+                        ),
+                        SizedBox(width: 20),
+                        SizedBox(
+                          width: 360,
+                          child: _PanelSelectionScope(child: SyncDebugPanel()),
+                        ),
                       ],
                     ),
                   )
                 : const Padding(
                     padding: EdgeInsets.fromLTRB(16, 0, 16, 16),
-                    child: TaskWorkspace(),
+                    child: _PanelSelectionScope(child: TaskWorkspace()),
                   ),
           ),
         );
       },
     );
+  }
+}
+
+class _PanelSelectionScope extends StatelessWidget {
+  const _PanelSelectionScope({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return SelectionArea(child: child);
   }
 }
 

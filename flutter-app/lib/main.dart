@@ -152,7 +152,7 @@ class _MyAppState extends State<MyApp> {
         debugShowCheckedModeBanner: false,
         title: 'SaaS Reliability Lab',
         theme: buildLabTheme(),
-        home: const SelectionArea(child: LabShell()),
+        home: const LabShell(),
       ),
     );
   }

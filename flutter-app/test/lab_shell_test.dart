@@ -65,6 +65,7 @@ void main() {
     expect(find.text('Task Workspace'), findsOneWidget);
     expect(find.text('Runtime Diagnostics'), findsOneWidget);
     expect(find.text('Reliability Lab'), findsNothing);
+    expect(find.byType(SelectionArea), findsNWidgets(3));
   });
 
   testWidgets('narrow shell moves rails into drawers', (tester) async {
@@ -97,10 +98,12 @@ void main() {
     expect(find.text('Reliability Lab'), findsOneWidget);
     expect(find.text('Operator Rail'), findsNothing);
     expect(find.text('Runtime Diagnostics'), findsNothing);
+    expect(find.byType(SelectionArea), findsOneWidget);
 
     await tester.tap(find.byIcon(Icons.dashboard_customize_outlined));
     await tester.pumpAndSettle();
     expect(find.text('Operator Rail'), findsOneWidget);
+    expect(find.byType(SelectionArea), findsNWidgets(2));
 
     Navigator.of(tester.element(find.text('Operator Rail'))).pop();
     await tester.pumpAndSettle();
@@ -108,5 +111,6 @@ void main() {
     await tester.tap(find.byIcon(Icons.monitor_heart_outlined));
     await tester.pumpAndSettle();
     expect(find.text('Runtime Diagnostics'), findsOneWidget);
+    expect(find.byType(SelectionArea), findsNWidgets(2));
   });
 }
