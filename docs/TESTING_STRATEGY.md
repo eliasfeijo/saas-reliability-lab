@@ -61,11 +61,11 @@ What they currently cover:
 - workspace startup and auth-session orchestration
 - shell ownership across wide and narrow layouts
 - operator rail rendering for anonymous and authenticated states
-- diagnostics rail rendering for explicit sync, push, local-state, and timeline evidence, including revealable event-record details
+- diagnostics rail rendering for explicit sync, push, local-state, and timeline evidence, including revealable event-record details and a timeline-only clear action
 - diagnostics rail rendering for active fault-injection evidence
 - provider-level queue and batch behavior
 - workflow-style widget regressions in the task workspace
-- responsive widget behavior at fixed viewport sizes
+- responsive widget behavior at fixed viewport sizes, including wide-layout rail and split-pane scroll affordances
 
 Current issue:
 
@@ -247,7 +247,7 @@ These should protect:
 - shell ownership across wide vs narrow layouts
 - workspace split vs compact layout
 - queue controls, notices, and empty states
-- operator rail and diagnostics rail rendering
+- operator rail, task workspace split panes, and diagnostics rail rendering, including wide-layout scrollbar affordances
 - task selection, inspector visibility, and batch-action affordances
 - responsive transitions, especially resize-in-place behavior
 

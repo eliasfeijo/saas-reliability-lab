@@ -397,6 +397,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      expect(find.byType(Scrollbar), findsOneWidget);
       await tester.scrollUntilVisible(find.text('Reset Controls'), 300);
 
       expect(find.text('Reset Controls'), findsOneWidget);

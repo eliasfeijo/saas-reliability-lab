@@ -26,6 +26,19 @@ class LabLeftRail extends StatefulWidget {
 class _LabLeftRailState extends State<LabLeftRail> {
   bool _isLoggingOut = false;
   bool _isReviewingAnonymousTasks = false;
+  late final ScrollController _scrollController;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController = ScrollController();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   void _showLoginBottomSheet() {
     showModalBottomSheet(
@@ -397,287 +410,343 @@ class _LabLeftRailState extends State<LabLeftRail> {
                 ? null
                 : Border.all(color: theme.colorScheme.outlineVariant),
           ),
-          child: ListView(
-            padding: const EdgeInsets.all(20),
-            children: [
-              Text('Operator Rail', style: theme.textTheme.headlineMedium),
-              const SizedBox(height: 6),
-              Text(
-                'Persistent controls for session state, view scope, and reliability context.',
-                style: theme.textTheme.bodyMedium,
-              ),
-              const SizedBox(height: 20),
-              DebugStatusCard(
-                title: 'Session Controls',
-                subtitle: 'Primary auth and sync actions now live here.',
-                leading: const Icon(Icons.verified_user_outlined),
-                accentColor: state.hasAuthenticatedSession
-                    ? theme.colorScheme.primary
-                    : theme.colorScheme.secondary,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        _statusBadge(
-                          context,
-                          state.hasAuthenticatedSession
-                              ? 'Authenticated'
-                              : 'Anonymous',
-                          state.hasAuthenticatedSession
-                              ? theme.colorScheme.primary
-                              : theme.colorScheme.secondary,
-                        ),
-                        _statusBadge(
-                          context,
-                          state.syncPhase.label,
-                          _phaseColor(state.syncPhase, theme),
-                        ),
-                        _statusBadge(
-                          context,
-                          state.pushSubscriptionState.label,
-                          _pushColor(state.pushSubscriptionState, theme),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
-                    _line(
-                      context,
-                      'Active user',
-                      _summarizeId(state.activeUserId),
-                    ),
-                    _line(
-                      context,
-                      'Cached user',
-                      _summarizeId(state.cachedUserId),
-                    ),
-                    _line(
-                      context,
-                      'Connectivity',
-                      state.connectivityStatus.label,
-                    ),
-                    _line(context, 'Last sync', state.lastSyncResult.label),
-                    const SizedBox(height: 14),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        if (!state.hasAuthenticatedSession)
-                          FilledButton.tonalIcon(
-                            onPressed: _showLoginBottomSheet,
-                            icon: const Icon(Icons.login),
-                            label: const Text('Open auth'),
-                          ),
-                        if (state.hasAuthenticatedSession)
-                          FilledButton.tonalIcon(
-                            onPressed: agenda.isLoading ? null : _syncNow,
-                            icon: const Icon(Icons.sync),
-                            label: const Text('Sync now'),
-                          ),
-                        if (state.hasAuthenticatedSession)
-                          OutlinedButton.icon(
-                            onPressed: _isLoggingOut ? null : _logout,
-                            icon: const Icon(Icons.logout),
-                            label: Text(
-                              _isLoggingOut ? 'Logging out...' : 'Logout',
-                            ),
-                          ),
-                      ],
-                    ),
-                  ],
+          child: _buildScrollablePanel(
+            context,
+            ListView(
+              controller: _scrollController,
+              padding: const EdgeInsets.all(20),
+              children: [
+                Text('Operator Rail', style: theme.textTheme.headlineMedium),
+                const SizedBox(height: 6),
+                Text(
+                  'Persistent controls for session state, view scope, and reliability context.',
+                  style: theme.textTheme.bodyMedium,
                 ),
-              ),
-              const SizedBox(height: 16),
-              DebugStatusCard(
-                title: 'Task Scope',
-                subtitle: 'Persistent view controls for the current workspace.',
-                leading: const Icon(Icons.tune),
-                accentColor: theme.colorScheme.tertiary,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: TaskFilter.values.map((filter) {
-                        return ChoiceChip(
-                          label: Text(filter.displayName),
-                          selected: agenda.currentFilter == filter,
-                          onSelected: (_) => agenda.setFilter(filter),
-                        );
-                      }).toList(),
-                    ),
-                    const SizedBox(height: 14),
-                    Wrap(
-                      spacing: 10,
-                      runSpacing: 10,
-                      children: [
-                        _metricPill(
-                          context,
-                          'Visible',
-                          agenda.filteredTasks.length.toString(),
-                          valueKey: const ValueKey('task-scope-visible-value'),
-                        ),
-                        _metricPill(
-                          context,
-                          'Total',
-                          agenda.totalTasks.toString(),
-                          valueKey: const ValueKey('task-scope-total-value'),
-                        ),
-                        _metricPill(
-                          context,
-                          'Overdue',
-                          agenda.overdueTasksCount.toString(),
-                          valueKey: const ValueKey('task-scope-overdue-value'),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              DebugStatusCard(
-                title: 'Anonymous Task Review',
-                subtitle: agenda.anonymousTasks.isEmpty
-                    ? 'No anonymous tasks are waiting for review.'
-                    : 'Resolve local-only tasks explicitly instead of hiding them in transient prompts.',
-                leading: const Icon(Icons.person_search_outlined),
-                accentColor: agenda.anonymousTasks.isEmpty
-                    ? theme.colorScheme.tertiary
-                    : theme.colorScheme.secondary,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _line(
-                      context,
-                      'Anonymous tasks',
-                      agenda.anonymousTasks.length.toString(),
-                      valueKey: const ValueKey('anonymous-review-count-value'),
-                    ),
-                    Text(
-                      state.hasAuthenticatedSession
-                          ? 'Review these local-only tasks here instead of relying only on the login-time dialog.'
-                          : 'These tasks remain local-only until you sign in and choose how to reconcile them.',
-                      style: theme.textTheme.bodyMedium,
-                    ),
-                    const SizedBox(height: 14),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        if (!state.hasAuthenticatedSession)
-                          FilledButton.tonalIcon(
-                            onPressed: agenda.anonymousTasks.isEmpty
-                                ? null
-                                : _showLoginBottomSheet,
-                            icon: const Icon(Icons.login),
-                            label: const Text('Sign in to review'),
+                const SizedBox(height: 20),
+                DebugStatusCard(
+                  title: 'Session Controls',
+                  subtitle: 'Primary auth and sync actions now live here.',
+                  leading: const Icon(Icons.verified_user_outlined),
+                  accentColor: state.hasAuthenticatedSession
+                      ? theme.colorScheme.primary
+                      : theme.colorScheme.secondary,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          _statusBadge(
+                            context,
+                            state.hasAuthenticatedSession
+                                ? 'Authenticated'
+                                : 'Anonymous',
+                            state.hasAuthenticatedSession
+                                ? theme.colorScheme.primary
+                                : theme.colorScheme.secondary,
                           ),
-                        if (state.hasAuthenticatedSession)
-                          FilledButton.tonalIcon(
-                            onPressed:
-                                agenda.anonymousTasks.isEmpty ||
-                                    _isReviewingAnonymousTasks
-                                ? null
-                                : _adoptAnonymousTasks,
-                            icon: const Icon(Icons.cloud_done_outlined),
-                            label: Text(
-                              _isReviewingAnonymousTasks
-                                  ? 'Applying...'
-                                  : 'Adopt tasks',
-                            ),
+                          _statusBadge(
+                            context,
+                            state.syncPhase.label,
+                            _phaseColor(state.syncPhase, theme),
                           ),
-                        if (state.hasAuthenticatedSession)
-                          OutlinedButton.icon(
-                            onPressed:
-                                agenda.anonymousTasks.isEmpty ||
-                                    _isReviewingAnonymousTasks
-                                ? null
-                                : _discardAnonymousTasks,
-                            icon: const Icon(Icons.delete_outline),
-                            label: const Text('Discard local'),
+                          _statusBadge(
+                            context,
+                            state.pushSubscriptionState.label,
+                            _pushColor(state.pushSubscriptionState, theme),
                           ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              DebugStatusCard(
-                title: 'Scenario Controls',
-                subtitle: faultState.isActive
-                    ? 'A controlled failure scenario is active. Use the normal lab controls to observe its effect.'
-                    : 'Activate a controlled failure scenario here, then observe the resulting evidence in diagnostics and the event timeline.',
-                leading: const Icon(Icons.science_outlined),
-                accentColor: faultState.isActive
-                    ? theme.colorScheme.error
-                    : theme.colorScheme.primary,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: faultInjection.availableScenarios.map((
-                        scenario,
-                      ) {
-                        final isActive =
-                            faultState.isActive &&
-                            faultState.activeScenario == scenario;
-                        if (isActive) {
-                          return InputChip(
-                            avatar: Icon(
-                              Icons.science_outlined,
-                              size: 18,
-                              color: theme.colorScheme.error,
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      _line(
+                        context,
+                        'Active user',
+                        _summarizeId(state.activeUserId),
+                      ),
+                      _line(
+                        context,
+                        'Cached user',
+                        _summarizeId(state.cachedUserId),
+                      ),
+                      _line(
+                        context,
+                        'Connectivity',
+                        state.connectivityStatus.label,
+                      ),
+                      _line(context, 'Last sync', state.lastSyncResult.label),
+                      const SizedBox(height: 14),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          if (!state.hasAuthenticatedSession)
+                            FilledButton.tonalIcon(
+                              onPressed: _showLoginBottomSheet,
+                              icon: const Icon(Icons.login),
+                              label: const Text('Open auth'),
                             ),
-                            label: Text(scenario.label),
-                            selected: true,
-                            showCheckmark: false,
-                            deleteIcon: Icon(
-                              Icons.close,
-                              size: 18,
-                              color: theme.colorScheme.error,
+                          if (state.hasAuthenticatedSession)
+                            FilledButton.tonalIcon(
+                              onPressed: agenda.isLoading ? null : _syncNow,
+                              icon: const Icon(Icons.sync),
+                              label: const Text('Sync now'),
                             ),
-                            onDeleted: _clearScenario,
-                            selectedColor: theme.colorScheme.error.withValues(
-                              alpha: 0.14,
-                            ),
-                            side: BorderSide(
-                              color: theme.colorScheme.error.withValues(
-                                alpha: 0.28,
+                          if (state.hasAuthenticatedSession)
+                            OutlinedButton.icon(
+                              onPressed: _isLoggingOut ? null : _logout,
+                              icon: const Icon(Icons.logout),
+                              label: Text(
+                                _isLoggingOut ? 'Logging out...' : 'Logout',
                               ),
                             ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                DebugStatusCard(
+                  title: 'Task Scope',
+                  subtitle:
+                      'Persistent view controls for the current workspace.',
+                  leading: const Icon(Icons.tune),
+                  accentColor: theme.colorScheme.tertiary,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: TaskFilter.values.map((filter) {
+                          return ChoiceChip(
+                            label: Text(filter.displayName),
+                            selected: agenda.currentFilter == filter,
+                            onSelected: (_) => agenda.setFilter(filter),
                           );
-                        }
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 14),
+                      Wrap(
+                        spacing: 10,
+                        runSpacing: 10,
+                        children: [
+                          _metricPill(
+                            context,
+                            'Visible',
+                            agenda.filteredTasks.length.toString(),
+                            valueKey: const ValueKey(
+                              'task-scope-visible-value',
+                            ),
+                          ),
+                          _metricPill(
+                            context,
+                            'Total',
+                            agenda.totalTasks.toString(),
+                            valueKey: const ValueKey('task-scope-total-value'),
+                          ),
+                          _metricPill(
+                            context,
+                            'Overdue',
+                            agenda.overdueTasksCount.toString(),
+                            valueKey: const ValueKey(
+                              'task-scope-overdue-value',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                DebugStatusCard(
+                  title: 'Anonymous Task Review',
+                  subtitle: agenda.anonymousTasks.isEmpty
+                      ? 'No anonymous tasks are waiting for review.'
+                      : 'Resolve local-only tasks explicitly instead of hiding them in transient prompts.',
+                  leading: const Icon(Icons.person_search_outlined),
+                  accentColor: agenda.anonymousTasks.isEmpty
+                      ? theme.colorScheme.tertiary
+                      : theme.colorScheme.secondary,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _line(
+                        context,
+                        'Anonymous tasks',
+                        agenda.anonymousTasks.length.toString(),
+                        valueKey: const ValueKey(
+                          'anonymous-review-count-value',
+                        ),
+                      ),
+                      Text(
+                        state.hasAuthenticatedSession
+                            ? 'Review these local-only tasks here instead of relying only on the login-time dialog.'
+                            : 'These tasks remain local-only until you sign in and choose how to reconcile them.',
+                        style: theme.textTheme.bodyMedium,
+                      ),
+                      const SizedBox(height: 14),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          if (!state.hasAuthenticatedSession)
+                            FilledButton.tonalIcon(
+                              onPressed: agenda.anonymousTasks.isEmpty
+                                  ? null
+                                  : _showLoginBottomSheet,
+                              icon: const Icon(Icons.login),
+                              label: const Text('Sign in to review'),
+                            ),
+                          if (state.hasAuthenticatedSession)
+                            FilledButton.tonalIcon(
+                              onPressed:
+                                  agenda.anonymousTasks.isEmpty ||
+                                      _isReviewingAnonymousTasks
+                                  ? null
+                                  : _adoptAnonymousTasks,
+                              icon: const Icon(Icons.cloud_done_outlined),
+                              label: Text(
+                                _isReviewingAnonymousTasks
+                                    ? 'Applying...'
+                                    : 'Adopt tasks',
+                              ),
+                            ),
+                          if (state.hasAuthenticatedSession)
+                            OutlinedButton.icon(
+                              onPressed:
+                                  agenda.anonymousTasks.isEmpty ||
+                                      _isReviewingAnonymousTasks
+                                  ? null
+                                  : _discardAnonymousTasks,
+                              icon: const Icon(Icons.delete_outline),
+                              label: const Text('Discard local'),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                DebugStatusCard(
+                  title: 'Scenario Controls',
+                  subtitle: faultState.isActive
+                      ? 'A controlled failure scenario is active. Use the normal lab controls to observe its effect.'
+                      : 'Activate a controlled failure scenario here, then observe the resulting evidence in diagnostics and the event timeline.',
+                  leading: const Icon(Icons.science_outlined),
+                  accentColor: faultState.isActive
+                      ? theme.colorScheme.error
+                      : theme.colorScheme.primary,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: faultInjection.availableScenarios.map((
+                          scenario,
+                        ) {
+                          final isActive =
+                              faultState.isActive &&
+                              faultState.activeScenario == scenario;
+                          if (isActive) {
+                            return InputChip(
+                              avatar: Icon(
+                                Icons.science_outlined,
+                                size: 18,
+                                color: theme.colorScheme.error,
+                              ),
+                              label: Text(scenario.label),
+                              selected: true,
+                              showCheckmark: false,
+                              deleteIcon: Icon(
+                                Icons.close,
+                                size: 18,
+                                color: theme.colorScheme.error,
+                              ),
+                              onDeleted: _clearScenario,
+                              selectedColor: theme.colorScheme.error.withValues(
+                                alpha: 0.14,
+                              ),
+                              side: BorderSide(
+                                color: theme.colorScheme.error.withValues(
+                                  alpha: 0.28,
+                                ),
+                              ),
+                            );
+                          }
 
-                        return ChoiceChip(
-                          label: Text(scenario.label),
-                          selected: false,
-                          onSelected: (_) async {
-                            await _activateScenario(scenario);
-                          },
-                        );
-                      }).toList(),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      faultState.isActive
-                          ? faultState.activeSummary ??
-                                faultState.activeScenario.summary
-                          : 'Connectivity loss is ready immediately. Delayed sync opens a setup modal with a recommended local 5 s persistent hold, while expired auth and partial replay drop remain planned.',
-                      style: theme.textTheme.bodyMedium,
-                    ),
-                    if (faultState.activeScenario ==
-                        FaultInjectionScenario.delayedSync) ...[
+                          return ChoiceChip(
+                            label: Text(scenario.label),
+                            selected: false,
+                            onSelected: (_) async {
+                              await _activateScenario(scenario);
+                            },
+                          );
+                        }).toList(),
+                      ),
                       const SizedBox(height: 12),
                       Text(
-                        'Delayed sync setup',
-                        style: theme.textTheme.titleSmall,
+                        faultState.isActive
+                            ? faultState.activeSummary ??
+                                  faultState.activeScenario.summary
+                            : 'Connectivity loss is ready immediately. Delayed sync opens a setup modal with a recommended local 5 s persistent hold, while expired auth and partial replay drop remain planned.',
+                        style: theme.textTheme.bodyMedium,
                       ),
-                      const SizedBox(height: 8),
+                      if (faultState.activeScenario ==
+                          FaultInjectionScenario.delayedSync) ...[
+                        const SizedBox(height: 12),
+                        Text(
+                          'Delayed sync setup',
+                          style: theme.textTheme.titleSmall,
+                        ),
+                        const SizedBox(height: 8),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.surfaceContainer,
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _line(
+                                context,
+                                'Mode',
+                                faultState.effectiveDelayedSyncMode.label,
+                              ),
+                              _line(
+                                context,
+                                'Target',
+                                faultState.effectiveDelayedSyncTarget.label,
+                              ),
+                              _line(
+                                context,
+                                'Behavior',
+                                faultState.effectiveDelayedSyncBehavior.label,
+                              ),
+                              _line(
+                                context,
+                                'Delay',
+                                faultState.delayLabel ?? '5 s',
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Recommended fast path: Local, Full pass, Persistent, 5 s. Reconfigure the scenario when you want transport or backend-shaped delay evidence.',
+                          style: theme.textTheme.bodySmall,
+                        ),
+                        const SizedBox(height: 8),
+                        OutlinedButton.icon(
+                          onPressed: _configureDelayedSync,
+                          icon: const Icon(Icons.tune),
+                          label: const Text('Configure delayed sync'),
+                        ),
+                      ],
+                      const SizedBox(height: 12),
                       Container(
                         width: double.infinity,
                         padding: const EdgeInsets.all(12),
@@ -688,100 +757,74 @@ class _LabLeftRailState extends State<LabLeftRail> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            _line(
-                              context,
-                              'Mode',
-                              faultState.effectiveDelayedSyncMode.label,
+                            Text(
+                              faultState.isActive
+                                  ? 'How to operate this scenario'
+                                  : 'How fault injection works here',
+                              style: theme.textTheme.titleSmall,
                             ),
-                            _line(
-                              context,
-                              'Target',
-                              faultState.effectiveDelayedSyncTarget.label,
-                            ),
-                            _line(
-                              context,
-                              'Behavior',
-                              faultState.effectiveDelayedSyncBehavior.label,
-                            ),
-                            _line(
-                              context,
-                              'Delay',
-                              faultState.delayLabel ?? '5 s',
+                            const SizedBox(height: 8),
+                            Text(
+                              faultState.isActive
+                                  ? faultState.operatorInstruction ?? ''
+                                  : 'Select a scenario chip to activate it. The active scenario keeps normal product controls in place, adds explicit evidence to runtime diagnostics, and writes a matching event to the timeline.',
+                              style: theme.textTheme.bodyMedium,
                             ),
                           ],
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Recommended fast path: Local, Full pass, Persistent, 5 s. Reconfigure the scenario when you want transport or backend-shaped delay evidence.',
-                        style: theme.textTheme.bodySmall,
-                      ),
-                      const SizedBox(height: 8),
-                      OutlinedButton.icon(
-                        onPressed: _configureDelayedSync,
-                        icon: const Icon(Icons.tune),
-                        label: const Text('Configure delayed sync'),
-                      ),
+                      if (faultState.isActive) ...[
+                        const SizedBox(height: 12),
+                        Text(
+                          'Tap the active red chip to clear the scenario instantly.',
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ],
+                      if (!faultState.isActive) ...[
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: const [
+                            Chip(label: Text('Expired auth (planned)')),
+                            Chip(label: Text('Partial replay drop (planned)')),
+                          ],
+                        ),
+                      ],
                     ],
-                    const SizedBox(height: 12),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.surfaceContainer,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            faultState.isActive
-                                ? 'How to operate this scenario'
-                                : 'How fault injection works here',
-                            style: theme.textTheme.titleSmall,
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            faultState.isActive
-                                ? faultState.operatorInstruction ?? ''
-                                : 'Select a scenario chip to activate it. The active scenario keeps normal product controls in place, adds explicit evidence to runtime diagnostics, and writes a matching event to the timeline.',
-                            style: theme.textTheme.bodyMedium,
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (faultState.isActive) ...[
-                      const SizedBox(height: 12),
-                      Text(
-                        'Tap the active red chip to clear the scenario instantly.',
-                        style: theme.textTheme.bodySmall,
-                      ),
-                    ],
-                    if (!faultState.isActive) ...[
-                      const SizedBox(height: 12),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: const [
-                          Chip(label: Text('Expired auth (planned)')),
-                          Chip(label: Text('Partial replay drop (planned)')),
-                        ],
-                      ),
-                    ],
-                  ],
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              ResetControlsCard(
-                agenda: agenda,
-                runtimeDebug: runtimeDebug,
-                faultInjection: faultInjection,
-                hasAuthenticatedSession: state.hasAuthenticatedSession,
-              ),
-            ],
+                const SizedBox(height: 16),
+                ResetControlsCard(
+                  agenda: agenda,
+                  runtimeDebug: runtimeDebug,
+                  faultInjection: faultInjection,
+                  hasAuthenticatedSession: state.hasAuthenticatedSession,
+                ),
+              ],
+            ),
           ),
         );
       },
+    );
+  }
+
+  Widget _buildScrollablePanel(BuildContext context, Widget child) {
+    if (widget.compact) {
+      return child;
+    }
+
+    return ScrollConfiguration(
+      behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+      child: Scrollbar(
+        controller: _scrollController,
+        thumbVisibility: true,
+        trackVisibility: true,
+        interactive: true,
+        thickness: 14,
+        radius: const Radius.circular(999),
+        child: child,
+      ),
     );
   }
 

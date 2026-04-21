@@ -195,6 +195,7 @@ void main() {
 
     expect(find.text('Runtime Diagnostics'), findsOneWidget);
     expect(find.text('Reset Controls'), findsNothing);
+    expect(find.byType(Scrollbar), findsOneWidget);
     expect(find.text('Online'), findsWidgets);
 
     await tester.scrollUntilVisible(find.text('Fault Injection'), 300);
@@ -501,6 +502,85 @@ void main() {
 
     expect(find.text('Operator summary'), findsNothing);
   });
+
+  testWidgets(
+    'event timeline can be cleared without resetting the wider diagnostics state',
+    (tester) async {
+      final runtimeDebug = RuntimeDebugProvider();
+      addTearDown(runtimeDebug.dispose);
+      final faultInjection = FaultInjectionProvider(runtimeDebug: runtimeDebug);
+      addTearDown(faultInjection.dispose);
+      final repository = InMemoryTasksRepository([]);
+      final agenda = buildAgendaProviderForTesting(
+        repository,
+        TaskSyncService.forTesting(
+          repository,
+          remote: FakeTaskRemoteDataSource([]),
+          connectivityCheck: () async => [ConnectivityResult.wifi],
+          hasActiveSession: () => true,
+          runtimeDebug: runtimeDebug,
+        ),
+        runtimeDebug: runtimeDebug,
+      );
+      addTearDown(agenda.dispose);
+
+      runtimeDebug.setConnectivityResults(const [
+        ConnectivityResult.wifi,
+      ], logEvent: false);
+      runtimeDebug.markSyncPartial(
+        'Sync completed. Some operations need review.',
+      );
+      runtimeDebug.setPushSubscriptionState(
+        PushSubscriptionState.registered,
+        message: 'Push registration is active.',
+      );
+      runtimeDebug.addEvent(
+        category: RuntimeEventCategory.sync,
+        message: 'Timeline event for diagnostics.',
+      );
+
+      await tester.pumpWidget(
+        RailHarness(
+          agenda: agenda,
+          runtimeDebug: runtimeDebug,
+          faultInjection: faultInjection,
+          child: const SyncDebugPanel(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.scrollUntilVisible(find.text('Event Timeline'), 300);
+
+      expect(find.text('Clear timeline'), findsOneWidget);
+      expect(
+        find.text('Timeline event for diagnostics.', skipOffstage: false),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Clear timeline'));
+      await tester.pumpAndSettle();
+
+      expect(runtimeDebug.state.recentEvents, isEmpty);
+      expect(
+        find.text('Timeline event for diagnostics.', skipOffstage: false),
+        findsNothing,
+      );
+      expect(
+        find.text(
+          'Events will appear here as the app loads, authenticates, syncs, and registers push.',
+        ),
+        findsOneWidget,
+      );
+      expect(
+        runtimeDebug.state.lastSyncMessage,
+        'Sync completed. Some operations need review.',
+      );
+      expect(
+        runtimeDebug.state.pushSubscriptionState,
+        PushSubscriptionState.registered,
+      );
+    },
+  );
 
   testWidgets(
     'expanded context stays attached to the original event when newer events arrive',

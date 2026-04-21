@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:todo_flutter/models/task.dart';
 import 'package:todo_flutter/providers/runtime_debug_provider.dart';
 import 'package:todo_flutter/services/task_sync_service.dart';
+import 'package:todo_flutter/widgets/lab/task_workspace.dart';
 
 import 'test_support/app_test_support.dart';
 
@@ -109,6 +110,62 @@ void main() {
       expect(find.text('Task Queue'), findsOneWidget);
     },
   );
+
+  testWidgets('wide split workspace exposes queue and inspector scrollbars', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1.0;
+    tester.view.physicalSize = const Size(1600, 900);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+
+    final seededTask = TaskModel(
+      id: 'task-split-scroll',
+      title: 'Split scroll task',
+      beginsAt: DateTime(2026, 4, 21, 9),
+      estimatedDuration: const Duration(hours: 1),
+      syncStatus: SyncStatus.dirty,
+      tags: const ['Ops', 'Timeline', 'Desktop'],
+      description:
+          'Selected task details should stay inside a desktop inspector pane with an explicit scrollbar.',
+    );
+
+    final repository = InMemoryTasksRepository([seededTask]);
+    final runtimeDebug = RuntimeDebugProvider();
+    addTearDown(runtimeDebug.dispose);
+
+    final syncService = TaskSyncService.forTesting(
+      repository,
+      remote: FakeTaskRemoteDataSource([]),
+      connectivityCheck: () async => [ConnectivityResult.wifi],
+      hasActiveSession: () => false,
+      runtimeDebug: runtimeDebug,
+    );
+
+    final agenda = buildAgendaProviderForTesting(
+      repository,
+      syncService,
+      runtimeDebug: runtimeDebug,
+    );
+    addTearDown(agenda.dispose);
+
+    await tester.pumpWidget(
+      LabWorkspaceHarness(agenda: agenda, runtimeDebug: runtimeDebug),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Split scroll task'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Task Inspector'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(TaskWorkspace),
+        matching: find.byType(Scrollbar),
+      ),
+      findsNWidgets(2),
+    );
+  });
 
   testWidgets(
     'compact queue header stacks actions without losing the heading',

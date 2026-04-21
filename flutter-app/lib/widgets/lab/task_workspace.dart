@@ -24,6 +24,8 @@ class TaskWorkspace extends StatefulWidget {
 class _TaskWorkspaceState extends State<TaskWorkspace> {
   late Timer _refreshTimer;
   late final StreamSubscription<AuthState> _authStateSubscription;
+  late final ScrollController _queueScrollController;
+  late final ScrollController _inspectorScrollController;
 
   final TextEditingController _searchController = TextEditingController();
   bool _isCompactPanelMinimized = false;
@@ -36,6 +38,8 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
   @override
   void initState() {
     super.initState();
+    _queueScrollController = ScrollController();
+    _inspectorScrollController = ScrollController();
     _refreshTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
       if (mounted) {
         setState(() {});
@@ -61,6 +65,8 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
   void dispose() {
     _authStateSubscription.cancel();
     _refreshTimer.cancel();
+    _queueScrollController.dispose();
+    _inspectorScrollController.dispose();
     _searchController.dispose();
     super.dispose();
   }
@@ -473,6 +479,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
             compact: compact,
             dense: dense,
             scrollInternally: true,
+            scrollController: compact ? null : _queueScrollController,
           ),
         ),
       ],
@@ -1008,6 +1015,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
     required bool dense,
     required bool scrollInternally,
     double? minBodyHeight,
+    ScrollController? scrollController,
   }) {
     final theme = Theme.of(context);
     final tasks = agenda.filteredTasks;
@@ -1127,7 +1135,24 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
           ),
           Divider(height: 1, color: theme.colorScheme.outlineVariant),
           if (scrollInternally)
-            Expanded(child: _buildTaskQueueBody(agenda, selectedTask, dense))
+            Expanded(
+              child: compact
+                  ? _buildTaskQueueBody(
+                      agenda,
+                      selectedTask,
+                      dense,
+                      controller: scrollController,
+                    )
+                  : _buildDesktopPaneScrollbar(
+                      controller: scrollController!,
+                      child: _buildTaskQueueBody(
+                        agenda,
+                        selectedTask,
+                        dense,
+                        controller: scrollController,
+                      ),
+                    ),
+            )
           else
             ConstrainedBox(
               constraints: BoxConstraints(minHeight: minBodyHeight ?? 320),
@@ -1135,6 +1160,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
                 agenda,
                 selectedTask,
                 dense,
+                controller: scrollController,
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
               ),
@@ -1148,6 +1174,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
     AgendaProvider agenda,
     TaskModel? selectedTask,
     bool dense, {
+    ScrollController? controller,
     bool shrinkWrap = false,
     ScrollPhysics? physics,
   }) {
@@ -1158,6 +1185,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
     }
 
     return ListView.separated(
+      controller: controller,
       shrinkWrap: shrinkWrap,
       physics: physics,
       padding: EdgeInsets.fromLTRB(
@@ -1406,164 +1434,172 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
               dense: dense,
               onMinimize: onMinimize,
               onClose: onClose,
+              scrollController: compact ? null : _inspectorScrollController,
             )
           : selectedTask == null
           ? _buildInspectorPlaceholder(compact: compact, dense: dense)
-          : SingleChildScrollView(
-              padding: EdgeInsets.all(dense ? 14 : 18),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+          : _buildInspectorScrollSurface(
+              compact: compact,
+              controller: compact ? null : _inspectorScrollController,
+              child: SingleChildScrollView(
+                controller: compact ? null : _inspectorScrollController,
+                padding: EdgeInsets.all(dense ? 14 : 18),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                compact ? 'Task details' : 'Task Inspector',
+                                style: theme.textTheme.titleMedium,
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                compact
+                                    ? 'Attached details for the active task.'
+                                    : 'Desktop detail surface for the active task.',
+                                style: theme.textTheme.bodySmall,
+                              ),
+                            ],
+                          ),
+                        ),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text(
-                              compact ? 'Task details' : 'Task Inspector',
-                              style: theme.textTheme.titleMedium,
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              compact
-                                  ? 'Attached details for the active task.'
-                                  : 'Desktop detail surface for the active task.',
-                              style: theme.textTheme.bodySmall,
+                            if (onMinimize != null)
+                              IconButton(
+                                onPressed: onMinimize,
+                                icon: const Icon(Icons.expand_more),
+                                tooltip: 'Minimize panel',
+                              ),
+                            IconButton(
+                              onPressed: onClose ?? agenda.clearSelection,
+                              icon: const Icon(Icons.close),
+                              tooltip: 'Clear selection',
                             ),
                           ],
                         ),
-                      ),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (onMinimize != null)
-                            IconButton(
-                              onPressed: onMinimize,
-                              icon: const Icon(Icons.expand_more),
-                              tooltip: 'Minimize panel',
-                            ),
-                          IconButton(
-                            onPressed: onClose ?? agenda.clearSelection,
-                            icon: const Icon(Icons.close),
-                            tooltip: 'Clear selection',
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    selectedTask.title,
-                    style: theme.textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
+                      ],
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      _WorkspaceBadge(
-                        icon: Icons.flag_rounded,
-                        label: selectedTask.priority.displayName,
-                        backgroundColor: selectedTask.priority.color.withValues(
-                          alpha: 0.16,
-                        ),
-                        foregroundColor: selectedTask.priority.color,
+                    const SizedBox(height: 16),
+                    Text(
+                      selectedTask.title,
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
                       ),
-                      _WorkspaceBadge(
-                        icon: _statusIcon(selectedTask.status),
-                        label: selectedTask.status.displayName,
-                        backgroundColor: _statusBackgroundColor(
-                          selectedTask.status,
-                          theme.colorScheme,
-                        ),
-                        foregroundColor: _statusForegroundColor(
-                          selectedTask.status,
-                          theme.colorScheme,
-                        ),
-                      ),
-                      _WorkspaceBadge(
-                        icon: selectedTask.userId == null
-                            ? Icons.phone_iphone_outlined
-                            : Icons.cloud_done_outlined,
-                        label: selectedTask.userId == null
-                            ? 'Local only'
-                            : 'Account task',
-                        backgroundColor: theme.colorScheme.surfaceContainerHigh,
-                        foregroundColor: theme.colorScheme.onSurface,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  _InspectorField(
-                    label: 'Schedule',
-                    value: _formatLongTaskWindow(selectedTask),
-                  ),
-                  _InspectorField(
-                    label: 'Duration',
-                    value: _formatDurationLabel(selectedTask.estimatedDuration),
-                  ),
-                  _InspectorField(
-                    label: 'Sync state',
-                    value: _syncStatusLabel(selectedTask.syncStatus),
-                  ),
-                  _InspectorField(
-                    label: 'Notes',
-                    value: _taskNotes(selectedTask),
-                  ),
-                  if (selectedTask.tags.isNotEmpty) ...[
-                    Text('Tags', style: theme.textTheme.labelLarge),
-                    const SizedBox(height: 8),
+                    ),
+                    const SizedBox(height: 12),
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
-                      children: selectedTask.tags
-                          .map((tag) => Chip(label: Text(tag)))
-                          .toList(),
+                      children: [
+                        _WorkspaceBadge(
+                          icon: Icons.flag_rounded,
+                          label: selectedTask.priority.displayName,
+                          backgroundColor: selectedTask.priority.color
+                              .withValues(alpha: 0.16),
+                          foregroundColor: selectedTask.priority.color,
+                        ),
+                        _WorkspaceBadge(
+                          icon: _statusIcon(selectedTask.status),
+                          label: selectedTask.status.displayName,
+                          backgroundColor: _statusBackgroundColor(
+                            selectedTask.status,
+                            theme.colorScheme,
+                          ),
+                          foregroundColor: _statusForegroundColor(
+                            selectedTask.status,
+                            theme.colorScheme,
+                          ),
+                        ),
+                        _WorkspaceBadge(
+                          icon: selectedTask.userId == null
+                              ? Icons.phone_iphone_outlined
+                              : Icons.cloud_done_outlined,
+                          label: selectedTask.userId == null
+                              ? 'Local only'
+                              : 'Account task',
+                          backgroundColor:
+                              theme.colorScheme.surfaceContainerHigh,
+                          foregroundColor: theme.colorScheme.onSurface,
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 16),
-                  ],
-                  Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
-                    children: [
-                      FilledButton.tonalIcon(
-                        onPressed: () => _editTask(context, selectedTask),
-                        icon: const Icon(Icons.edit_outlined),
-                        label: const Text('Edit'),
+                    const SizedBox(height: 20),
+                    _InspectorField(
+                      label: 'Schedule',
+                      value: _formatLongTaskWindow(selectedTask),
+                    ),
+                    _InspectorField(
+                      label: 'Duration',
+                      value: _formatDurationLabel(
+                        selectedTask.estimatedDuration,
                       ),
-                      OutlinedButton.icon(
-                        onPressed: () => selectedTask.isCompleted
-                            ? agenda.reopenTask(selectedTask.id)
-                            : agenda.markTaskCompleted(selectedTask.id),
-                        icon: Icon(
-                          selectedTask.isCompleted
-                              ? Icons.undo_outlined
-                              : Icons.check_circle_outline,
-                        ),
-                        label: Text(
-                          selectedTask.isCompleted
-                              ? 'Reopen task'
-                              : 'Mark done',
-                        ),
+                    ),
+                    _InspectorField(
+                      label: 'Sync state',
+                      value: _syncStatusLabel(selectedTask.syncStatus),
+                    ),
+                    _InspectorField(
+                      label: 'Notes',
+                      value: _taskNotes(selectedTask),
+                    ),
+                    if (selectedTask.tags.isNotEmpty) ...[
+                      Text('Tags', style: theme.textTheme.labelLarge),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: selectedTask.tags
+                            .map((tag) => Chip(label: Text(tag)))
+                            .toList(),
                       ),
-                      TextButton.icon(
-                        onPressed: () => _deleteTask(context, selectedTask),
-                        icon: Icon(
-                          Icons.delete_outline,
-                          color: theme.colorScheme.error,
-                        ),
-                        label: Text(
-                          'Delete',
-                          style: TextStyle(color: theme.colorScheme.error),
-                        ),
-                      ),
+                      const SizedBox(height: 16),
                     ],
-                  ),
-                ],
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: [
+                        FilledButton.tonalIcon(
+                          onPressed: () => _editTask(context, selectedTask),
+                          icon: const Icon(Icons.edit_outlined),
+                          label: const Text('Edit'),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: () => selectedTask.isCompleted
+                              ? agenda.reopenTask(selectedTask.id)
+                              : agenda.markTaskCompleted(selectedTask.id),
+                          icon: Icon(
+                            selectedTask.isCompleted
+                                ? Icons.undo_outlined
+                                : Icons.check_circle_outline,
+                          ),
+                          label: Text(
+                            selectedTask.isCompleted
+                                ? 'Reopen task'
+                                : 'Mark done',
+                          ),
+                        ),
+                        TextButton.icon(
+                          onPressed: () => _deleteTask(context, selectedTask),
+                          icon: Icon(
+                            Icons.delete_outline,
+                            color: theme.colorScheme.error,
+                          ),
+                          label: Text(
+                            'Delete',
+                            style: TextStyle(color: theme.colorScheme.error),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
     );
@@ -1575,6 +1611,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
     required bool dense,
     VoidCallback? onMinimize,
     VoidCallback? onClose,
+    ScrollController? scrollController,
   }) {
     final theme = Theme.of(context);
     final selectedTasks = agenda.selectedBatchTasks;
@@ -1613,111 +1650,116 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
       );
     }
 
-    return SingleChildScrollView(
-      padding: EdgeInsets.all(dense ? 14 : 18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+    return _buildInspectorScrollSurface(
+      compact: compact,
+      controller: scrollController,
+      child: SingleChildScrollView(
+        controller: scrollController,
+        padding: EdgeInsets.all(dense ? 14 : 18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        compact ? 'Batch actions' : 'Batch Actions',
+                        style: theme.textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${agenda.batchSelectedCount} task(s) selected in the current view.',
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      compact ? 'Batch actions' : 'Batch Actions',
-                      style: theme.textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${agenda.batchSelectedCount} task(s) selected in the current view.',
-                      style: theme.textTheme.bodySmall,
+                    if (onMinimize != null)
+                      IconButton(
+                        onPressed: onMinimize,
+                        icon: const Icon(Icons.expand_more),
+                        tooltip: 'Minimize panel',
+                      ),
+                    IconButton(
+                      onPressed: onClose ?? agenda.exitBatchMode,
+                      icon: const Icon(Icons.close),
+                      tooltip: 'Exit batch mode',
                     ),
                   ],
                 ),
-              ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (onMinimize != null)
-                    IconButton(
-                      onPressed: onMinimize,
-                      icon: const Icon(Icons.expand_more),
-                      tooltip: 'Minimize panel',
-                    ),
-                  IconButton(
-                    onPressed: onClose ?? agenda.exitBatchMode,
-                    icon: const Icon(Icons.close),
-                    tooltip: 'Exit batch mode',
+              ],
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _WorkspaceBadge(
+                  icon: Icons.playlist_add_check_circle_outlined,
+                  label: '${agenda.batchSelectedCount} selected',
+                  backgroundColor: theme.colorScheme.primaryContainer,
+                  foregroundColor: theme.colorScheme.onPrimaryContainer,
+                ),
+                _WorkspaceBadge(
+                  icon: Icons.check_circle_outline,
+                  label: '$incompleteCount ready to mark done',
+                  backgroundColor: theme.colorScheme.secondaryContainer,
+                  foregroundColor: theme.colorScheme.onSecondaryContainer,
+                ),
+                _WorkspaceBadge(
+                  icon: Icons.undo_outlined,
+                  label: '$completedCount ready to reopen',
+                  backgroundColor: theme.colorScheme.surfaceContainerHigh,
+                  foregroundColor: theme.colorScheme.onSurface,
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'Apply the current queue-safe actions to the selected tasks in one local save and one sync pass.',
+              style: theme.textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                FilledButton.tonalIcon(
+                  onPressed: incompleteCount > 0
+                      ? () => agenda.markSelectedTasksCompleted()
+                      : null,
+                  icon: const Icon(Icons.check_circle_outline),
+                  label: const Text('Mark done'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: completedCount > 0
+                      ? () => agenda.reopenSelectedTasks()
+                      : null,
+                  icon: const Icon(Icons.undo_outlined),
+                  label: const Text('Reopen'),
+                ),
+                TextButton.icon(
+                  onPressed: () => _confirmBatchDelete(context, agenda),
+                  icon: Icon(
+                    Icons.delete_outline,
+                    color: theme.colorScheme.error,
                   ),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _WorkspaceBadge(
-                icon: Icons.playlist_add_check_circle_outlined,
-                label: '${agenda.batchSelectedCount} selected',
-                backgroundColor: theme.colorScheme.primaryContainer,
-                foregroundColor: theme.colorScheme.onPrimaryContainer,
-              ),
-              _WorkspaceBadge(
-                icon: Icons.check_circle_outline,
-                label: '$incompleteCount ready to mark done',
-                backgroundColor: theme.colorScheme.secondaryContainer,
-                foregroundColor: theme.colorScheme.onSecondaryContainer,
-              ),
-              _WorkspaceBadge(
-                icon: Icons.undo_outlined,
-                label: '$completedCount ready to reopen',
-                backgroundColor: theme.colorScheme.surfaceContainerHigh,
-                foregroundColor: theme.colorScheme.onSurface,
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          Text(
-            'Apply the current queue-safe actions to the selected tasks in one local save and one sync pass.',
-            style: theme.textTheme.bodyMedium,
-          ),
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              FilledButton.tonalIcon(
-                onPressed: incompleteCount > 0
-                    ? () => agenda.markSelectedTasksCompleted()
-                    : null,
-                icon: const Icon(Icons.check_circle_outline),
-                label: const Text('Mark done'),
-              ),
-              OutlinedButton.icon(
-                onPressed: completedCount > 0
-                    ? () => agenda.reopenSelectedTasks()
-                    : null,
-                icon: const Icon(Icons.undo_outlined),
-                label: const Text('Reopen'),
-              ),
-              TextButton.icon(
-                onPressed: () => _confirmBatchDelete(context, agenda),
-                icon: Icon(
-                  Icons.delete_outline,
-                  color: theme.colorScheme.error,
+                  label: Text(
+                    'Delete',
+                    style: TextStyle(color: theme.colorScheme.error),
+                  ),
                 ),
-                label: Text(
-                  'Delete',
-                  style: TextStyle(color: theme.colorScheme.error),
-                ),
-              ),
-            ],
-          ),
-        ],
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1757,6 +1799,25 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
         ),
       ),
     );
+  }
+
+  Widget _buildDesktopPaneScrollbar({
+    required ScrollController controller,
+    required Widget child,
+  }) {
+    return _DesktopPaneScrollbar(controller: controller, child: child);
+  }
+
+  Widget _buildInspectorScrollSurface({
+    required bool compact,
+    required Widget child,
+    ScrollController? controller,
+  }) {
+    if (compact || controller == null) {
+      return child;
+    }
+
+    return _buildDesktopPaneScrollbar(controller: controller, child: child);
   }
 
   Future<void> _editTask(BuildContext context, TaskModel task) {
@@ -2089,6 +2150,66 @@ class _WorkspaceMetricChip extends StatelessWidget {
                 ),
               ],
             ),
+    );
+  }
+}
+
+class _DesktopPaneScrollbar extends StatefulWidget {
+  const _DesktopPaneScrollbar({required this.controller, required this.child});
+
+  final ScrollController controller;
+  final Widget child;
+
+  @override
+  State<_DesktopPaneScrollbar> createState() => _DesktopPaneScrollbarState();
+}
+
+class _DesktopPaneScrollbarState extends State<_DesktopPaneScrollbar> {
+  bool _ready = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _ready = widget.controller.hasClients;
+      });
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant _DesktopPaneScrollbar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+
+        setState(() {
+          _ready = widget.controller.hasClients;
+        });
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ScrollConfiguration(
+      behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+      child: Scrollbar(
+        controller: widget.controller,
+        thumbVisibility: _ready,
+        trackVisibility: _ready,
+        interactive: _ready,
+        thickness: 14,
+        radius: const Radius.circular(999),
+        child: widget.child,
+      ),
     );
   }
 }

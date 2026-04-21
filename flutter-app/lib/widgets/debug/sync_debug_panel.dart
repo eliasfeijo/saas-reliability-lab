@@ -10,10 +10,29 @@ import 'package:todo_flutter/providers/fault_injection_provider.dart';
 import 'package:todo_flutter/providers/runtime_debug_provider.dart';
 import 'package:todo_flutter/widgets/debug/debug_status_card.dart';
 
-class SyncDebugPanel extends StatelessWidget {
+class SyncDebugPanel extends StatefulWidget {
   const SyncDebugPanel({super.key, this.compact = false});
 
   final bool compact;
+
+  @override
+  State<SyncDebugPanel> createState() => _SyncDebugPanelState();
+}
+
+class _SyncDebugPanelState extends State<SyncDebugPanel> {
+  late final ScrollController _scrollController;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController = ScrollController();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -26,636 +45,694 @@ class SyncDebugPanel extends StatelessWidget {
         return Container(
           decoration: BoxDecoration(
             color: theme.colorScheme.surfaceContainerLow,
-            borderRadius: BorderRadius.circular(compact ? 0 : 28),
-            border: compact
+            borderRadius: BorderRadius.circular(widget.compact ? 0 : 28),
+            border: widget.compact
                 ? null
                 : Border.all(color: theme.colorScheme.outlineVariant),
           ),
-          child: ListView(
-            padding: const EdgeInsets.all(20),
-            children: [
-              Text(
-                'Runtime Diagnostics',
-                style: theme.textTheme.headlineMedium,
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Live evidence for auth, sync, local state, and push behavior.',
-                style: theme.textTheme.bodyMedium,
-              ),
-              const SizedBox(height: 20),
-              DebugStatusCard(
-                title: 'Sync State',
-                subtitle: 'Current connectivity and synchronization lifecycle.',
-                leading: const Icon(Icons.sync),
-                accentColor: _syncAccent(state.syncPhase, theme),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        _statusBadge(
-                          context,
-                          state.connectivityStatus.label,
-                          _connectivityColor(state.connectivityStatus, theme),
-                        ),
-                        _statusBadge(
-                          context,
-                          state.syncPhase.label,
-                          _syncAccent(state.syncPhase, theme),
-                        ),
-                        _statusBadge(
-                          context,
-                          state.lastSyncResult.label,
-                          _resultColor(state.lastSyncResult, theme),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
-                    _statusRow(
-                      context,
-                      label: 'Connectivity',
-                      value: state.connectivityStatus.label,
-                    ),
-                    _statusRow(
-                      context,
-                      label: 'Phase',
-                      value: state.syncPhase.label,
-                    ),
-                    _statusRow(
-                      context,
-                      label: 'Last result',
-                      value: state.lastSyncResult.label,
-                    ),
-                    _statusRow(
-                      context,
-                      label: 'Last message',
-                      value:
-                          state.lastSyncMessage ??
-                          'No sync event recorded yet.',
-                    ),
-                    _statusRow(
-                      context,
-                      label: 'Started',
-                      value: _formatTimestamp(state.lastSyncStartedAt),
-                    ),
-                    _statusRow(
-                      context,
-                      label: 'Completed',
-                      value: _formatTimestamp(state.lastSyncCompletedAt),
-                    ),
-                  ],
+          child: _buildScrollablePanel(
+            context,
+            ListView(
+              controller: _scrollController,
+              padding: const EdgeInsets.all(20),
+              children: [
+                Text(
+                  'Runtime Diagnostics',
+                  style: theme.textTheme.headlineMedium,
                 ),
-              ),
-              const SizedBox(height: 16),
-              DebugStatusCard(
-                title: 'Sync Outcomes',
-                subtitle: 'Most recent outcome recorded for each sync path.',
-                leading: const Icon(Icons.fact_check_outlined),
-                accentColor: _resultColor(state.lastSyncResult, theme),
-                child: Column(
-                  children: [
-                    _outcomeTile(
-                      context,
-                      title: 'Successful sync',
-                      timestamp: state.lastSuccessfulSyncAt,
-                      message: state.lastSuccessfulSyncMessage,
-                      accent: theme.colorScheme.primary,
-                    ),
-                    _outcomeTile(
-                      context,
-                      title: 'Skipped sync',
-                      timestamp: state.lastSkippedSyncAt,
-                      message: state.lastSkippedSyncMessage,
-                      accent: theme.colorScheme.secondary,
-                    ),
-                    _outcomeTile(
-                      context,
-                      title: 'Partial sync',
-                      timestamp: state.lastPartialSyncAt,
-                      message: state.lastPartialSyncMessage,
-                      accent: theme.colorScheme.tertiary,
-                    ),
-                    _outcomeTile(
-                      context,
-                      title: 'Failed sync',
-                      timestamp: state.lastFailedSyncAt,
-                      message: state.lastFailedSyncMessage,
-                      accent: theme.colorScheme.error,
-                      isLast: true,
-                    ),
-                  ],
+                const SizedBox(height: 6),
+                Text(
+                  'Live evidence for auth, sync, local state, and push behavior.',
+                  style: theme.textTheme.bodyMedium,
                 ),
-              ),
-              const SizedBox(height: 16),
-              DebugStatusCard(
-                title: 'Fault Injection',
-                subtitle: state.activeFaultInjectionLabel == null
-                    ? 'No controlled failure scenario is active right now.'
-                    : 'The current runtime state is being influenced by an active controlled scenario.',
-                leading: const Icon(Icons.science_outlined),
-                accentColor: state.activeFaultInjectionLabel == null
-                    ? theme.colorScheme.outline
-                    : theme.colorScheme.error,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (state.activeFaultInjectionLabel == null)
-                      Text(
-                        'Use Scenario Controls in the operator rail to activate a controlled failure and observe its evidence here.',
-                        style: theme.textTheme.bodyMedium,
-                      )
-                    else ...[
+                const SizedBox(height: 20),
+                DebugStatusCard(
+                  title: 'Sync State',
+                  subtitle:
+                      'Current connectivity and synchronization lifecycle.',
+                  leading: const Icon(Icons.sync),
+                  accentColor: _syncAccent(state.syncPhase, theme),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,
                         children: [
-                          InputChip(
-                            avatar: Icon(
-                              Icons.science_outlined,
-                              size: 18,
-                              color: theme.colorScheme.error,
-                            ),
-                            label: Text(state.activeFaultInjectionLabel!),
-                            selected: true,
-                            showCheckmark: false,
-                            deleteIcon: Icon(
-                              Icons.close,
-                              size: 18,
-                              color: theme.colorScheme.error,
-                            ),
-                            onDeleted: () async {
-                              await faultInjection.clearScenario();
-                            },
-                            selectedColor: theme.colorScheme.error.withValues(
-                              alpha: 0.14,
-                            ),
-                            side: BorderSide(
-                              color: theme.colorScheme.error.withValues(
-                                alpha: 0.28,
-                              ),
-                            ),
+                          _statusBadge(
+                            context,
+                            state.connectivityStatus.label,
+                            _connectivityColor(state.connectivityStatus, theme),
+                          ),
+                          _statusBadge(
+                            context,
+                            state.syncPhase.label,
+                            _syncAccent(state.syncPhase, theme),
+                          ),
+                          _statusBadge(
+                            context,
+                            state.lastSyncResult.label,
+                            _resultColor(state.lastSyncResult, theme),
                           ),
                         ],
                       ),
                       const SizedBox(height: 14),
                       _statusRow(
                         context,
-                        label: 'Scenario',
-                        value: state.activeFaultInjectionLabel!,
+                        label: 'Connectivity',
+                        value: state.connectivityStatus.label,
                       ),
                       _statusRow(
                         context,
-                        label: 'Summary',
+                        label: 'Phase',
+                        value: state.syncPhase.label,
+                      ),
+                      _statusRow(
+                        context,
+                        label: 'Last result',
+                        value: state.lastSyncResult.label,
+                      ),
+                      _statusRow(
+                        context,
+                        label: 'Last message',
                         value:
-                            state.activeFaultInjectionMessage ??
-                            'No summary recorded.',
+                            state.lastSyncMessage ??
+                            'No sync event recorded yet.',
                       ),
-                      if (faultInjection.state.activeScenario ==
-                              FaultInjectionScenario.delayedSync &&
-                          faultInjection.state.delayLabel != null)
-                        _statusRow(
-                          context,
-                          label: 'Injected delay',
-                          value: faultInjection.state.delayLabel!,
-                        ),
-                      if (faultInjection.state.isDelayedSyncActive)
-                        _statusRow(
-                          context,
-                          label: 'Mode',
-                          value: faultInjection
-                              .state
-                              .effectiveDelayedSyncMode
-                              .label,
-                        ),
-                      if (faultInjection.state.isDelayedSyncActive)
-                        _statusRow(
-                          context,
-                          label: 'Target',
-                          value: faultInjection
-                              .state
-                              .effectiveDelayedSyncTarget
-                              .label,
-                        ),
-                      if (faultInjection.state.isDelayedSyncActive)
-                        _statusRow(
-                          context,
-                          label: 'Behavior',
-                          value: faultInjection
-                              .state
-                              .effectiveDelayedSyncBehavior
-                              .label,
-                        ),
-                      const SizedBox(height: 8),
-                      Text('How to operate', style: theme.textTheme.titleSmall),
-                      const SizedBox(height: 6),
-                      Text(
-                        state.activeFaultInjectionInstruction ??
-                            'No operator instruction recorded.',
-                        style: theme.textTheme.bodyMedium,
+                      _statusRow(
+                        context,
+                        label: 'Started',
+                        value: _formatTimestamp(state.lastSyncStartedAt),
                       ),
+                      _statusRow(
+                        context,
+                        label: 'Completed',
+                        value: _formatTimestamp(state.lastSyncCompletedAt),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                DebugStatusCard(
+                  title: 'Sync Outcomes',
+                  subtitle: 'Most recent outcome recorded for each sync path.',
+                  leading: const Icon(Icons.fact_check_outlined),
+                  accentColor: _resultColor(state.lastSyncResult, theme),
+                  child: Column(
+                    children: [
+                      _outcomeTile(
+                        context,
+                        title: 'Successful sync',
+                        timestamp: state.lastSuccessfulSyncAt,
+                        message: state.lastSuccessfulSyncMessage,
+                        accent: theme.colorScheme.primary,
+                      ),
+                      _outcomeTile(
+                        context,
+                        title: 'Skipped sync',
+                        timestamp: state.lastSkippedSyncAt,
+                        message: state.lastSkippedSyncMessage,
+                        accent: theme.colorScheme.secondary,
+                      ),
+                      _outcomeTile(
+                        context,
+                        title: 'Partial sync',
+                        timestamp: state.lastPartialSyncAt,
+                        message: state.lastPartialSyncMessage,
+                        accent: theme.colorScheme.tertiary,
+                      ),
+                      _outcomeTile(
+                        context,
+                        title: 'Failed sync',
+                        timestamp: state.lastFailedSyncAt,
+                        message: state.lastFailedSyncMessage,
+                        accent: theme.colorScheme.error,
+                        isLast: true,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                DebugStatusCard(
+                  title: 'Fault Injection',
+                  subtitle: state.activeFaultInjectionLabel == null
+                      ? 'No controlled failure scenario is active right now.'
+                      : 'The current runtime state is being influenced by an active controlled scenario.',
+                  leading: const Icon(Icons.science_outlined),
+                  accentColor: state.activeFaultInjectionLabel == null
+                      ? theme.colorScheme.outline
+                      : theme.colorScheme.error,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (state.activeFaultInjectionLabel == null)
+                        Text(
+                          'Use Scenario Controls in the operator rail to activate a controlled failure and observe its evidence here.',
+                          style: theme.textTheme.bodyMedium,
+                        )
+                      else ...[
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            InputChip(
+                              avatar: Icon(
+                                Icons.science_outlined,
+                                size: 18,
+                                color: theme.colorScheme.error,
+                              ),
+                              label: Text(state.activeFaultInjectionLabel!),
+                              selected: true,
+                              showCheckmark: false,
+                              deleteIcon: Icon(
+                                Icons.close,
+                                size: 18,
+                                color: theme.colorScheme.error,
+                              ),
+                              onDeleted: () async {
+                                await faultInjection.clearScenario();
+                              },
+                              selectedColor: theme.colorScheme.error.withValues(
+                                alpha: 0.14,
+                              ),
+                              side: BorderSide(
+                                color: theme.colorScheme.error.withValues(
+                                  alpha: 0.28,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        _statusRow(
+                          context,
+                          label: 'Scenario',
+                          value: state.activeFaultInjectionLabel!,
+                        ),
+                        _statusRow(
+                          context,
+                          label: 'Summary',
+                          value:
+                              state.activeFaultInjectionMessage ??
+                              'No summary recorded.',
+                        ),
+                        if (faultInjection.state.activeScenario ==
+                                FaultInjectionScenario.delayedSync &&
+                            faultInjection.state.delayLabel != null)
+                          _statusRow(
+                            context,
+                            label: 'Injected delay',
+                            value: faultInjection.state.delayLabel!,
+                          ),
+                        if (faultInjection.state.isDelayedSyncActive)
+                          _statusRow(
+                            context,
+                            label: 'Mode',
+                            value: faultInjection
+                                .state
+                                .effectiveDelayedSyncMode
+                                .label,
+                          ),
+                        if (faultInjection.state.isDelayedSyncActive)
+                          _statusRow(
+                            context,
+                            label: 'Target',
+                            value: faultInjection
+                                .state
+                                .effectiveDelayedSyncTarget
+                                .label,
+                          ),
+                        if (faultInjection.state.isDelayedSyncActive)
+                          _statusRow(
+                            context,
+                            label: 'Behavior',
+                            value: faultInjection
+                                .state
+                                .effectiveDelayedSyncBehavior
+                                .label,
+                          ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'How to operate',
+                          style: theme.textTheme.titleSmall,
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          state.activeFaultInjectionInstruction ??
+                              'No operator instruction recorded.',
+                          style: theme.textTheme.bodyMedium,
+                        ),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            OutlinedButton.icon(
+                              onPressed: () async {
+                                await faultInjection.clearScenario();
+                              },
+                              icon: const Icon(Icons.refresh),
+                              label: const Text('Reset failure scenario'),
+                            ),
+                            Text(
+                              'Use this rail when you want to narrate the evidence and clear the scenario without jumping back to the operator controls.',
+                              style: theme.textTheme.bodySmall,
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                DebugStatusCard(
+                  title: 'Session Truth',
+                  subtitle:
+                      'Supabase auth state compared with cached local identity.',
+                  leading: const Icon(Icons.person_outline),
+                  accentColor: state.hasAuthenticatedSession
+                      ? theme.colorScheme.primary
+                      : theme.colorScheme.secondary,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _statusRow(
+                        context,
+                        label: 'Authenticated session',
+                        value: state.hasAuthenticatedSession
+                            ? 'Active'
+                            : 'None',
+                      ),
+                      _statusRow(
+                        context,
+                        label: 'Active user',
+                        value: _summarizeId(state.activeUserId),
+                      ),
+                      _statusRow(
+                        context,
+                        label: 'Cached user',
+                        value: _summarizeId(state.cachedUserId),
+                      ),
+                      _statusRow(
+                        context,
+                        label: 'Identity check',
+                        value: _identityAlignment(state),
+                      ),
+                      _statusRow(
+                        context,
+                        label: 'Initial load',
+                        value: state.isInitialLoadRunning
+                            ? 'Running'
+                            : 'Settled',
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                DebugStatusCard(
+                  title: 'Operation States',
+                  subtitle:
+                      'Current outbox state across queued, blocked, in-flight, and reviewed work.',
+                  leading: const Icon(Icons.account_tree_outlined),
+                  accentColor: state.conflictEntryCount > 0
+                      ? theme.colorScheme.error
+                      : state.failedEntryCount > 0
+                      ? theme.colorScheme.tertiary
+                      : theme.colorScheme.outline,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          _stateCountChip(
+                            context,
+                            'Queued',
+                            state.queuedEntryCount,
+                            theme.colorScheme.primary,
+                          ),
+                          _stateCountChip(
+                            context,
+                            'Sending',
+                            state.sendingEntryCount,
+                            theme.colorScheme.secondary,
+                          ),
+                          _stateCountChip(
+                            context,
+                            'Acknowledged',
+                            state.acknowledgedEntryCount,
+                            theme.colorScheme.tertiary,
+                          ),
+                          _stateCountChip(
+                            context,
+                            'Failed',
+                            state.failedEntryCount,
+                            theme.colorScheme.error,
+                          ),
+                          _stateCountChip(
+                            context,
+                            'Conflict',
+                            state.conflictEntryCount,
+                            theme.colorScheme.error,
+                          ),
+                          _stateCountChip(
+                            context,
+                            'Blocked Review',
+                            state.blockedAnonymousReviewEntryCount,
+                            theme.colorScheme.secondary,
+                          ),
+                          _stateCountChip(
+                            context,
+                            'Blocked Session',
+                            state.blockedNoSessionEntryCount,
+                            theme.colorScheme.secondary,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      _statusRow(
+                        context,
+                        label: 'Queued',
+                        value: state.queuedEntryCount.toString(),
+                      ),
+                      _statusRow(
+                        context,
+                        label: 'Sending',
+                        value: state.sendingEntryCount.toString(),
+                      ),
+                      _statusRow(
+                        context,
+                        label: 'Failed',
+                        value: state.failedEntryCount.toString(),
+                      ),
+                      _statusRow(
+                        context,
+                        label: 'Conflict',
+                        value: state.conflictEntryCount.toString(),
+                      ),
+                      _statusRow(
+                        context,
+                        label: 'Blocked review',
+                        value: state.blockedAnonymousReviewEntryCount
+                            .toString(),
+                      ),
+                      _statusRow(
+                        context,
+                        label: 'Blocked session',
+                        value: state.blockedNoSessionEntryCount.toString(),
+                      ),
+                      if (state.conflictEntries.isNotEmpty) ...[
+                        const SizedBox(height: 16),
+                        Text(
+                          'Conflict review',
+                          style: theme.textTheme.titleSmall,
+                        ),
+                        const SizedBox(height: 6),
+                        ...state.conflictEntries
+                            .take(3)
+                            .map(
+                              (entry) => Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: theme.colorScheme.errorContainer
+                                        .withValues(alpha: 0.24),
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(
+                                      color: theme.colorScheme.error.withValues(
+                                        alpha: 0.22,
+                                      ),
+                                    ),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        _taskTitleForEntry(entry),
+                                        style: theme.textTheme.titleSmall,
+                                      ),
+                                      const SizedBox(height: 16),
+                                      Text(
+                                        entry.lastError ??
+                                            'Remote state changed after this operation was queued.',
+                                        style: theme.textTheme.bodySmall,
+                                      ),
+                                      if (_remoteSnapshotTitle(entry) !=
+                                          null) ...[
+                                        const SizedBox(height: 16),
+                                        Text(
+                                          'Remote version: ${_remoteSnapshotTitle(entry)}',
+                                          style: theme.textTheme.bodySmall,
+                                        ),
+                                      ],
+                                      const SizedBox(height: 8),
+                                      Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.stretch,
+                                        children: [
+                                          OutlinedButton(
+                                            onPressed: () async {
+                                              await context
+                                                  .read<AgendaProvider>()
+                                                  .keepRemoteConflict(
+                                                    entry.taskId,
+                                                  );
+                                              if (!context.mounted) {
+                                                return;
+                                              }
+                                              ScaffoldMessenger.of(
+                                                context,
+                                              ).showSnackBar(
+                                                SnackBar(
+                                                  content: Text(
+                                                    'Kept remote state for ${_taskTitleForEntry(entry)}.',
+                                                  ),
+                                                ),
+                                              );
+                                            },
+                                            child: const Text(
+                                              'Keep remote version',
+                                            ),
+                                          ),
+                                          const SizedBox(height: 8),
+                                          FilledButton(
+                                            onPressed: () async {
+                                              await context
+                                                  .read<AgendaProvider>()
+                                                  .reapplyLocalConflict(
+                                                    entry.taskId,
+                                                  );
+                                              if (!context.mounted) {
+                                                return;
+                                              }
+                                              ScaffoldMessenger.of(
+                                                context,
+                                              ).showSnackBar(
+                                                SnackBar(
+                                                  content: Text(
+                                                    'Re-queued local intent for ${_taskTitleForEntry(entry)}.',
+                                                  ),
+                                                ),
+                                              );
+                                            },
+                                            child: const Text(
+                                              'Reapply local intent',
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                      ],
+                      if (state.recentAcknowledgements.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          'Recent acknowledgements',
+                          style: theme.textTheme.titleSmall,
+                        ),
+                        const SizedBox(height: 6),
+                        ...state.recentAcknowledgements
+                            .take(3)
+                            .map(
+                              (entry) => Padding(
+                                padding: const EdgeInsets.only(bottom: 4),
+                                child: Text(
+                                  '${entry.operationType.name} ${entry.taskId}',
+                                  style: theme.textTheme.bodySmall,
+                                ),
+                              ),
+                            ),
+                      ],
+                      if (state.recentAcknowledgements.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Text(
+                            'Retained acknowledgements stay in local outbox storage until they are displaced by newer acknowledgements or explicitly cleared here.',
+                            style: theme.textTheme.bodySmall,
+                          ),
+                        ),
                       const SizedBox(height: 12),
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,
                         children: [
-                          OutlinedButton.icon(
-                            onPressed: () async {
-                              await faultInjection.clearScenario();
-                            },
-                            icon: const Icon(Icons.refresh),
-                            label: const Text('Reset failure scenario'),
-                          ),
-                          Text(
-                            'Use this rail when you want to narrate the evidence and clear the scenario without jumping back to the operator controls.',
-                            style: theme.textTheme.bodySmall,
-                          ),
+                          if (state.recentAcknowledgements.isNotEmpty)
+                            OutlinedButton.icon(
+                              onPressed: () async {
+                                await context
+                                    .read<AgendaProvider>()
+                                    .clearRetainedAcknowledgements();
+                              },
+                              icon: const Icon(
+                                Icons.cleaning_services_outlined,
+                              ),
+                              label: const Text('Clear retained history'),
+                            ),
                         ],
                       ),
                     ],
-                  ],
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              DebugStatusCard(
-                title: 'Session Truth',
-                subtitle:
-                    'Supabase auth state compared with cached local identity.',
-                leading: const Icon(Icons.person_outline),
-                accentColor: state.hasAuthenticatedSession
-                    ? theme.colorScheme.primary
-                    : theme.colorScheme.secondary,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _statusRow(
-                      context,
-                      label: 'Authenticated session',
-                      value: state.hasAuthenticatedSession ? 'Active' : 'None',
-                    ),
-                    _statusRow(
-                      context,
-                      label: 'Active user',
-                      value: _summarizeId(state.activeUserId),
-                    ),
-                    _statusRow(
-                      context,
-                      label: 'Cached user',
-                      value: _summarizeId(state.cachedUserId),
-                    ),
-                    _statusRow(
-                      context,
-                      label: 'Identity check',
-                      value: _identityAlignment(state),
-                    ),
-                    _statusRow(
-                      context,
-                      label: 'Initial load',
-                      value: state.isInitialLoadRunning ? 'Running' : 'Settled',
-                    ),
-                  ],
+                const SizedBox(height: 16),
+                DebugStatusCard(
+                  title: 'Local State',
+                  subtitle:
+                      'Task counts that affect replay, adoption, and cleanup.',
+                  leading: const Icon(Icons.storage_outlined),
+                  accentColor: theme.colorScheme.tertiary,
+                  child: Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: [
+                      _metricPill(
+                        context,
+                        'Dirty',
+                        state.dirtyTaskCount.toString(),
+                      ),
+                      _metricPill(
+                        context,
+                        'Deleted',
+                        state.deletedTaskCount.toString(),
+                      ),
+                      _metricPill(
+                        context,
+                        'Anonymous',
+                        state.anonymousTaskCount.toString(),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              DebugStatusCard(
-                title: 'Operation States',
-                subtitle:
-                    'Current outbox state across queued, blocked, in-flight, and reviewed work.',
-                leading: const Icon(Icons.account_tree_outlined),
-                accentColor: state.conflictEntryCount > 0
-                    ? theme.colorScheme.error
-                    : state.failedEntryCount > 0
-                    ? theme.colorScheme.tertiary
-                    : theme.colorScheme.outline,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        _stateCountChip(
-                          context,
-                          'Queued',
-                          state.queuedEntryCount,
-                          theme.colorScheme.primary,
-                        ),
-                        _stateCountChip(
-                          context,
-                          'Sending',
-                          state.sendingEntryCount,
-                          theme.colorScheme.secondary,
-                        ),
-                        _stateCountChip(
-                          context,
-                          'Acknowledged',
-                          state.acknowledgedEntryCount,
-                          theme.colorScheme.tertiary,
-                        ),
-                        _stateCountChip(
-                          context,
-                          'Failed',
-                          state.failedEntryCount,
-                          theme.colorScheme.error,
-                        ),
-                        _stateCountChip(
-                          context,
-                          'Conflict',
-                          state.conflictEntryCount,
-                          theme.colorScheme.error,
-                        ),
-                        _stateCountChip(
-                          context,
-                          'Blocked Review',
-                          state.blockedAnonymousReviewEntryCount,
-                          theme.colorScheme.secondary,
-                        ),
-                        _stateCountChip(
-                          context,
-                          'Blocked Session',
-                          state.blockedNoSessionEntryCount,
-                          theme.colorScheme.secondary,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    _statusRow(
-                      context,
-                      label: 'Queued',
-                      value: state.queuedEntryCount.toString(),
-                    ),
-                    _statusRow(
-                      context,
-                      label: 'Sending',
-                      value: state.sendingEntryCount.toString(),
-                    ),
-                    _statusRow(
-                      context,
-                      label: 'Failed',
-                      value: state.failedEntryCount.toString(),
-                    ),
-                    _statusRow(
-                      context,
-                      label: 'Conflict',
-                      value: state.conflictEntryCount.toString(),
-                    ),
-                    _statusRow(
-                      context,
-                      label: 'Blocked review',
-                      value: state.blockedAnonymousReviewEntryCount.toString(),
-                    ),
-                    _statusRow(
-                      context,
-                      label: 'Blocked session',
-                      value: state.blockedNoSessionEntryCount.toString(),
-                    ),
-                    if (state.conflictEntries.isNotEmpty) ...[
-                      const SizedBox(height: 16),
-                      Text(
-                        'Conflict review',
-                        style: theme.textTheme.titleSmall,
+                const SizedBox(height: 16),
+                DebugStatusCard(
+                  title: 'Push State',
+                  subtitle: 'Browser permission and subscription lifecycle.',
+                  leading: const Icon(Icons.notifications_active_outlined),
+                  accentColor: theme.colorScheme.secondary,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _statusRow(
+                        context,
+                        label: 'Permission',
+                        value: state.pushPermissionState.label,
                       ),
-                      const SizedBox(height: 6),
-                      ...state.conflictEntries
-                          .take(3)
-                          .map(
-                            (entry) => Padding(
-                              padding: const EdgeInsets.only(bottom: 8),
-                              child: Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: theme.colorScheme.errorContainer
-                                      .withValues(alpha: 0.24),
-                                  borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(
-                                    color: theme.colorScheme.error.withValues(
-                                      alpha: 0.22,
-                                    ),
-                                  ),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      _taskTitleForEntry(entry),
-                                      style: theme.textTheme.titleSmall,
-                                    ),
-                                    const SizedBox(height: 16),
-                                    Text(
-                                      entry.lastError ??
-                                          'Remote state changed after this operation was queued.',
-                                      style: theme.textTheme.bodySmall,
-                                    ),
-                                    if (_remoteSnapshotTitle(entry) !=
-                                        null) ...[
-                                      const SizedBox(height: 16),
-                                      Text(
-                                        'Remote version: ${_remoteSnapshotTitle(entry)}',
-                                        style: theme.textTheme.bodySmall,
-                                      ),
-                                    ],
-                                    const SizedBox(height: 8),
-                                    Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.stretch,
-                                      children: [
-                                        OutlinedButton(
-                                          onPressed: () async {
-                                            await context
-                                                .read<AgendaProvider>()
-                                                .keepRemoteConflict(
-                                                  entry.taskId,
-                                                );
-                                            if (!context.mounted) {
-                                              return;
-                                            }
-                                            ScaffoldMessenger.of(
-                                              context,
-                                            ).showSnackBar(
-                                              SnackBar(
-                                                content: Text(
-                                                  'Kept remote state for ${_taskTitleForEntry(entry)}.',
-                                                ),
-                                              ),
-                                            );
-                                          },
-                                          child: const Text(
-                                            'Keep remote version',
-                                          ),
-                                        ),
-                                        const SizedBox(height: 8),
-                                        FilledButton(
-                                          onPressed: () async {
-                                            await context
-                                                .read<AgendaProvider>()
-                                                .reapplyLocalConflict(
-                                                  entry.taskId,
-                                                );
-                                            if (!context.mounted) {
-                                              return;
-                                            }
-                                            ScaffoldMessenger.of(
-                                              context,
-                                            ).showSnackBar(
-                                              SnackBar(
-                                                content: Text(
-                                                  'Re-queued local intent for ${_taskTitleForEntry(entry)}.',
-                                                ),
-                                              ),
-                                            );
-                                          },
-                                          child: const Text(
-                                            'Reapply local intent',
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                    ],
-                    if (state.recentAcknowledgements.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        'Recent acknowledgements',
-                        style: theme.textTheme.titleSmall,
+                      _statusRow(
+                        context,
+                        label: 'Subscription',
+                        value: state.pushSubscriptionState.label,
                       ),
-                      const SizedBox(height: 6),
-                      ...state.recentAcknowledgements
-                          .take(3)
-                          .map(
-                            (entry) => Padding(
-                              padding: const EdgeInsets.only(bottom: 4),
-                              child: Text(
-                                '${entry.operationType.name} ${entry.taskId}',
-                                style: theme.textTheme.bodySmall,
-                              ),
-                            ),
-                          ),
+                      _statusRow(
+                        context,
+                        label: 'Last push message',
+                        value:
+                            state.lastPushMessage ??
+                            'No push registration activity yet.',
+                      ),
+                      _statusRow(
+                        context,
+                        label: 'Updated',
+                        value: _formatTimestamp(state.lastPushUpdatedAt),
+                      ),
                     ],
-                    if (state.recentAcknowledgements.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: Text(
-                          'Retained acknowledgements stay in local outbox storage until they are displaced by newer acknowledgements or explicitly cleared here.',
+                  ),
+                ),
+                const SizedBox(height: 16),
+                DebugStatusCard(
+                  title: 'Event Timeline',
+                  subtitle:
+                      'Recent runtime evidence retained in memory for inspection.',
+                  leading: const Icon(Icons.history),
+                  accentColor: theme.colorScheme.primary,
+                  child: state.recentEvents.isEmpty
+                      ? Text(
+                          'Events will appear here as the app loads, authenticates, syncs, and registers push.',
                           style: theme.textTheme.bodySmall,
-                        ),
-                      ),
-                    const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        if (state.recentAcknowledgements.isNotEmpty)
-                          OutlinedButton.icon(
-                            onPressed: () async {
-                              await context
-                                  .read<AgendaProvider>()
-                                  .clearRetainedAcknowledgements();
-                            },
-                            icon: const Icon(Icons.cleaning_services_outlined),
-                            label: const Text('Clear retained history'),
-                          ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              DebugStatusCard(
-                title: 'Local State',
-                subtitle:
-                    'Task counts that affect replay, adoption, and cleanup.',
-                leading: const Icon(Icons.storage_outlined),
-                accentColor: theme.colorScheme.tertiary,
-                child: Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: [
-                    _metricPill(
-                      context,
-                      'Dirty',
-                      state.dirtyTaskCount.toString(),
-                    ),
-                    _metricPill(
-                      context,
-                      'Deleted',
-                      state.deletedTaskCount.toString(),
-                    ),
-                    _metricPill(
-                      context,
-                      'Anonymous',
-                      state.anonymousTaskCount.toString(),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              DebugStatusCard(
-                title: 'Push State',
-                subtitle: 'Browser permission and subscription lifecycle.',
-                leading: const Icon(Icons.notifications_active_outlined),
-                accentColor: theme.colorScheme.secondary,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _statusRow(
-                      context,
-                      label: 'Permission',
-                      value: state.pushPermissionState.label,
-                    ),
-                    _statusRow(
-                      context,
-                      label: 'Subscription',
-                      value: state.pushSubscriptionState.label,
-                    ),
-                    _statusRow(
-                      context,
-                      label: 'Last push message',
-                      value:
-                          state.lastPushMessage ??
-                          'No push registration activity yet.',
-                    ),
-                    _statusRow(
-                      context,
-                      label: 'Updated',
-                      value: _formatTimestamp(state.lastPushUpdatedAt),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              DebugStatusCard(
-                title: 'Event Timeline',
-                subtitle:
-                    'Recent runtime evidence retained in memory for inspection.',
-                leading: const Icon(Icons.history),
-                accentColor: theme.colorScheme.primary,
-                child: state.recentEvents.isEmpty
-                    ? Text(
-                        'Events will appear here as the app loads, authenticates, syncs, and registers push.',
-                        style: theme.textTheme.bodySmall,
-                      )
-                    : Column(
-                        children: state.recentEvents
-                            .map(
-                              (event) => _RuntimeEventTile(
-                                key: ValueKey(event.id),
-                                event: event,
-                                compact: compact,
+                        )
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: OutlinedButton.icon(
+                                onPressed: () {
+                                  runtimeDebug.clearRecentEvents();
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Event timeline cleared.'),
+                                    ),
+                                  );
+                                },
+                                icon: const Icon(
+                                  Icons.cleaning_services_outlined,
+                                ),
+                                label: const Text('Clear timeline'),
                               ),
-                            )
-                            .toList(),
-                      ),
-              ),
-            ],
+                            ),
+                            const SizedBox(height: 12),
+                            Column(
+                              children: state.recentEvents
+                                  .map(
+                                    (event) => _RuntimeEventTile(
+                                      key: ValueKey(event.id),
+                                      event: event,
+                                      compact: widget.compact,
+                                    ),
+                                  )
+                                  .toList(),
+                            ),
+                          ],
+                        ),
+                ),
+              ],
+            ),
           ),
         );
       },
+    );
+  }
+
+  Widget _buildScrollablePanel(BuildContext context, Widget child) {
+    if (widget.compact) {
+      return child;
+    }
+
+    return ScrollConfiguration(
+      behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+      child: Scrollbar(
+        controller: _scrollController,
+        thumbVisibility: true,
+        trackVisibility: true,
+        interactive: true,
+        thickness: 14,
+        radius: const Radius.circular(999),
+        child: child,
+      ),
     );
   }
 

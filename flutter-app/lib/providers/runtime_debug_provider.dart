@@ -568,6 +568,14 @@ class RuntimeDebugProvider extends ChangeNotifier {
     _replace(_state.copyWith(recentEvents: updatedEvents));
   }
 
+  void clearRecentEvents() {
+    if (_state.recentEvents.isEmpty) {
+      return;
+    }
+
+    _replace(_state.copyWith(recentEvents: const <RuntimeEvent>[]));
+  }
+
   void _replace(RuntimeDebugState nextState) {
     _state = nextState;
     notifyListeners();
