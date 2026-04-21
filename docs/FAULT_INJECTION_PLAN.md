@@ -17,21 +17,21 @@ Implemented today:
 
 - a stable lab shell with a durable operator rail
 - a stable runtime diagnostics surface for connectivity, auth, sync, push, and local task counts
-- a task-based sync boundary with explicit entry gating and visible sync outcomes
+- an explicit local outbox with per-entry queued, sending, acknowledged, failed, conflict, blocked-session, and blocked-review states
 - operator-facing connectivity-loss and delayed-sync scenarios, including delay presets tuned for live demonstrations
+- first-slice conflict capture and review surfaces in the runtime diagnostics rail
 
 Still missing today:
 
-- durable outbox semantics
-- per-operation replay state
 - retry and backoff behavior
-- explicit conflict capture and resolution
+- richer per-scenario fault-injection modes beyond the current connectivity-loss and full-pass delayed-sync slices
 - backend idempotency contract for duplicate replay
+- a stronger backend-owned mutation boundary for truly server-shaped delay and replay experiments
 
 Practical conclusion:
 
-- the lab can start implementing fault injection immediately for scenarios that fit the current task-based sync model
-- the lab should defer duplicate-replay and conflict-heavy scenarios until Objective 1 makes sync semantics explicit enough to model them honestly
+- the lab can keep implementing fault injection immediately on top of the current outbox replay model
+- duplicate-replay and conflict-heavy scenarios are now semantically closer than before, but they should still wait for a clearer backend contract and explicit idempotency story
 
 ## Planning principles
 
@@ -116,14 +116,14 @@ The recommended order is:
 3. delayed sync
 4. expired auth
 5. network drop during partial replay
-6. Objective 1 outbox and state-machine follow-through
+6. richer delayed-sync modes on the outbox replay path
 7. duplicate replay
 8. update/update conflict simulation
 9. worker-side fault injection
 
 This order is deliberate.
 The first five slices fit the current architecture well enough to be implemented honestly.
-The later slices depend on deeper sync semantics that the repository still documents as planned work.
+The sixth slice now reflects the current repository reality: the outbox and first state-machine slice exist, so delayed sync can evolve into transport-shaped and backend-shaped experiments before duplicate replay and deeper conflict simulation.
 
 ## Phase 0 - Foundation slice
 
@@ -175,6 +175,7 @@ The scenario state should at minimum support:
 - active scenario
 - whether injection is enabled
 - delay duration in milliseconds
+- delay mode for scenarios that can target more than one seam
 - optional trigger step for step-based failures
 - whether the next failure is one-shot or persistent
 - explanatory label or operator note
@@ -265,15 +266,16 @@ Do not begin with per-step delay injection.
 
 Current implementation status:
 
-- full-pass delayed sync is now implemented with `500 ms`, `2 s`, `5 s`, and `10 s` presets
-- the `5 s` preset is the default because it is the clearest live-demo cadence for future videos
-- per-step delay injection remains planned work
+- delayed sync now supports a setup modal with `500 ms`, `2 s`, `5 s`, and `10 s` presets plus a recommended `5 s` fast path
+- `local`, `transport`, and `backend` delayed-sync modes now run on the explicit outbox replay path
+- delayed sync now supports `persistent` and `one-shot` behavior plus stage-aware diagnostics that name the active delayed seam
+- the current delayed-sync slice remains client-owned inside the sync service rather than being backed by a server-owned mutation contract
 
 Important current boundary:
 
-- the implemented delayed-sync slice is still client-owned and holds the sync pass before remote replay begins
-- this is good enough for a clear first demonstration of delayed convergence, but it is not yet the same as transport latency or backend acknowledgement delay
-- Objective 1 outbox work is the step that will make transport-shaped and backend-shaped delay scenarios honest because operations will have explicit queued, sending, acknowledged, failed, and conflict states
+- the implemented delayed-sync slice is still client-owned on the explicit outbox replay path
+- `transport` and `backend` modes are now implemented as honest client-side simulations around named replay seams and acknowledgement timing
+- true server-owned execution delay still depends on a future backend mutation boundary rather than more client-only fault-injection work
 
 ### Why this is the right first version
 
@@ -309,22 +311,15 @@ Suggested initial delay presets:
 - widget test for active delayed-sync scenario visibility
 - integration-style test for local mutation + delayed sync + eventual success
 
-### Planned follow-up after first version
+### Delayed-sync follow-up after this batch
 
-Once the global-delay version is stable, add optional per-step delay targets such as:
+The next work item after the implemented delayed-sync batch is not another client-only delay mode.
 
-- remote fetch by id
-- remote insert
-- remote update
-- remote fetch-all merge
+It is the future backend-owned mutation-boundary sketch in `SERVER_OWNED_MUTATION_BOUNDARY_PLAN.md`, which describes how the lab could eventually move from direct client CRUD to a server-owned replay contract.
 
-After Objective 1 outbox semantics land, evolve delayed sync again so the delay can move from a pre-replay client hold into a more realistic transport or backend-shaped condition, such as:
+Important honesty rule:
 
-- queued operations waiting to leave the client
-- operations stuck in `sending` while backend acknowledgement is late
-- partial replay where one operation is acknowledged and another remains pending
-
-That second version should be treated as a later enhancement, not as part of the first delivery slice.
+- backend delay in the current batch is still simulated acknowledgement delay at the client-owned remote seam, not a true server-owned execution delay
 
 ## Phase 3 - Expired auth
 
@@ -408,19 +403,20 @@ Then allow a fault-injection policy to force connectivity loss at one named step
 This still does not make the current sync engine a true operation-replay model.
 It is a controlled task-based failure scenario and should be described that way.
 
-## Phase 5 - Objective 1 follow-through before deeper scenarios
+## Phase 5 - Current prerequisites before deeper scenarios
 
-Before the lab implements duplicate replay and conflict simulation, it should complete the key Objective 1 slices that make those scenarios honest.
+The repository now has the first Objective 1 slice in place.
+Before the lab implements duplicate replay and deeper conflict simulation, it should finish the next realism steps that make those scenarios honest end to end.
 
-Recommended minimum Objective 1 follow-through:
+Recommended minimum follow-through from the current state:
 
-1. define the local outbox model
-2. define operation types and operation states
-3. decide shell ownership for queued, failed, and conflicted work
-4. document the sync state machine
-5. add the first integration-style coverage for offline create -> reconnect -> sync
+1. extend delayed sync beyond the current full-pass local hold
+2. define the backend idempotency contract for duplicate replay
+3. decide how stronger retry and backoff behavior should appear in the shell and diagnostics
+4. keep the sync state-machine docs aligned with the implemented client replay path
+5. broaden integration-style coverage for offline create -> reconnect -> sync and richer replay failure scenarios
 
-Without those slices, duplicate replay and conflict simulation would still be more theatrical than educational.
+Without those slices, duplicate replay and deeper conflict simulation would still be more theatrical than educational.
 
 ## Phase 6 - Duplicate replay
 
@@ -558,17 +554,19 @@ The repository should wait for Objective 1 follow-through before implementing:
 - duplicate replay
 - update/update conflict simulation
 
-## Recommended first execution backlog
+In practical terms today, that means waiting for the next realism steps above rather than waiting for the initial outbox slice itself.
 
-If the goal is to start right away with the highest leverage and lowest semantic risk, the recommended first execution backlog is:
+## Recommended next execution backlog
 
-1. add the fault-injection domain model and provider
-2. replace scenario placeholder chips in the operator rail with real controls
-3. extend runtime diagnostics to show injected-scenario evidence
-4. implement connectivity-loss injection
-5. implement full-pass delayed-sync injection
-6. implement expired-auth injection
-7. implement named-step partial-replay drop injection
-8. document the sync state machine and known mismatches still pending before duplicate replay and conflict work
+If the goal is to keep moving with the highest leverage and lowest semantic risk from the current repository state, the recommended next execution backlog is:
 
-That sequence gives the lab real scenario control quickly while preserving honesty about the current task-based sync model.
+1. extend the delayed-sync state model with mode, target seam, and one-shot versus persistent behavior
+2. refactor the sync service to expose named replay seams and a wrapped remote boundary for delay injection
+3. implement transport-shaped delay at outbound replay seams on the outbox path
+4. implement backend-shaped acknowledgement delay before entries transition from `sending` to `acknowledged`
+5. extend the operator rail with mode, target, duration, and one-shot controls while keeping the current `5 s` local default
+6. extend runtime diagnostics and workspace sync indicators with stage-aware delay evidence
+7. add focused tests for local, transport, and backend delay placement plus the richer operator and diagnostics surfaces
+8. document the shipped behavior honestly once the code lands
+
+That sequence keeps the lab aligned with the current outbox replay model while making delayed sync a much stronger educational experiment.

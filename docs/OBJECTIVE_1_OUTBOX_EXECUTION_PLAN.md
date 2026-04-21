@@ -7,6 +7,10 @@ This document turns the Objective 1 entry plan into an execution-ready plan for 
 It is still a planning document.
 Nothing in this file should be read as implemented behavior unless the implementation docs are updated alongside the code.
 
+Historical note:
+
+The cleanup that followed the first Objective 1 slice removed the temporary legacy dirty-task migration and the legacy task-shaped replay fallback. References below to those rollout mechanics should be read as historical execution planning, not as the current runtime contract.
+
 ## Scope of this plan
 
 This plan defines the **first real outbox slice** for the Flutter client.
@@ -168,7 +172,7 @@ Implemented so far from this execution plan:
 
 - Phase A groundwork is now in place in the Flutter app
 - the repository now has an explicit `OutboxEntry` model and local outbox persistence beside the existing task snapshot
-- startup now initializes a migration-aware local-state coordinator that derives first-slice outbox entries from the legacy dirty-task snapshot model
+- startup now initializes an explicit local-state coordinator that persists task snapshot state and outbox state together without deriving new outbox entries from legacy dirty-task markers
 - local task persistence now preserves explicit outbox state and resets only the entries affected by the latest mutation set
 - `TaskModel` now carries lightweight remote-backing metadata used by compaction and replay safety rules
 - direct mutation flows now pass changed task ids through to coordinated local persistence so add, update, complete, delete, and anonymous-adoption resets stay task-scoped
@@ -185,7 +189,7 @@ Not implemented yet from this execution plan:
 Important current constraint:
 
 The coordinated local-state path now uses the explicit outbox as the active replay authority.
-The older task-based sync path still exists as a fallback for seams that are not yet wired through the coordinated outbox state layer.
+The runtime no longer preserves the older task-based sync fallback path.
 
 ## Explicit non-goals for the first slice
 

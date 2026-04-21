@@ -140,8 +140,7 @@ That means the repo should test two related but distinct concerns:
 
 The first Objective 1 slice now verifies these transition points directly, while broader multi-device and backend-contract scenarios remain later coverage work:
 
-- legacy dirty-task migration into `queued` entries
-- legacy deleted-task migration into `queued` delete entries
+- explicit local-state initialization with an empty outbox when no replayable entries exist yet
 - anonymous local work migration into `blockedAnonymousReview`
 - `blockedAnonymousReview -> queued` on keep after sign-in
 - `blockedAnonymousReview -> removed` on discard
@@ -152,13 +151,14 @@ The first Objective 1 slice now verifies these transition points directly, while
 - `failed -> queued` on retry
 - `conflict -> queued` on reapply-local resolution
 - `conflict -> removed` on keep-remote resolution
+- delayed-sync placement at local, transport, and backend acknowledgement seams
 
 Implemented focused coverage in the current repo includes:
 
-- migration and persistence repair checks in `task_local_state_coordinator_test.dart`
+- local-state initialization and persistence repair checks in `task_local_state_coordinator_test.dart`
 - mutation compaction checks in `task_mutation_coordinator_test.dart`
-- outbox replay acknowledgement, blocked-session, and conflict-path checks in `sync_logic_test.dart`
-- diagnostics evidence rendering and conflict-action visibility in `sync_debug_panel_test.dart`, with soft-reset confirmation coverage in `lab_left_rail_test.dart`
+- outbox replay acknowledgement, blocked-session, conflict-path, and delayed-sync seam checks in `sync_logic_test.dart`
+- diagnostics evidence rendering, delayed-sync configuration visibility, and conflict-action coverage in `sync_debug_panel_test.dart`, with operator-rail modal configuration and soft-reset confirmation coverage in `lab_left_rail_test.dart`
 - hard-reset remote-delete replay and local wipe coverage in `agenda_provider_test.dart`
 - local-state conflict resolution coverage in `task_local_state_coordinator_test.dart` and signed-out workspace clearing coverage in `workspace_session_coordinator_test.dart`
 - mutation-to-persistence handoff checks in `task_sync_flow_coordinator_test.dart`

@@ -39,13 +39,13 @@ Why:
 
 Current implication:
 
-- the implemented delayed-sync scenario is currently a client-owned pre-replay hold, not a true transport-latency or backend-acknowledgement delay
+- the implemented delayed-sync scenario now supports three client-owned modes on the explicit outbox replay path: `local` full-pass hold, `transport` seam delay, and `backend` acknowledgement delay
 - explicit outbox replay now exists when the runtime is using the coordinated local task-plus-outbox state layer
 - failed, blocked, conflict, queued, sending, and recent acknowledgement evidence now surface through runtime diagnostics and workspace notices
 - recent acknowledgements are currently retained as a rolling local history of up to 10 entries, and the diagnostics rail exposes a manual clear action for clean recording or demo setup
 - the operator rail now exposes a soft demo reset action that clears transient diagnostics history, retained acknowledgements, sync outcome surfaces, and fault-injection UI state while preserving auth state, push state truth, local tasks, and active outbox entries
 - the operator rail now exposes a hard reset action that confirms the remote deletion replay for authenticated remote-backed tasks before wiping all local task and outbox state on the current device
-- older task-shaped sync seams still exist as a fallback path for flows that are not yet running through the coordinated outbox state layer
+- the sync runtime now uses the coordinated local task-plus-outbox state layer as the active replay authority rather than preserving a legacy task-shaped fallback path
 
 Current Objective 1 implication:
 
@@ -335,6 +335,7 @@ Current boundary:
 - the app-side sync gateway is `TaskSyncGateway`, implemented today by `TaskSyncService`
 - the backend-side task sync contract is still direct table access on `tasks`, not a dedicated RPC or Edge Function mutation gateway
 - push subscription management already uses a different backend contract on purpose
+- the next backend-evolution sketch is documented separately in `SERVER_OWNED_MUTATION_BOUNDARY_PLAN.md` so delayed-sync and replay experiments can stay honest about the current client-owned contract
 
 Architectural significance:
 

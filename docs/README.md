@@ -204,6 +204,8 @@ The goal is to make reliability behavior inspectable.
 - [`OBJECTIVE_1_OUTBOX_ENTRY_PLAN.md`](OBJECTIVE_1_OUTBOX_ENTRY_PLAN.md): active Objective 1 entry plan for the next outbox-focused phase
 - [`OBJECTIVE_1_OUTBOX_EXECUTION_PLAN.md`](OBJECTIVE_1_OUTBOX_EXECUTION_PLAN.md): execution-ready first-slice plan for building the explicit outbox on the current Objective 0 seams
 - [`FAULT_INJECTION_PLAN.md`](FAULT_INJECTION_PLAN.md): end-to-end plan for turning scenario placeholders into real fault-injection controls, starting with connectivity loss and delayed sync
+- [`DELAYED_SYNC_EXECUTION_PLAN.md`](DELAYED_SYNC_EXECUTION_PLAN.md): implemented delayed-sync batch record and remaining follow-up for local, transport-shaped, and backend-shaped delay simulation
+- [`SERVER_OWNED_MUTATION_BOUNDARY_PLAN.md`](SERVER_OWNED_MUTATION_BOUNDARY_PLAN.md): future-state sketch for moving task mutation replay from direct client CRUD to a server-owned mutation gateway
 - [`DEPLOYMENT.md`](DEPLOYMENT.md): GitHub Actions workflows, GitHub Pages integration, worker deployment, and environment matrix
 - [`LOCAL_DEVELOPMENT.md`](LOCAL_DEVELOPMENT.md): repository-root workflow, local commands, and developer setup for running the projects locally
 - [`AI_ASSISTED_DEVELOPMENT.md`](AI_ASSISTED_DEVELOPMENT.md): intended human-and-agent development loop, Copilot workflow, and low-friction lifecycle expectations
