@@ -7,6 +7,8 @@ This document is the active entry plan for **Objective 1**.
 Objective 0 is complete.
 The next phase is to make sync semantics explicit without reopening foundation cleanup unless the new seams prove insufficient.
 
+The execution-ready follow-through for this phase now lives in [`OBJECTIVE_1_OUTBOX_EXECUTION_PLAN.md`](OBJECTIVE_1_OUTBOX_EXECUTION_PLAN.md).
+
 ## Starting point inherited from Objective 0
 
 Implemented now:
@@ -32,21 +34,29 @@ Objective 1 should start from these assumptions:
 - new semantics should land on the completed Objective 0 seams rather than bypass them
 - the long-term backend mutation surface is still an open decision and must be documented deliberately when chosen
 
-## Most relevant open decisions
+## Decisions now fixed for the first execution slice
 
-These are the decisions Objective 1 should answer explicitly:
+The following decisions are now fixed for the first Objective 1 slice and should be treated as the planning contract for implementation:
 
-1. what the long-term task mutation surface should be: direct table access retained temporarily, Supabase RPC, Edge Function, or another backend boundary
-2. what local persistence upgrade is needed once the outbox requires stronger durability than the current snapshot store
-3. what conflict policy the lab wants to model first: reject, merge, or explicit user resolution
-4. what notification and sync guarantee language the lab wants to use once auditability improves
+1. keep direct `tasks` table CRUD temporarily as the backend mutation boundary
+2. keep SharedPreferences as the transitional local persistence layer for this first slice
+3. use a generic first operation model of `upsert` and `delete`
+4. compact local edits to the latest effective operation per task before replay
+5. replay operations FIFO by the earliest surviving operation timestamp
+6. capture conflicts explicitly and block replay for those entries until the operator resolves them
+7. make `Runtime Diagnostics` the primary home for outbox evidence and `TaskWorkspace` the secondary home for task-scoped indicators
+8. preserve the existing anonymous keep-or-discard review gate, but represent anonymous work as blocked outbox entries immediately
+9. keep missing-session replay blocking for interrupted sync paths, but continue clearing the local workspace on explicit sign-out so user-bound tasks do not leak across sessions
+
+The detailed rationale, implementation sequence, file map, and verification plan now live in [`OBJECTIVE_1_OUTBOX_EXECUTION_PLAN.md`](OBJECTIVE_1_OUTBOX_EXECUTION_PLAN.md).
 
 ## Recommended first execution slices
 
-1. Define the local outbox model and operation states.
-2. Decide where queued, blocked, failed, and conflicted work appears in the shell.
-3. Define the sync and auth state-machine language that the product and docs will use.
-4. Add the first integration-style verification path for offline create -> reconnect -> sync.
+1. Add explicit outbox models, storage, and migration from the current dirty-task semantics.
+2. Refactor local mutation flow so each task change updates both the visible projection and the outbox.
+3. Replace task-shaped replay with FIFO outbox replay and explicit blocked, failed, acknowledged, and conflict states.
+4. Turn the diagnostics placeholders into real outbox evidence and add task-scoped conflict or failure visibility in the workspace.
+5. Add the first outbox-focused verification path, starting with migration, replay ordering, conflict handling, and offline create -> reconnect -> sync.
 
 ## Why Objective 1 matters for delayed-sync realism
 
@@ -73,6 +83,7 @@ Use the existing repo verification commands:
 ## Related docs
 
 - [`OBJECTIVE_0_FOUNDATION_PLAN.md`](OBJECTIVE_0_FOUNDATION_PLAN.md)
+- [`OBJECTIVE_1_OUTBOX_EXECUTION_PLAN.md`](OBJECTIVE_1_OUTBOX_EXECUTION_PLAN.md)
 - [`ARCHITECTURE.md`](ARCHITECTURE.md)
 - [`TESTING_STRATEGY.md`](TESTING_STRATEGY.md)
 - [`../ROADMAP.md`](../ROADMAP.md)

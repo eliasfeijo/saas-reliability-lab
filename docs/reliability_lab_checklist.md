@@ -80,9 +80,13 @@ Exit criteria:
 
 Goal: make offline replay and convergence explicit, durable, and testable.
 
+Execution reference:
+
+- use [`OBJECTIVE_1_OUTBOX_EXECUTION_PLAN.md`](OBJECTIVE_1_OUTBOX_EXECUTION_PLAN.md) as the first-slice implementation contract for Objective 1
+
 - [ ] Replace the implicit dirty-object model with an explicit local outbox
-- [ ] Persist each local mutation as its own operation
-- [ ] Add operation types such as `create_task`, `update_task`, `complete_task`, `delete_task`, and `reschedule_task`
+- [ ] Persist each local mutation as an explicit operation entry, with first-slice compaction to the latest effective operation per task
+- [ ] Add the first operation model for Objective 1, starting with `upsert` and `delete` before any later split into finer verbs
 - [ ] Add per-operation state such as queued, sending, acknowledged, failed, and conflict
 - [ ] Add idempotency keys or operation ids that the backend can replay safely
 - [ ] Preserve full field fidelity in sync payloads, including `description`, `tags`, and completion metadata
@@ -217,8 +221,9 @@ Exit criteria:
 
 If the goal is maximum leverage from the current state, do these next:
 
-- [ ] define the explicit outbox model and map it onto the reserved shell states
-- [ ] decide how conflicts will be surfaced between the diagnostics rail and the task workspace
+- [x] define the first-slice outbox model and document it in `OBJECTIVE_1_OUTBOX_EXECUTION_PLAN.md`
+- [x] decide the first-slice ownership split between `Runtime Diagnostics` and `TaskWorkspace` for conflict and replay visibility
+- [ ] implement the documented outbox model and map it onto the reserved shell states
 - [ ] add structured sync and worker logging that complements the in-app diagnostics panel
 - [ ] add targeted widget tests for the operator and diagnostics rails
 - [ ] add the missing sync and auth state-machine diagrams
