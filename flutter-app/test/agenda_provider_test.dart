@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:connectivity_plus_platform_interface/connectivity_plus_platform_interface.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:todo_flutter/models/fault_injection_scenario.dart';
@@ -355,7 +354,10 @@ void main() {
         hasRemoteBackingRecord: true,
       );
 
-      final repository = InMemoryTasksRepository([updatedTask, deleteCandidate]);
+      final repository = InMemoryTasksRepository([
+        updatedTask,
+        deleteCandidate,
+      ]);
       final remote = FakeTaskRemoteDataSource([
         remoteUpdatedBase,
         deleteCandidate,
@@ -411,11 +413,17 @@ void main() {
 
       final afterFirstSyncState = await localStateCoordinator.loadState();
       expect(
-        afterFirstSyncState.tasks.where((task) => task.id == updatedTask.id).single.syncStatus,
+        afterFirstSyncState.tasks
+            .where((task) => task.id == updatedTask.id)
+            .single
+            .syncStatus,
         SyncStatus.synced,
       );
       expect(
-        afterFirstSyncState.tasks.where((task) => task.id == deleteCandidate.id).single.syncStatus,
+        afterFirstSyncState.tasks
+            .where((task) => task.id == deleteCandidate.id)
+            .single
+            .syncStatus,
         SyncStatus.deleted,
       );
       expect(afterFirstSyncState.outboxState.activeEntries, hasLength(1));
@@ -430,15 +438,13 @@ void main() {
 
       await agenda.syncAllTasks();
 
-      final reloadedAgenda =
-          buildAgendaProviderForTesting(
-              repository,
-              service,
-              runtimeDebug: runtimeDebug,
-              localStateCoordinator: localStateCoordinator,
-              outboxRepository: outboxRepository,
-            )
-            ..userId = 'user-1';
+      final reloadedAgenda = buildAgendaProviderForTesting(
+        repository,
+        service,
+        runtimeDebug: runtimeDebug,
+        localStateCoordinator: localStateCoordinator,
+        outboxRepository: outboxRepository,
+      )..userId = 'user-1';
       await reloadedAgenda.loadTasks();
 
       final savedTasks = await repository.loadTasks();
@@ -458,7 +464,9 @@ void main() {
         runtimeDebug.state.recentEvents.any(
           (event) =>
               event.payload?.stage == 'Concurrent local mutations preserved' &&
-              event.message.contains('preserved while replay was already in progress'),
+              event.message.contains(
+                'preserved while replay was already in progress',
+              ),
         ),
         isTrue,
       );
