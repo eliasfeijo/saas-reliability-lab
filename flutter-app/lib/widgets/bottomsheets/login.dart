@@ -91,6 +91,11 @@ class _LoginBottomSheetState extends State<LoginBottomSheet> {
     runtimeDebug.addEvent(
       category: RuntimeEventCategory.auth,
       message: 'Attempting password login.',
+      payload: const RuntimeEventPayload(
+        stage: 'Password login started',
+        summary:
+            'The operator started an email and password sign-in flow from the authentication sheet.',
+      ),
     );
 
     try {
@@ -113,6 +118,11 @@ class _LoginBottomSheetState extends State<LoginBottomSheet> {
         message: 'Login failed.',
         detail: _formatAuthError(error),
         level: RuntimeEventLevel.error,
+        payload: const RuntimeEventPayload(
+          stage: 'Password login failed',
+          summary:
+              'The email and password sign-in flow did not complete successfully.',
+        ),
       );
       if (!mounted) return;
       setState(() {
@@ -144,6 +154,11 @@ class _LoginBottomSheetState extends State<LoginBottomSheet> {
     runtimeDebug.addEvent(
       category: RuntimeEventCategory.auth,
       message: 'Attempting sign up.',
+      payload: const RuntimeEventPayload(
+        stage: 'Sign-up started',
+        summary:
+            'The operator started a new email and password registration flow from the authentication sheet.',
+      ),
     );
 
     try {
@@ -167,6 +182,11 @@ class _LoginBottomSheetState extends State<LoginBottomSheet> {
         message: 'Sign up failed.',
         detail: _formatAuthError(error),
         level: RuntimeEventLevel.error,
+        payload: const RuntimeEventPayload(
+          stage: 'Sign-up failed',
+          summary:
+              'The registration flow did not complete successfully and requires operator review.',
+        ),
       );
       if (!mounted) return;
       setState(() {

@@ -245,11 +245,10 @@ Responsibilities:
 - compare session truth with cached identity
 - surface local dirty, deleted, and anonymous counts
 - render push permission and subscription state
-- retain a short runtime event timeline
+- retain a short runtime event timeline with expandable operator records for stage, task-level evidence, and state diffs
 - reserve future UI slots for queued, sending, acknowledged, failed, and conflict operation states
 
 ### 6. Runtime diagnostics model
-
 Primary files:
 
 - `lib/providers/runtime_debug_provider.dart`
@@ -260,7 +259,7 @@ Responsibilities:
 
 - hold the UI-facing diagnostics snapshot
 - normalize connectivity, auth, sync, local state, and push state into one renderable model
-- publish runtime events that can be inspected in the diagnostics rail
+- publish runtime events that can be inspected in the diagnostics rail, including structured sync evidence when task-level context is available
 
 Architectural significance:
 

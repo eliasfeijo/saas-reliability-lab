@@ -61,7 +61,7 @@ What they currently cover:
 - workspace startup and auth-session orchestration
 - shell ownership across wide and narrow layouts
 - operator rail rendering for anonymous and authenticated states
-- diagnostics rail rendering for explicit sync, push, local-state, and timeline evidence
+- diagnostics rail rendering for explicit sync, push, local-state, and timeline evidence, including revealable event-record details
 - diagnostics rail rendering for active fault-injection evidence
 - provider-level queue and batch behavior
 - workflow-style widget regressions in the task workspace

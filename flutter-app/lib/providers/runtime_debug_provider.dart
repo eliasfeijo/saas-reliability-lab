@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:todo_flutter/models/runtime_debug_state.dart';
 import 'package:todo_flutter/models/runtime_event.dart';
 import 'package:todo_flutter/models/task.dart';
+import 'package:uuid/uuid.dart';
 
 class RuntimeDebugProvider extends ChangeNotifier {
   RuntimeDebugProvider({Connectivity? connectivity})
@@ -16,6 +17,7 @@ class RuntimeDebugProvider extends ChangeNotifier {
   }
 
   final Connectivity _connectivity;
+  static const Uuid _uuid = Uuid();
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
   List<ConnectivityResult> _lastObservedConnectivityResults = const [];
 
@@ -58,6 +60,21 @@ class RuntimeDebugProvider extends ChangeNotifier {
         level: nextStatus == ConnectivityStatus.online
             ? RuntimeEventLevel.info
             : RuntimeEventLevel.warning,
+        payload: RuntimeEventPayload(
+          stage: nextStatus == ConnectivityStatus.online
+              ? 'Network restored'
+              : 'Network unavailable',
+          summary: nextStatus == ConnectivityStatus.online
+              ? 'The browser runtime reported that network connectivity is available again.'
+              : 'The browser runtime reported that the network boundary is currently unavailable.',
+          metrics: [
+            RuntimeEventMetric(label: 'Connectivity', value: nextStatus.label),
+          ],
+          notes: results
+              .map((result) => result.name)
+              .where((value) => value.isNotEmpty)
+              .toList(growable: false),
+        ),
       );
     }
   }
@@ -77,7 +94,15 @@ class RuntimeDebugProvider extends ChangeNotifier {
         syncPhase: RuntimeSyncPhase.initialLoad,
       ),
     );
-    addEvent(category: RuntimeEventCategory.app, message: message);
+    addEvent(
+      category: RuntimeEventCategory.app,
+      message: message,
+      payload: const RuntimeEventPayload(
+        stage: 'Workspace bootstrap',
+        summary:
+            'The workspace is loading local session state and the local task snapshot before the shell settles.',
+      ),
+    );
   }
 
   void finishInitialLoad({String? message}) {
@@ -88,7 +113,15 @@ class RuntimeDebugProvider extends ChangeNotifier {
       ),
     );
     if (message != null && message.isNotEmpty) {
-      addEvent(category: RuntimeEventCategory.app, message: message);
+      addEvent(
+        category: RuntimeEventCategory.app,
+        message: message,
+        payload: const RuntimeEventPayload(
+          stage: 'Workspace ready',
+          summary:
+              'The initial local bootstrap finished and the runtime diagnostics surface is now reflecting settled state.',
+        ),
+      );
     }
   }
 
@@ -103,6 +136,11 @@ class RuntimeDebugProvider extends ChangeNotifier {
       category: RuntimeEventCategory.app,
       message: message,
       level: RuntimeEventLevel.error,
+      payload: const RuntimeEventPayload(
+        stage: 'Bootstrap failed',
+        summary:
+            'The workspace could not finish its initial local bootstrap and the shell entered an error state.',
+      ),
     );
   }
 
@@ -137,6 +175,28 @@ class RuntimeDebugProvider extends ChangeNotifier {
         level: hasAuthenticatedSession
             ? RuntimeEventLevel.info
             : RuntimeEventLevel.warning,
+        payload: RuntimeEventPayload(
+          stage: hasAuthenticatedSession
+              ? 'Session active'
+              : 'Session unavailable',
+          summary: hasAuthenticatedSession
+              ? 'The runtime now has an authenticated Supabase session.'
+              : 'The runtime does not currently have an authenticated Supabase session.',
+          metrics: [
+            RuntimeEventMetric(
+              label: 'Active session',
+              value: hasAuthenticatedSession ? 'Yes' : 'No',
+            ),
+            RuntimeEventMetric(
+              label: 'Active user',
+              value: _summarizeIdentity(activeUserId),
+            ),
+            RuntimeEventMetric(
+              label: 'Cached user',
+              value: _summarizeIdentity(cachedUserId),
+            ),
+          ],
+        ),
       );
     }
   }
@@ -170,7 +230,7 @@ class RuntimeDebugProvider extends ChangeNotifier {
     _replace(nextState);
   }
 
-  void markSyncStarted(String message) {
+  void markSyncStarted(String message, {RuntimeEventPayload? payload}) {
     _replace(
       _state.copyWith(
         syncPhase: RuntimeSyncPhase.syncing,
@@ -178,10 +238,14 @@ class RuntimeDebugProvider extends ChangeNotifier {
         lastSyncMessage: message,
       ),
     );
-    addEvent(category: RuntimeEventCategory.sync, message: message);
+    addEvent(
+      category: RuntimeEventCategory.sync,
+      message: message,
+      payload: payload,
+    );
   }
 
-  void markSyncSuccess(String message) {
+  void markSyncSuccess(String message, {RuntimeEventPayload? payload}) {
     _replace(
       _state.copyWith(
         syncPhase: RuntimeSyncPhase.idle,
@@ -192,12 +256,17 @@ class RuntimeDebugProvider extends ChangeNotifier {
         lastSuccessfulSyncMessage: message,
       ),
     );
-    addEvent(category: RuntimeEventCategory.sync, message: message);
+    addEvent(
+      category: RuntimeEventCategory.sync,
+      message: message,
+      payload: payload,
+    );
   }
 
   void markSyncSkipped({
     required RuntimeSyncPhase phase,
     required String message,
+    RuntimeEventPayload? payload,
   }) {
     _replace(
       _state.copyWith(
@@ -213,10 +282,11 @@ class RuntimeDebugProvider extends ChangeNotifier {
       category: RuntimeEventCategory.sync,
       message: message,
       level: RuntimeEventLevel.warning,
+      payload: payload,
     );
   }
 
-  void markSyncPartial(String message) {
+  void markSyncPartial(String message, {RuntimeEventPayload? payload}) {
     _replace(
       _state.copyWith(
         syncPhase: RuntimeSyncPhase.idle,
@@ -231,10 +301,11 @@ class RuntimeDebugProvider extends ChangeNotifier {
       category: RuntimeEventCategory.sync,
       message: message,
       level: RuntimeEventLevel.warning,
+      payload: payload,
     );
   }
 
-  void markSyncFailure(String message) {
+  void markSyncFailure(String message, {RuntimeEventPayload? payload}) {
     _replace(
       _state.copyWith(
         syncPhase: RuntimeSyncPhase.error,
@@ -249,6 +320,7 @@ class RuntimeDebugProvider extends ChangeNotifier {
       category: RuntimeEventCategory.sync,
       message: message,
       level: RuntimeEventLevel.error,
+      payload: payload,
     );
   }
 
@@ -289,7 +361,21 @@ class RuntimeDebugProvider extends ChangeNotifier {
   }) {
     _replace(_state.copyWith(pushPermissionState: permissionState));
     if (logEvent && message != null && message.isNotEmpty) {
-      addEvent(category: RuntimeEventCategory.push, message: message);
+      addEvent(
+        category: RuntimeEventCategory.push,
+        message: message,
+        payload: RuntimeEventPayload(
+          stage: 'Permission update',
+          summary:
+              'The browser notification permission state changed or was refreshed.',
+          metrics: [
+            RuntimeEventMetric(
+              label: 'Permission',
+              value: permissionState.label,
+            ),
+          ],
+        ),
+      );
     }
   }
 
@@ -333,6 +419,21 @@ class RuntimeDebugProvider extends ChangeNotifier {
         category: RuntimeEventCategory.push,
         message: message,
         level: level,
+        payload: RuntimeEventPayload(
+          stage: 'Subscription update',
+          summary:
+              'The browser push subscription lifecycle advanced to a new state.',
+          metrics: [
+            RuntimeEventMetric(
+              label: 'Permission',
+              value: _state.pushPermissionState.label,
+            ),
+            RuntimeEventMetric(
+              label: 'Subscription',
+              value: subscriptionState.label,
+            ),
+          ],
+        ),
       );
     }
   }
@@ -342,14 +443,17 @@ class RuntimeDebugProvider extends ChangeNotifier {
     required String message,
     RuntimeEventLevel level = RuntimeEventLevel.info,
     String? detail,
+    RuntimeEventPayload? payload,
   }) {
     final updatedEvents = [
       RuntimeEvent(
+        id: _uuid.v4(),
         timestamp: DateTime.now(),
         level: level,
         category: category,
         message: message,
         detail: detail,
+        payload: payload,
       ),
       ..._state.recentEvents,
     ].take(20).toList(growable: false);
@@ -360,6 +464,18 @@ class RuntimeDebugProvider extends ChangeNotifier {
   void _replace(RuntimeDebugState nextState) {
     _state = nextState;
     notifyListeners();
+  }
+
+  String _summarizeIdentity(String? value) {
+    if (value == null || value.isEmpty) {
+      return 'None';
+    }
+
+    if (value.length <= 12) {
+      return value;
+    }
+
+    return '${value.substring(0, 6)}...${value.substring(value.length - 4)}';
   }
 
   @override

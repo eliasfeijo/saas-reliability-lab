@@ -55,6 +55,11 @@ Future<String?> primeWebPushPermission({
       message: 'Failed to request notification permission.',
       detail: e.toString(),
       level: RuntimeEventLevel.error,
+      payload: const RuntimeEventPayload(
+        stage: 'Permission request failed',
+        summary:
+            'The browser did not complete the notification permission request successfully.',
+      ),
     );
     debugPrint('[Push] Failed to request notification permission: $e');
     return null;
@@ -153,6 +158,11 @@ Future<void> registerWebPushSubscription({
         message: 'Browser push subscription was not created.',
         detail: errorDetail,
         level: RuntimeEventLevel.error,
+        payload: const RuntimeEventPayload(
+          stage: 'Subscription rejected',
+          summary:
+              'The browser declined or failed to return a push subscription during registration.',
+        ),
       );
       debugPrint(
         '[Push] Browser did not return a push subscription${errorDetail == null || errorDetail.isEmpty ? '' : ': $errorDetail'}',
@@ -202,6 +212,11 @@ Future<void> registerWebPushSubscription({
       message: 'Failed to register browser push subscription.',
       detail: e.toString(),
       level: RuntimeEventLevel.error,
+      payload: const RuntimeEventPayload(
+        stage: 'Registration failed',
+        summary:
+            'The runtime could not register a browser push subscription for the current session.',
+      ),
     );
     debugPrint('Failed to subscribe: $e');
   }
@@ -257,6 +272,11 @@ Future<void> unregisterWebPushSubscription({
       message: 'Failed to unregister browser push subscription.',
       detail: e.toString(),
       level: RuntimeEventLevel.error,
+      payload: const RuntimeEventPayload(
+        stage: 'Cleanup failed',
+        summary:
+            'The runtime could not remove the browser push subscription cleanly during cleanup.',
+      ),
     );
     debugPrint('[Push] Failed to unregister web push: $e');
   }

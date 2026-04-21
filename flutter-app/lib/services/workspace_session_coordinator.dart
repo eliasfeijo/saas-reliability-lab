@@ -29,7 +29,8 @@ class WorkspaceSessionCoordinator {
   }) : _registerPushSubscription =
            registerPushSubscription ?? registerWebPushSubscription,
        _activeUserId =
-           activeUserId ?? (() => Supabase.instance.client.auth.currentUser?.id),
+           activeUserId ??
+           (() => Supabase.instance.client.auth.currentUser?.id),
        _hasAuthenticatedSession =
            hasAuthenticatedSession ??
            (() {
@@ -122,12 +123,15 @@ class WorkspaceSessionCoordinator {
         message:
             'Anonymous local tasks are waiting for review before cloud sync can continue.',
         level: RuntimeEventLevel.warning,
+        payload: const RuntimeEventPayload(
+          stage: 'Local review required',
+          summary:
+              'Cloud replay is paused until the operator explicitly keeps or discards anonymous local tasks.',
+        ),
       );
 
       await _registerPushSubscription(runtimeDebug: runtimeDebug);
-      return const WorkspaceSessionResult(
-        shouldShowAnonymousTaskReview: true,
-      );
+      return const WorkspaceSessionResult(shouldShowAnonymousTaskReview: true);
     }
 
     await agenda.syncAllTasks();

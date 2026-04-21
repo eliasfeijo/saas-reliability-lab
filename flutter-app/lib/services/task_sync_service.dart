@@ -162,6 +162,16 @@ class TaskSyncService implements TaskSyncGateway {
       _runtimeDebug?.markSyncSkipped(
         phase: RuntimeSyncPhase.offline,
         message: message,
+        payload: _buildSyncPayload(
+          stage: 'Replay skipped',
+          summary:
+              'The sync pass did not start because the cloud boundary is offline.',
+          tasks: tasks,
+          notes: [
+            if (_faultInjectionPolicy.isConnectivityLossActive)
+              'A controlled connectivity-loss scenario is currently forcing the sync boundary offline.',
+          ],
+        ),
       );
       debugPrint(message);
       return const TaskSyncRunResult();
@@ -171,6 +181,12 @@ class TaskSyncService implements TaskSyncGateway {
       _runtimeDebug?.markSyncSkipped(
         phase: RuntimeSyncPhase.blockedNoSession,
         message: 'No authenticated session. Skipping sync.',
+        payload: _buildSyncPayload(
+          stage: 'Replay blocked',
+          summary:
+              'The sync pass is waiting for an authenticated session before any cloud replay can start.',
+          tasks: tasks,
+        ),
       );
       debugPrint('No user session. Skipping sync.');
       return const TaskSyncRunResult();
@@ -181,11 +197,25 @@ class TaskSyncService implements TaskSyncGateway {
         ? 'Synchronizing ${tasks.length} local task(s).'
         : 'Delayed sync scenario is active. Holding remote replay for $delayedSyncLabel before synchronizing ${tasks.length} local task(s).';
 
-    _runtimeDebug?.markSyncStarted(startMessage);
-    await _applyInjectedPreSyncDelay();
+    _runtimeDebug?.markSyncStarted(
+      startMessage,
+      payload: _buildSyncPayload(
+        stage: 'Replay started',
+        summary:
+            'The runtime is preparing local task mutations for cloud replay.',
+        tasks: tasks,
+        notes: [
+          if (delayedSyncLabel != null)
+            'A deterministic delay is active before remote replay begins.',
+        ],
+      ),
+    );
+    await _applyInjectedPreSyncDelay(tasks);
 
     try {
       final syncedTasks = <TaskModel>[];
+      final acknowledgedTaskDetails = <RuntimeEventTaskDetail>[];
+      final adoptedRemoteTaskDetails = <RuntimeEventTaskDetail>[];
       final remotelyConfirmedTaskIds = <String>{};
       final workingTasks = [...tasks];
       var hadRecoverableErrors = false;
@@ -199,6 +229,14 @@ class TaskSyncService implements TaskSyncGateway {
           workingTasks.removeWhere((t) => t.id == task.id);
           task.syncStatus = SyncStatus.synced;
           syncedTasks.add(task);
+          acknowledgedTaskDetails.add(
+            _buildTaskDetail(
+              task,
+              outcome: 'Deleted remotely',
+              description:
+                  'A locally deleted task was confirmed and removed from the cloud record.',
+            ),
+          );
         } catch (e) {
           hadRecoverableErrors = true;
           _runtimeDebug?.addEvent(
@@ -206,6 +244,21 @@ class TaskSyncService implements TaskSyncGateway {
             message: 'Failed to delete task ${task.title}.',
             level: RuntimeEventLevel.warning,
             detail: e.toString(),
+            payload: _buildSyncPayload(
+              stage: 'Delete failed',
+              summary:
+                  'The runtime could not remove this task from the remote store during replay.',
+              tasks: tasks,
+              highlightedTasks: [
+                _buildTaskDetail(
+                  task,
+                  outcome: 'Delete failed',
+                  description:
+                      'The task remains in local review state until a later sync pass succeeds.',
+                ),
+              ],
+              notes: [e.toString()],
+            ),
           );
           debugPrint('Delete error: $e');
         }
@@ -224,6 +277,14 @@ class TaskSyncService implements TaskSyncGateway {
             task.syncStatus = SyncStatus.synced;
             remotelyConfirmedTaskIds.add(task.id);
             syncedTasks.add(task);
+            acknowledgedTaskDetails.add(
+              _buildTaskDetail(
+                task,
+                outcome: 'Created remotely',
+                description:
+                    'A local-only task was inserted into the remote task set.',
+              ),
+            );
             continue;
           }
 
@@ -232,6 +293,15 @@ class TaskSyncService implements TaskSyncGateway {
             task.syncStatus = SyncStatus.synced;
             remotelyConfirmedTaskIds.add(task.id);
             syncedTasks.add(task);
+            acknowledgedTaskDetails.add(
+              _buildTaskDetail(
+                task,
+                outcome: 'Updated remotely',
+                description:
+                    'The local task version was newer and replaced the remote copy.',
+                fieldDiffs: _buildTaskFieldDiffs(remoteTask, task),
+              ),
+            );
             continue;
           }
 
@@ -239,6 +309,30 @@ class TaskSyncService implements TaskSyncGateway {
           _runtimeDebug?.addEvent(
             category: RuntimeEventCategory.sync,
             message: 'Remote task ${task.title} replaced stale local state.',
+            payload: _buildSyncPayload(
+              stage: 'Remote truth adopted',
+              summary:
+                  'The remote task version was newer, so the local draft was replaced to preserve canonical state.',
+              tasks: tasks,
+              highlightedTasks: [
+                _buildTaskDetail(
+                  remoteTask,
+                  outcome: 'Remote truth kept',
+                  description:
+                      'The local draft was stale and has been replaced by the fresher remote state.',
+                  fieldDiffs: _buildTaskFieldDiffs(task, remoteTask),
+                ),
+              ],
+            ),
+          );
+          adoptedRemoteTaskDetails.add(
+            _buildTaskDetail(
+              remoteTask,
+              outcome: 'Remote truth kept',
+              description:
+                  'The local draft was stale and the remote version became the retained record.',
+              fieldDiffs: _buildTaskFieldDiffs(task, remoteTask),
+            ),
           );
           debugPrint(
             'Remote task ${task.id} is newer or equal. Keeping remote version.',
@@ -250,6 +344,21 @@ class TaskSyncService implements TaskSyncGateway {
             message: 'Failed to sync task ${task.title}.',
             level: RuntimeEventLevel.warning,
             detail: e.toString(),
+            payload: _buildSyncPayload(
+              stage: 'Task replay failed',
+              summary:
+                  'The runtime could not replay this task mutation to the remote store.',
+              tasks: tasks,
+              highlightedTasks: [
+                _buildTaskDetail(
+                  task,
+                  outcome: 'Replay failed',
+                  description:
+                      'The task remains locally available and will need another sync pass.',
+                ),
+              ],
+              notes: [e.toString()],
+            ),
           );
           debugPrint('Sync error: $e');
         }
@@ -282,9 +391,56 @@ class TaskSyncService implements TaskSyncGateway {
       final summary =
           'Sync completed. ${syncedTasks.length} task(s) acknowledged.';
       if (hadRecoverableErrors) {
-        _runtimeDebug?.markSyncPartial('$summary Some operations need review.');
+        _runtimeDebug?.markSyncPartial(
+          '$summary Some operations need review.',
+          payload: _buildSyncPayload(
+            stage: 'Replay completed with review needed',
+            summary:
+                'The sync pass finished, but one or more operations emitted warning events that still need operator review.',
+            tasks: mergedTasks,
+            highlightedTasks: [
+              ...acknowledgedTaskDetails,
+              ...adoptedRemoteTaskDetails,
+            ],
+            extraMetrics: [
+              RuntimeEventMetric(
+                label: 'Acknowledged',
+                value: syncedTasks.length.toString(),
+              ),
+              RuntimeEventMetric(
+                label: 'Remote truth kept',
+                value: adoptedRemoteTaskDetails.length.toString(),
+              ),
+            ],
+            notes: const [
+              'Review the warning events in the timeline for the specific tasks that still need attention.',
+            ],
+          ),
+        );
       } else {
-        _runtimeDebug?.markSyncSuccess(summary);
+        _runtimeDebug?.markSyncSuccess(
+          summary,
+          payload: _buildSyncPayload(
+            stage: 'Replay completed',
+            summary:
+                'All local mutations in this pass were reconciled without warning-level issues.',
+            tasks: mergedTasks,
+            highlightedTasks: [
+              ...acknowledgedTaskDetails,
+              ...adoptedRemoteTaskDetails,
+            ],
+            extraMetrics: [
+              RuntimeEventMetric(
+                label: 'Acknowledged',
+                value: syncedTasks.length.toString(),
+              ),
+              RuntimeEventMetric(
+                label: 'Remote truth kept',
+                value: adoptedRemoteTaskDetails.length.toString(),
+              ),
+            ],
+          ),
+        );
       }
 
       debugPrint('Sync completed. Synced ${syncedTasks.length} tasks.');
@@ -294,7 +450,16 @@ class TaskSyncService implements TaskSyncGateway {
         hadRecoverableErrors: hadRecoverableErrors,
       );
     } catch (e) {
-      _runtimeDebug?.markSyncFailure('Sync failed: $e');
+      _runtimeDebug?.markSyncFailure(
+        'Sync failed: $e',
+        payload: _buildSyncPayload(
+          stage: 'Replay failed',
+          summary:
+              'The sync pass stopped before completion because an unrecoverable error escaped the replay loop.',
+          tasks: tasks,
+          notes: [e.toString()],
+        ),
+      );
       rethrow;
     }
   }
@@ -361,7 +526,7 @@ class TaskSyncService implements TaskSyncGateway {
     tasks[index] = replacement;
   }
 
-  Future<void> _applyInjectedPreSyncDelay() async {
+  Future<void> _applyInjectedPreSyncDelay(List<TaskModel> tasks) async {
     final delay = _faultInjectionPolicy.delayedSyncDuration;
     final delayLabel = _faultInjectionPolicy.delayedSyncDurationLabel;
     if (delay == null || delayLabel == null) {
@@ -374,8 +539,178 @@ class TaskSyncService implements TaskSyncGateway {
       category: RuntimeEventCategory.sync,
       message: message,
       level: RuntimeEventLevel.warning,
+      payload: _buildSyncPayload(
+        stage: 'Deterministic hold',
+        summary:
+            'The sync pass is intentionally paused before remote replay to make the delayed-sync scenario visible.',
+        tasks: tasks,
+        extraMetrics: [
+          RuntimeEventMetric(label: 'Injected delay', value: delayLabel),
+        ],
+      ),
     );
     debugPrint(message);
     await _delayExecution(delay);
+  }
+
+  RuntimeEventPayload _buildSyncPayload({
+    required String stage,
+    required String summary,
+    required List<TaskModel> tasks,
+    List<RuntimeEventTaskDetail> highlightedTasks = const [],
+    List<RuntimeEventMetric> extraMetrics = const [],
+    List<String> notes = const [],
+  }) {
+    return RuntimeEventPayload(
+      stage: stage,
+      summary: summary,
+      metrics: [..._buildTaskMetrics(tasks), ...extraMetrics],
+      tasks: highlightedTasks.isEmpty
+          ? tasks.map(_buildTaskDetail).toList(growable: false)
+          : highlightedTasks,
+      notes: notes,
+    );
+  }
+
+  List<RuntimeEventMetric> _buildTaskMetrics(List<TaskModel> tasks) {
+    final dirtyCount = tasks
+        .where((task) => task.syncStatus == SyncStatus.dirty)
+        .length;
+    final deletedCount = tasks
+        .where((task) => task.syncStatus == SyncStatus.deleted)
+        .length;
+    final localOnlyCount = tasks
+        .where(
+          (task) =>
+              task.userId == null && task.syncStatus != SyncStatus.deleted,
+        )
+        .length;
+
+    return [
+      RuntimeEventMetric(
+        label: 'Tasks in pass',
+        value: tasks.length.toString(),
+      ),
+      RuntimeEventMetric(label: 'Dirty', value: dirtyCount.toString()),
+      RuntimeEventMetric(label: 'Deleted', value: deletedCount.toString()),
+      RuntimeEventMetric(label: 'Local only', value: localOnlyCount.toString()),
+    ];
+  }
+
+  RuntimeEventTaskDetail _buildTaskDetail(
+    TaskModel task, {
+    String? outcome,
+    String? description,
+    List<RuntimeEventFieldDiff> fieldDiffs = const [],
+  }) {
+    return RuntimeEventTaskDetail(
+      title: task.title.isEmpty ? 'Untitled task' : task.title,
+      taskId: task.id,
+      syncStatus: _syncStatusLabel(task.syncStatus),
+      outcome: outcome,
+      description: description ?? _buildTaskSnapshot(task),
+      tags: [
+        _priorityLabel(task.priority),
+        if (task.userId == null) 'No user linked',
+        if (task.isCompleted) 'Completed' else 'Open',
+      ],
+      fieldDiffs: fieldDiffs,
+    );
+  }
+
+  List<RuntimeEventFieldDiff> _buildTaskFieldDiffs(
+    TaskModel before,
+    TaskModel after,
+  ) {
+    final fieldDiffs = <RuntimeEventFieldDiff>[];
+
+    void addField(String label, String previous, String next) {
+      if (previous == next) {
+        return;
+      }
+      fieldDiffs.add(
+        RuntimeEventFieldDiff(label: label, before: previous, after: next),
+      );
+    }
+
+    addField('Title', before.title, after.title);
+    addField(
+      'Start',
+      _formatDateTime(before.beginsAt),
+      _formatDateTime(after.beginsAt),
+    );
+    addField(
+      'Duration',
+      _formatDuration(before.estimatedDuration),
+      _formatDuration(after.estimatedDuration),
+    );
+    addField(
+      'Completion',
+      before.isCompleted ? 'Completed' : 'Open',
+      after.isCompleted ? 'Completed' : 'Open',
+    );
+    addField(
+      'Priority',
+      _priorityLabel(before.priority),
+      _priorityLabel(after.priority),
+    );
+    addField(
+      'Description',
+      (before.description == null || before.description!.isEmpty)
+          ? 'Not provided'
+          : before.description!,
+      (after.description == null || after.description!.isEmpty)
+          ? 'Not provided'
+          : after.description!,
+    );
+
+    return fieldDiffs;
+  }
+
+  String _buildTaskSnapshot(TaskModel task) {
+    return '${_formatDateTime(task.beginsAt)} for ${_formatDuration(task.estimatedDuration)}.';
+  }
+
+  String _syncStatusLabel(SyncStatus status) {
+    switch (status) {
+      case SyncStatus.synced:
+        return 'Synced';
+      case SyncStatus.dirty:
+        return 'Dirty';
+      case SyncStatus.deleted:
+        return 'Deleted';
+    }
+  }
+
+  String _priorityLabel(TaskPriority priority) {
+    switch (priority) {
+      case TaskPriority.low:
+        return 'Low priority';
+      case TaskPriority.medium:
+        return 'Medium priority';
+      case TaskPriority.high:
+        return 'High priority';
+      case TaskPriority.urgent:
+        return 'Urgent';
+    }
+  }
+
+  String _formatDateTime(DateTime value) {
+    final localValue = value.toLocal();
+    final hour = localValue.hour.toString().padLeft(2, '0');
+    final minute = localValue.minute.toString().padLeft(2, '0');
+    return '${localValue.year}-${localValue.month.toString().padLeft(2, '0')}-${localValue.day.toString().padLeft(2, '0')} $hour:$minute';
+  }
+
+  String _formatDuration(Duration value) {
+    final hours = value.inHours;
+    final minutes = value.inMinutes.remainder(60);
+    if (hours == 0) {
+      return '${value.inMinutes} min';
+    }
+    if (minutes == 0) {
+      return '$hours h';
+    }
+    return '$hours h $minutes min';
   }
 }

@@ -394,7 +394,13 @@ class SyncDebugPanel extends StatelessWidget {
                       )
                     : Column(
                         children: state.recentEvents
-                            .map((event) => _eventTile(context, event))
+                            .map(
+                              (event) => _RuntimeEventTile(
+                                key: ValueKey(event.id),
+                                event: event,
+                                compact: compact,
+                              ),
+                            )
                             .toList(),
                       ),
               ),
@@ -485,51 +491,6 @@ class SyncDebugPanel extends StatelessWidget {
     );
   }
 
-  Widget _eventTile(BuildContext context, RuntimeEvent event) {
-    final theme = Theme.of(context);
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainer,
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _statusBadge(
-                context,
-                event.category.label,
-                theme.colorScheme.primary,
-              ),
-              _statusBadge(
-                context,
-                event.level.label,
-                _eventColor(event.level, theme),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(event.message, style: theme.textTheme.bodyMedium),
-          const SizedBox(height: 4),
-          Text(
-            _formatTimestamp(event.timestamp),
-            style: theme.textTheme.bodySmall,
-          ),
-          if (event.detail != null && event.detail!.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Text(event.detail!, style: theme.textTheme.bodySmall),
-          ],
-        ],
-      ),
-    );
-  }
-
   Widget _statusBadge(BuildContext context, String label, Color tone) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -601,17 +562,6 @@ class SyncDebugPanel extends StatelessWidget {
     }
   }
 
-  Color _eventColor(RuntimeEventLevel level, ThemeData theme) {
-    switch (level) {
-      case RuntimeEventLevel.info:
-        return theme.colorScheme.primary;
-      case RuntimeEventLevel.warning:
-        return theme.colorScheme.secondary;
-      case RuntimeEventLevel.error:
-        return theme.colorScheme.error;
-    }
-  }
-
   String _identityAlignment(RuntimeDebugState state) {
     if (state.activeUserId == null && state.cachedUserId == null) {
       return 'No identity loaded';
@@ -649,4 +599,447 @@ class SyncDebugPanel extends StatelessWidget {
     }
     return '${value.substring(0, 6)}...${value.substring(value.length - 4)}';
   }
+}
+
+class _RuntimeEventTile extends StatefulWidget {
+  const _RuntimeEventTile({
+    super.key,
+    required this.event,
+    required this.compact,
+  });
+
+  final RuntimeEvent event;
+  final bool compact;
+
+  @override
+  State<_RuntimeEventTile> createState() => _RuntimeEventTileState();
+}
+
+class _RuntimeEventTileState extends State<_RuntimeEventTile> {
+  bool _detailsVisible = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final payload = widget.event.payload;
+    final hasDetailText =
+        widget.event.detail != null && widget.event.detail!.isNotEmpty;
+    final canInspect = widget.event.hasInspectableDetails;
+    final shouldOfferDialog =
+        canInspect &&
+        (widget.compact ||
+            (payload?.tasks.length ?? 0) > 2 ||
+            (payload?.tasks.any((task) => task.fieldDiffs.length > 2) ??
+                false));
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainer,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _eventBadge(
+                context,
+                widget.event.category.label,
+                theme.colorScheme.primary,
+              ),
+              _eventBadge(
+                context,
+                widget.event.level.label,
+                _eventColor(widget.event.level, theme),
+              ),
+              if (payload?.stage case final stage?)
+                _eventBadge(context, stage, theme.colorScheme.tertiary),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(widget.event.message, style: theme.textTheme.bodyMedium),
+          const SizedBox(height: 4),
+          Text(
+            _formatRuntimeTimestamp(widget.event.timestamp),
+            style: theme.textTheme.bodySmall,
+          ),
+          const SizedBox(height: 10),
+          if (canInspect)
+            Row(
+              children: [
+                TextButton.icon(
+                  onPressed: () {
+                    setState(() {
+                      _detailsVisible = !_detailsVisible;
+                    });
+                  },
+                  icon: Icon(
+                    _detailsVisible
+                        ? Icons.keyboard_arrow_up
+                        : Icons.keyboard_arrow_down,
+                  ),
+                  label: Text(
+                    _detailsVisible ? 'Hide context' : 'View context',
+                  ),
+                ),
+                if (shouldOfferDialog) ...[
+                  const SizedBox(width: 4),
+                  TextButton.icon(
+                    onPressed: () => _showFullRecordDialog(context),
+                    icon: const Icon(Icons.open_in_full_outlined),
+                    label: const Text('Open full record'),
+                  ),
+                ],
+              ],
+            ),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
+            child: canInspect && _detailsVisible
+                ? Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: _InlineEventDetails(
+                      event: widget.event,
+                      maxTasks: shouldOfferDialog ? 2 : 4,
+                      showTruncationHint: shouldOfferDialog,
+                      forceNotesVisible: hasDetailText,
+                    ),
+                  )
+                : const SizedBox.shrink(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showFullRecordDialog(BuildContext context) {
+    return showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        final theme = Theme.of(dialogContext);
+        return Dialog(
+          insetPadding: const EdgeInsets.all(24),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 860, maxHeight: 720),
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Event record',
+                              style: theme.textTheme.titleLarge,
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              widget.event.message,
+                              style: theme.textTheme.bodyMedium,
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.of(dialogContext).pop(),
+                        icon: const Icon(Icons.close),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: _InlineEventDetails(
+                        event: widget.event,
+                        maxTasks: null,
+                        showTruncationHint: false,
+                        forceNotesVisible: true,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _InlineEventDetails extends StatelessWidget {
+  const _InlineEventDetails({
+    required this.event,
+    required this.maxTasks,
+    required this.showTruncationHint,
+    required this.forceNotesVisible,
+  });
+
+  final RuntimeEvent event;
+  final int? maxTasks;
+  final bool showTruncationHint;
+  final bool forceNotesVisible;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final payload = event.payload;
+    final tasks = maxTasks == null || payload == null
+        ? payload?.visibleTasks ?? const <RuntimeEventTaskDetail>[]
+        : payload.visibleTasks.take(maxTasks!).toList(growable: false);
+    final hasExtraTasks =
+        payload != null &&
+        maxTasks != null &&
+        payload.visibleTasks.length > maxTasks!;
+    final visibleMetrics =
+        payload?.visibleMetrics ?? const <RuntimeEventMetric>[];
+    final visibleNotes = payload?.visibleNotes ?? const <String>[];
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (payload?.summary case final summary?) ...[
+            Text('Operator summary', style: theme.textTheme.titleSmall),
+            const SizedBox(height: 6),
+            Text(summary, style: theme.textTheme.bodyMedium),
+          ],
+          if (visibleMetrics.isNotEmpty) ...[
+            if (payload?.summary != null) const SizedBox(height: 14),
+            Text('Key metrics', style: theme.textTheme.titleSmall),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: visibleMetrics
+                  .map(
+                    (metric) =>
+                        _MetricChip(label: metric.label, value: metric.value),
+                  )
+                  .toList(),
+            ),
+          ],
+          if (tasks.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Text('Tasks touched', style: theme.textTheme.titleSmall),
+            const SizedBox(height: 8),
+            ...tasks.map((task) => _TaskDetailCard(task: task)),
+            if (hasExtraTasks || showTruncationHint) ...[
+              const SizedBox(height: 8),
+              Text(
+                hasExtraTasks
+                    ? 'More task-level evidence is available in the full record.'
+                    : 'Open the full record when you want more room for the state diff.',
+                style: theme.textTheme.bodySmall,
+              ),
+            ],
+          ],
+          if (forceNotesVisible ||
+              (event.detail != null && event.detail!.isNotEmpty) ||
+              visibleNotes.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Text('Notes', style: theme.textTheme.titleSmall),
+            const SizedBox(height: 8),
+            if (event.detail != null && event.detail!.isNotEmpty)
+              _NoteLine(value: event.detail!),
+            ...visibleNotes.map((note) => _NoteLine(value: note)),
+            if ((event.detail == null || event.detail!.isEmpty) &&
+                visibleNotes.isEmpty)
+              Text(
+                'No additional note was recorded for this event.',
+                style: theme.textTheme.bodySmall,
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _MetricChip extends StatelessWidget {
+  const _MetricChip({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(label, style: theme.textTheme.bodySmall),
+          const SizedBox(height: 2),
+          Text(value, style: theme.textTheme.titleSmall),
+        ],
+      ),
+    );
+  }
+}
+
+class _TaskDetailCard extends StatelessWidget {
+  const _TaskDetailCard({required this.task});
+
+  final RuntimeEventTaskDetail task;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final visibleTags = task.visibleTags;
+    final visibleFieldDiffs = task.visibleFieldDiffs;
+    final hasBadges =
+        (task.syncStatus?.trim().isNotEmpty ?? false) ||
+        (task.outcome?.trim().isNotEmpty ?? false) ||
+        visibleTags.isNotEmpty;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(task.title, style: theme.textTheme.titleSmall),
+          if (hasBadges) ...[
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                if (task.syncStatus case final syncStatus?
+                    when syncStatus.trim().isNotEmpty)
+                  _eventBadge(context, syncStatus, theme.colorScheme.secondary),
+                if (task.outcome case final outcome?
+                    when outcome.trim().isNotEmpty)
+                  _eventBadge(context, outcome, theme.colorScheme.tertiary),
+                ...visibleTags.map(
+                  (tag) => _eventBadge(context, tag, theme.colorScheme.primary),
+                ),
+              ],
+            ),
+          ],
+          if (task.taskId case final taskId?) ...[
+            const SizedBox(height: 8),
+            Text('Task ID: $taskId', style: theme.textTheme.bodySmall),
+          ],
+          if (task.description case final description?) ...[
+            const SizedBox(height: 8),
+            Text(description, style: theme.textTheme.bodyMedium),
+          ],
+          if (visibleFieldDiffs.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text('State diff', style: theme.textTheme.labelLarge),
+            const SizedBox(height: 8),
+            ...visibleFieldDiffs.map((field) => _FieldDiffRow(field: field)),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _FieldDiffRow extends StatelessWidget {
+  const _FieldDiffRow({required this.field});
+
+  final RuntimeEventFieldDiff field;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(field.label, style: theme.textTheme.labelLarge),
+          const SizedBox(height: 6),
+          Text('Before: ${field.before}', style: theme.textTheme.bodySmall),
+          const SizedBox(height: 2),
+          Text('After: ${field.after}', style: theme.textTheme.bodyMedium),
+        ],
+      ),
+    );
+  }
+}
+
+class _NoteLine extends StatelessWidget {
+  const _NoteLine({required this.value});
+
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Text(value, style: Theme.of(context).textTheme.bodySmall),
+    );
+  }
+}
+
+Widget _eventBadge(BuildContext context, String label, Color tone) {
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+    decoration: BoxDecoration(
+      color: tone.withValues(alpha: 0.12),
+      borderRadius: BorderRadius.circular(999),
+      border: Border.all(color: tone.withValues(alpha: 0.18)),
+    ),
+    child: Text(
+      label,
+      style: Theme.of(context).textTheme.labelLarge?.copyWith(color: tone),
+    ),
+  );
+}
+
+Color _eventColor(RuntimeEventLevel level, ThemeData theme) {
+  switch (level) {
+    case RuntimeEventLevel.info:
+      return theme.colorScheme.primary;
+    case RuntimeEventLevel.warning:
+      return theme.colorScheme.secondary;
+    case RuntimeEventLevel.error:
+      return theme.colorScheme.error;
+  }
+}
+
+String _formatRuntimeTimestamp(DateTime timestamp) {
+  final localTime = timestamp.toLocal();
+  final hour = localTime.hour.toString().padLeft(2, '0');
+  final minute = localTime.minute.toString().padLeft(2, '0');
+  final second = localTime.second.toString().padLeft(2, '0');
+  return '${localTime.year}-${localTime.month.toString().padLeft(2, '0')}-${localTime.day.toString().padLeft(2, '0')} $hour:$minute:$second';
 }

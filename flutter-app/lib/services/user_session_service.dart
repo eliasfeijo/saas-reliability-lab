@@ -36,6 +36,11 @@ class UserSessionService {
         message:
             'Cleared stale cached user id because no active session was found.',
         level: RuntimeEventLevel.warning,
+        payload: const RuntimeEventPayload(
+          stage: 'Cached identity cleared',
+          summary:
+              'A stale locally cached user id was removed because the runtime could not confirm an active authenticated session.',
+        ),
       );
     }
 

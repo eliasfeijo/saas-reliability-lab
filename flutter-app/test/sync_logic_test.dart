@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:todo_flutter/models/fault_injection_scenario.dart';
 import 'package:todo_flutter/models/fault_injection_state.dart';
 import 'package:todo_flutter/models/runtime_debug_state.dart';
+import 'package:todo_flutter/models/runtime_event.dart';
 import 'package:todo_flutter/models/task.dart';
 import 'package:todo_flutter/providers/runtime_debug_provider.dart';
 import 'package:todo_flutter/services/fault_injection_policy.dart';
@@ -55,11 +56,14 @@ void main() {
 
       final repository = InMemoryTasksRepository([localTask]);
       final remote = FakeTaskRemoteDataSource([remoteTask]);
+      final runtimeDebug = RuntimeDebugProvider();
+      addTearDown(runtimeDebug.dispose);
       final service = TaskSyncService.forTesting(
         repository,
         remote: remote,
         connectivityCheck: () async => [ConnectivityResult.wifi],
         hasActiveSession: () => true,
+        runtimeDebug: runtimeDebug,
       );
 
       final syncedTasks = await service.syncAllTasks(
@@ -73,6 +77,24 @@ void main() {
       expect(savedTasks.single.title, 'Remote truth');
       expect(savedTasks.single.syncStatus, SyncStatus.synced);
       expect(savedTasks.single.updatedAt, DateTime(2026, 1, 10, 12));
+
+      final adoptionEvent = runtimeDebug.state.recentEvents.firstWhere(
+        (event) =>
+            event.message ==
+            'Remote task Stale local draft replaced stale local state.',
+      );
+      expect(adoptionEvent.payload, isNotNull);
+      expect(adoptionEvent.payload!.stage, 'Remote truth adopted');
+      expect(adoptionEvent.payload!.tasks, hasLength(1));
+      expect(adoptionEvent.payload!.tasks.single.fieldDiffs, isNotEmpty);
+      expect(
+        adoptionEvent.payload!.tasks.single.fieldDiffs
+            .where((field) => field.label == 'Title')
+            .single,
+        isA<RuntimeEventFieldDiff>()
+            .having((field) => field.before, 'before', 'Stale local draft')
+            .having((field) => field.after, 'after', 'Remote truth'),
+      );
     },
   );
 
@@ -174,6 +196,18 @@ void main() {
         runtimeDebug.state.recentEvents.first.message,
         'Delayed sync scenario is holding the sync pass for 5 s before remote replay begins.',
       );
+      expect(runtimeDebug.state.recentEvents.first.payload, isNotNull);
+      expect(
+        runtimeDebug.state.recentEvents.first.payload!.stage,
+        'Deterministic hold',
+      );
+      expect(
+        runtimeDebug.state.recentEvents.first.payload!.metrics
+            .where((metric) => metric.label == 'Injected delay')
+            .single
+            .value,
+        '5 s',
+      );
 
       delayCompleter.complete();
       final result = await syncFuture;
@@ -181,6 +215,15 @@ void main() {
       expect(result.acknowledgedTasks, hasLength(1));
       expect(remote.insertedTaskIds, ['task-delayed-sync']);
       expect(runtimeDebug.state.lastSyncResult, RuntimeSyncResult.success);
+      expect(runtimeDebug.state.recentEvents.first.payload, isNotNull);
+      expect(
+        runtimeDebug.state.recentEvents.first.payload!.stage,
+        'Replay completed',
+      );
+      expect(
+        runtimeDebug.state.recentEvents.first.payload!.tasks.single.outcome,
+        'Created remotely',
+      );
     },
   );
 }

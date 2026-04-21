@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:todo_flutter/models/runtime_debug_state.dart';
+import 'package:todo_flutter/models/runtime_event.dart';
 import 'package:todo_flutter/models/task.dart';
 import 'package:todo_flutter/providers/runtime_debug_provider.dart';
 import 'package:todo_flutter/repositories/tasks_repository.dart';
@@ -108,6 +109,11 @@ class TaskSyncCoordinator {
         phase: RuntimeSyncPhase.blockedAnonymousReview,
         message:
             'Anonymous local tasks are waiting for review. Keep or discard them before cloud sync.',
+        payload: const RuntimeEventPayload(
+          stage: 'Replay blocked',
+          summary:
+              'Cloud replay is paused until the operator keeps or discards anonymous local tasks.',
+        ),
       );
       debugPrint('Anonymous tasks pending review. Pausing cloud sync.');
       return false;

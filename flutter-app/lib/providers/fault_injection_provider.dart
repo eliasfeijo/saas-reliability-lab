@@ -46,6 +46,23 @@ class FaultInjectionProvider extends ChangeNotifier {
       category: RuntimeEventCategory.sync,
       message: _state.activationEventMessage,
       level: RuntimeEventLevel.warning,
+      payload: RuntimeEventPayload(
+        stage: 'Fault injection active',
+        summary:
+            'A controlled scenario is now influencing the sync runtime so operators can observe deterministic evidence.',
+        metrics: [
+          RuntimeEventMetric(label: 'Scenario', value: _state.activeLabel),
+          if (_state.delayLabel != null)
+            RuntimeEventMetric(
+              label: 'Injected delay',
+              value: _state.delayLabel!,
+            ),
+        ],
+        notes: [
+          if (_state.activeSummary != null) _state.activeSummary!,
+          if (_state.operatorInstruction != null) _state.operatorInstruction!,
+        ],
+      ),
     );
     notifyListeners();
   }
@@ -63,6 +80,19 @@ class FaultInjectionProvider extends ChangeNotifier {
       category: RuntimeEventCategory.sync,
       message:
           'Fault injection updated: delayed sync now holds the sync pass for ${_state.delayLabel}.',
+      payload: RuntimeEventPayload(
+        stage: 'Fault injection updated',
+        summary:
+            'The delayed-sync scenario was reconfigured without leaving the current operator flow.',
+        metrics: [
+          RuntimeEventMetric(label: 'Scenario', value: _state.activeLabel),
+          if (_state.delayLabel != null)
+            RuntimeEventMetric(
+              label: 'Injected delay',
+              value: _state.delayLabel!,
+            ),
+        ],
+      ),
     );
     notifyListeners();
   }
@@ -85,6 +115,14 @@ class FaultInjectionProvider extends ChangeNotifier {
       message: _state
           .copyWith(activeScenario: activeScenario, isEnabled: true)
           .resetEventMessage,
+      payload: RuntimeEventPayload(
+        stage: 'Fault injection cleared',
+        summary:
+            'The controlled scenario has been removed and the sync runtime is returning to live behavior.',
+        metrics: [
+          RuntimeEventMetric(label: 'Scenario', value: activeScenario.label),
+        ],
+      ),
     );
     notifyListeners();
   }

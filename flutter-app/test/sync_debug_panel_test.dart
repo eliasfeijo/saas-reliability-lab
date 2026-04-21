@@ -35,65 +35,270 @@ void main() {
     connectivityPlatform.emit(const [ConnectivityResult.wifi]);
   });
 
+  testWidgets('debug panel renders explicit runtime evidence and placeholders', (
+    tester,
+  ) async {
+    final runtimeDebug = RuntimeDebugProvider();
+    addTearDown(runtimeDebug.dispose);
+    final faultInjection = FaultInjectionProvider(runtimeDebug: runtimeDebug);
+    addTearDown(faultInjection.dispose);
+    runtimeDebug.setConnectivityResults(const [
+      ConnectivityResult.wifi,
+    ], logEvent: false);
+    runtimeDebug.setUserState(
+      cachedUserId: 'cached-user-123456',
+      activeUserId: 'active-user-123456',
+      hasAuthenticatedSession: true,
+    );
+    runtimeDebug.updateTaskCounts([
+      buildTask(
+        id: 'task-dirty',
+        title: 'Dirty task',
+        beginsAt: DateTime(2026, 4, 3, 9),
+        estimatedDuration: const Duration(hours: 1),
+        syncStatus: SyncStatus.dirty,
+        userId: 'user-1',
+      ),
+      buildTask(
+        id: 'task-anon',
+        title: 'Anonymous task',
+        beginsAt: DateTime(2026, 4, 3, 10),
+        estimatedDuration: const Duration(hours: 1),
+        syncStatus: SyncStatus.dirty,
+      ),
+      buildTask(
+        id: 'task-deleted',
+        title: 'Deleted task',
+        beginsAt: DateTime(2026, 4, 3, 11),
+        estimatedDuration: const Duration(hours: 1),
+        syncStatus: SyncStatus.deleted,
+        userId: 'user-1',
+      ),
+    ]);
+    runtimeDebug.markSyncPartial(
+      'Sync completed. Some operations need review.',
+    );
+    await faultInjection.activateScenario(
+      FaultInjectionScenario.connectivityLoss,
+    );
+    runtimeDebug.setPushPermission(
+      PushPermissionState.granted,
+      logEvent: false,
+    );
+    runtimeDebug.setPushSubscriptionState(
+      PushSubscriptionState.registered,
+      message: 'Push registration is active.',
+    );
+    runtimeDebug.addEvent(
+      category: RuntimeEventCategory.sync,
+      message: 'Timeline event for diagnostics.',
+      payload: const RuntimeEventPayload(
+        stage: 'Replay completed',
+        summary:
+            'The sync pass finished and captured structured operator evidence.',
+        metrics: [
+          RuntimeEventMetric(label: 'Acknowledged', value: '2'),
+          RuntimeEventMetric(label: 'Remote truth kept', value: '1'),
+        ],
+        tasks: [
+          RuntimeEventTaskDetail(
+            title: 'Dirty task',
+            taskId: 'task-dirty',
+            syncStatus: 'Dirty',
+            outcome: 'Updated remotely',
+            description: '2026-04-03 09:00 for 1 h.',
+            tags: ['High visibility'],
+            fieldDiffs: [
+              RuntimeEventFieldDiff(
+                label: 'Title',
+                before: 'Dirty task (local)',
+                after: 'Dirty task',
+              ),
+            ],
+          ),
+        ],
+        notes: [
+          'A follow-up warning event would appear separately if review were needed.',
+        ],
+      ),
+    );
+
+    final repository = InMemoryTasksRepository([]);
+    final agenda = buildAgendaProviderForTesting(
+      repository,
+      TaskSyncService.forTesting(
+        repository,
+        remote: FakeTaskRemoteDataSource([]),
+        connectivityCheck: () async => [ConnectivityResult.wifi],
+        hasActiveSession: () => true,
+        runtimeDebug: runtimeDebug,
+      ),
+      runtimeDebug: runtimeDebug,
+    );
+    addTearDown(agenda.dispose);
+
+    await tester.pumpWidget(
+      RailHarness(
+        agenda: agenda,
+        runtimeDebug: runtimeDebug,
+        faultInjection: faultInjection,
+        child: const SyncDebugPanel(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Runtime Diagnostics'), findsOneWidget);
+    expect(find.text('Online'), findsWidgets);
+
+    await tester.scrollUntilVisible(find.text('Fault Injection'), 300);
+
+    expect(find.text('Fault Injection'), findsOneWidget);
+    expect(find.text('Connectivity loss', skipOffstage: false), findsWidgets);
+    expect(
+      find.textContaining(
+        'Leave the browser online, then run Sync now',
+        skipOffstage: false,
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Reset failure scenario'), findsOneWidget);
+
+    final resetButton = find.widgetWithText(
+      OutlinedButton,
+      'Reset failure scenario',
+    );
+    expect(resetButton, findsOneWidget);
+
+    await faultInjection.clearScenario();
+    await tester.pumpAndSettle();
+
+    expect(runtimeDebug.state.activeFaultInjectionLabel, isNull);
+    expect(
+      find.text('No controlled failure scenario is active right now.'),
+      findsOneWidget,
+    );
+
+    await tester.scrollUntilVisible(find.text('Push State'), 300);
+
+    expect(
+      find.text(
+        'Sync completed. Some operations need review.',
+        skipOffstage: false,
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Push State'), findsOneWidget);
+    expect(find.text('Registered'), findsWidgets);
+    expect(find.text('Queued', skipOffstage: false), findsOneWidget);
+    expect(find.text('Conflict', skipOffstage: false), findsOneWidget);
+    expect(
+      find.text('Timeline event for diagnostics.', skipOffstage: false),
+      findsOneWidget,
+    );
+    expect(find.text('Dirty', skipOffstage: false), findsOneWidget);
+    expect(find.text('Deleted', skipOffstage: false), findsOneWidget);
+    expect(find.text('Anonymous', skipOffstage: false), findsOneWidget);
+  });
+
+  testWidgets('timeline context can be revealed and hidden', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1200, 2200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final runtimeDebug = RuntimeDebugProvider();
+    addTearDown(runtimeDebug.dispose);
+    final faultInjection = FaultInjectionProvider(runtimeDebug: runtimeDebug);
+    addTearDown(faultInjection.dispose);
+    final repository = InMemoryTasksRepository([]);
+    final agenda = buildAgendaProviderForTesting(
+      repository,
+      TaskSyncService.forTesting(
+        repository,
+        remote: FakeTaskRemoteDataSource([]),
+        connectivityCheck: () async => [ConnectivityResult.wifi],
+        hasActiveSession: () => true,
+        runtimeDebug: runtimeDebug,
+      ),
+      runtimeDebug: runtimeDebug,
+    );
+    addTearDown(agenda.dispose);
+
+    runtimeDebug.addEvent(
+      category: RuntimeEventCategory.sync,
+      message: 'Timeline event for diagnostics.',
+      payload: const RuntimeEventPayload(
+        stage: 'Replay completed',
+        summary:
+            'The sync pass finished and captured structured operator evidence.',
+        metrics: [RuntimeEventMetric(label: 'Acknowledged', value: '2')],
+        tasks: [
+          RuntimeEventTaskDetail(
+            title: 'Dirty task',
+            taskId: 'task-dirty',
+            syncStatus: 'Dirty',
+            outcome: 'Updated remotely',
+            description: '2026-04-03 09:00 for 1 h.',
+            fieldDiffs: [
+              RuntimeEventFieldDiff(
+                label: 'Title',
+                before: 'Dirty task (local)',
+                after: 'Dirty task',
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+
+    await tester.pumpWidget(
+      RailHarness(
+        agenda: agenda,
+        runtimeDebug: runtimeDebug,
+        faultInjection: faultInjection,
+        child: const SyncDebugPanel(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final detailsButton = find.widgetWithText(TextButton, 'View context');
+
+    expect(detailsButton, findsOneWidget);
+
+    await tester.ensureVisible(detailsButton);
+    await tester.pumpAndSettle();
+
+    await tester.tap(detailsButton);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Hide context'), findsOneWidget);
+    expect(find.text('Operator summary'), findsOneWidget);
+    expect(
+      find.text(
+        'The sync pass finished and captured structured operator evidence.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Acknowledged'), findsWidgets);
+    expect(find.text('Tasks touched'), findsOneWidget);
+    expect(find.text('State diff'), findsOneWidget);
+    expect(find.text('Before: Dirty task (local)'), findsOneWidget);
+    expect(find.text('After: Dirty task'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(TextButton, 'Hide context'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Operator summary'), findsNothing);
+  });
+
   testWidgets(
-    'debug panel renders explicit runtime evidence and placeholders',
+    'expanded context stays attached to the original event when newer events arrive',
     (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1200, 2200));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
       final runtimeDebug = RuntimeDebugProvider();
       addTearDown(runtimeDebug.dispose);
       final faultInjection = FaultInjectionProvider(runtimeDebug: runtimeDebug);
       addTearDown(faultInjection.dispose);
-      runtimeDebug.setConnectivityResults(const [
-        ConnectivityResult.wifi,
-      ], logEvent: false);
-      runtimeDebug.setUserState(
-        cachedUserId: 'cached-user-123456',
-        activeUserId: 'active-user-123456',
-        hasAuthenticatedSession: true,
-      );
-      runtimeDebug.updateTaskCounts([
-        buildTask(
-          id: 'task-dirty',
-          title: 'Dirty task',
-          beginsAt: DateTime(2026, 4, 3, 9),
-          estimatedDuration: const Duration(hours: 1),
-          syncStatus: SyncStatus.dirty,
-          userId: 'user-1',
-        ),
-        buildTask(
-          id: 'task-anon',
-          title: 'Anonymous task',
-          beginsAt: DateTime(2026, 4, 3, 10),
-          estimatedDuration: const Duration(hours: 1),
-          syncStatus: SyncStatus.dirty,
-        ),
-        buildTask(
-          id: 'task-deleted',
-          title: 'Deleted task',
-          beginsAt: DateTime(2026, 4, 3, 11),
-          estimatedDuration: const Duration(hours: 1),
-          syncStatus: SyncStatus.deleted,
-          userId: 'user-1',
-        ),
-      ]);
-      runtimeDebug.markSyncPartial(
-        'Sync completed. Some operations need review.',
-      );
-      await faultInjection.activateScenario(
-        FaultInjectionScenario.connectivityLoss,
-      );
-      runtimeDebug.setPushPermission(
-        PushPermissionState.granted,
-        logEvent: false,
-      );
-      runtimeDebug.setPushSubscriptionState(
-        PushSubscriptionState.registered,
-        message: 'Push registration is active.',
-      );
-      runtimeDebug.addEvent(
-        category: RuntimeEventCategory.sync,
-        message: 'Timeline event for diagnostics.',
-      );
-
       final repository = InMemoryTasksRepository([]);
       final agenda = buildAgendaProviderForTesting(
         repository,
@@ -108,6 +313,15 @@ void main() {
       );
       addTearDown(agenda.dispose);
 
+      runtimeDebug.addEvent(
+        category: RuntimeEventCategory.sync,
+        message: 'Older sync event.',
+        payload: const RuntimeEventPayload(
+          stage: 'Replay completed',
+          summary: 'Older event summary.',
+        ),
+      );
+
       await tester.pumpWidget(
         RailHarness(
           agenda: agenda,
@@ -118,59 +332,83 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Runtime Diagnostics'), findsOneWidget);
-      expect(find.text('Online'), findsWidgets);
+      await tester.scrollUntilVisible(find.text('Older sync event.'), 300);
 
-      await tester.scrollUntilVisible(find.text('Fault Injection'), 300);
+      final detailsButton = find.widgetWithText(TextButton, 'View context');
 
-      expect(find.text('Fault Injection'), findsOneWidget);
-      expect(find.text('Connectivity loss', skipOffstage: false), findsWidgets);
-      expect(
-        find.textContaining(
-          'Leave the browser online, then run Sync now',
-          skipOffstage: false,
-        ),
-        findsOneWidget,
-      );
-      expect(find.text('Reset failure scenario'), findsOneWidget);
-
-      final resetButton = find.widgetWithText(
-        OutlinedButton,
-        'Reset failure scenario',
-      );
-      expect(resetButton, findsOneWidget);
-
-      await faultInjection.clearScenario();
+      await tester.ensureVisible(detailsButton);
       await tester.pumpAndSettle();
 
-      expect(runtimeDebug.state.activeFaultInjectionLabel, isNull);
-      expect(
-        find.text('No controlled failure scenario is active right now.'),
-        findsOneWidget,
-      );
+      await tester.tap(detailsButton);
+      await tester.pumpAndSettle();
 
-      await tester.scrollUntilVisible(find.text('Push State'), 300);
+      expect(find.text('Older event summary.'), findsOneWidget);
 
-      expect(
-        find.text(
-          'Sync completed. Some operations need review.',
-          skipOffstage: false,
+      runtimeDebug.addEvent(
+        category: RuntimeEventCategory.sync,
+        message: 'Newest sync event.',
+        payload: const RuntimeEventPayload(
+          stage: 'Replay started',
+          summary: 'Newest event summary.',
         ),
-        findsOneWidget,
       );
-      expect(find.text('Push State'), findsOneWidget);
-      expect(find.text('Registered'), findsWidgets);
-      expect(find.text('Queued', skipOffstage: false), findsOneWidget);
-      expect(find.text('Conflict', skipOffstage: false), findsOneWidget);
-      expect(
-        find.text('Timeline event for diagnostics.', skipOffstage: false),
-        findsOneWidget,
+      await tester.pumpAndSettle();
+
+      expect(find.text('Newest sync event.'), findsOneWidget);
+      expect(find.text('Older event summary.'), findsOneWidget);
+      expect(find.text('Newest event summary.'), findsNothing);
+      expect(find.text('Hide context'), findsOneWidget);
+
+      final viewContextButtons = find.widgetWithText(
+        TextButton,
+        'View context',
       );
-      expect(find.text('Dirty', skipOffstage: false), findsOneWidget);
-      expect(find.text('Deleted', skipOffstage: false), findsOneWidget);
-      expect(find.text('Anonymous', skipOffstage: false), findsOneWidget);
+      expect(viewContextButtons, findsOneWidget);
     },
   );
+
+  testWidgets('plain events without context do not show an inspect action', (
+    tester,
+  ) async {
+    final runtimeDebug = RuntimeDebugProvider();
+    addTearDown(runtimeDebug.dispose);
+    final faultInjection = FaultInjectionProvider(runtimeDebug: runtimeDebug);
+    addTearDown(faultInjection.dispose);
+    final repository = InMemoryTasksRepository([]);
+    final agenda = buildAgendaProviderForTesting(
+      repository,
+      TaskSyncService.forTesting(
+        repository,
+        remote: FakeTaskRemoteDataSource([]),
+        connectivityCheck: () async => [ConnectivityResult.wifi],
+        hasActiveSession: () => true,
+        runtimeDebug: runtimeDebug,
+      ),
+      runtimeDebug: runtimeDebug,
+    );
+    addTearDown(agenda.dispose);
+
+    runtimeDebug.addEvent(
+      category: RuntimeEventCategory.app,
+      message: 'Bare app event.',
+    );
+
+    await tester.pumpWidget(
+      RailHarness(
+        agenda: agenda,
+        runtimeDebug: runtimeDebug,
+        faultInjection: faultInjection,
+        child: const SyncDebugPanel(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(find.text('Bare app event.'), 300);
+
+    expect(find.text('Bare app event.'), findsOneWidget);
+    expect(find.widgetWithText(TextButton, 'View context'), findsNothing);
+    expect(find.widgetWithText(TextButton, 'Open full record'), findsNothing);
+  });
 
   testWidgets(
     'debug panel shows delayed sync evidence and injected delay details',

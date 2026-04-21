@@ -75,7 +75,7 @@ flowchart TD
 - session truth versus cached identity
 - local dirty, deleted, and anonymous counts
 - push permission and subscription state
-- recent runtime event timeline
+- recent runtime event timeline with revealable task-level details and state diffs
 - reserved placeholders for future queued, sending, acknowledged, failed, and conflict operation states
 
 On narrow screens, the rails move into drawers so observability remains accessible without reintroducing the old centered layout as the primary model.

@@ -44,6 +44,11 @@ class _LabLeftRailState extends State<LabLeftRail> {
         category: RuntimeEventCategory.sync,
         message: 'Manual sync was requested without an authenticated session.',
         level: RuntimeEventLevel.warning,
+        payload: const RuntimeEventPayload(
+          stage: 'Manual sync blocked',
+          summary:
+              'An operator-triggered sync request was blocked because the workspace is not authenticated.',
+        ),
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -57,6 +62,11 @@ class _LabLeftRailState extends State<LabLeftRail> {
         phase: RuntimeSyncPhase.blockedAnonymousReview,
         message:
             'Anonymous local tasks are waiting for review. Keep or discard them before cloud sync.',
+        payload: const RuntimeEventPayload(
+          stage: 'Manual sync blocked',
+          summary:
+              'The requested sync pass cannot start until the operator resolves anonymous local tasks.',
+        ),
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -70,6 +80,23 @@ class _LabLeftRailState extends State<LabLeftRail> {
     runtimeDebug.addEvent(
       category: RuntimeEventCategory.sync,
       message: 'Manual sync requested from the operator rail.',
+      payload: RuntimeEventPayload(
+        stage: 'Manual sync requested',
+        summary:
+            'The operator explicitly triggered a sync pass from the left rail.',
+        metrics: [
+          RuntimeEventMetric(
+            label: 'Pending review',
+            value: agenda.hasPendingAnonymousReview ? 'Yes' : 'No',
+          ),
+          RuntimeEventMetric(
+            label: 'Selected user',
+            value: (agenda.userId == null || agenda.userId!.isEmpty)
+                ? 'None'
+                : 'Authenticated',
+          ),
+        ],
+      ),
     );
     await agenda.syncAllTasks();
 
@@ -164,6 +191,12 @@ class _LabLeftRailState extends State<LabLeftRail> {
           ? 'User logged out from the operator rail.'
           : failureMessage,
       level: loggedOut ? RuntimeEventLevel.info : RuntimeEventLevel.error,
+      payload: RuntimeEventPayload(
+        stage: loggedOut ? 'Logout completed' : 'Logout failed',
+        summary: loggedOut
+            ? 'The operator completed a logout flow from the left rail.'
+            : 'The left-rail logout flow did not complete successfully.',
+      ),
     );
 
     if (!mounted) return;
@@ -188,6 +221,11 @@ class _LabLeftRailState extends State<LabLeftRail> {
       runtimeDebug.addEvent(
         category: RuntimeEventCategory.storage,
         message: 'Anonymous tasks were adopted into the authenticated account.',
+        payload: const RuntimeEventPayload(
+          stage: 'Anonymous tasks kept',
+          summary:
+              'Local-only anonymous tasks were retained and adopted into the authenticated account.',
+        ),
       );
 
       if (!mounted) return;
@@ -242,6 +280,11 @@ class _LabLeftRailState extends State<LabLeftRail> {
         category: RuntimeEventCategory.storage,
         message: 'Anonymous local tasks were discarded from local storage.',
         level: RuntimeEventLevel.warning,
+        payload: const RuntimeEventPayload(
+          stage: 'Anonymous tasks discarded',
+          summary:
+              'Local-only anonymous tasks were explicitly removed before cloud sync could continue.',
+        ),
       );
 
       if (!mounted) return;
