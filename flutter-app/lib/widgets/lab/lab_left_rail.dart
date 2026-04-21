@@ -115,12 +115,87 @@ class _LabLeftRailState extends State<LabLeftRail> {
   Future<void> _activateScenario(FaultInjectionScenario scenario) async {
     final faultInjection = context.read<FaultInjectionProvider>();
 
+    if (scenario == FaultInjectionScenario.delayedSync) {
+      final selection = await _showDelayedSyncConfigurationDialog();
+      if (selection == null) {
+        return;
+      }
+
+      await faultInjection.activateScenario(
+        scenario,
+        delayMs: selection.delayMs,
+        delayedSyncMode: selection.mode,
+        delayedSyncTarget: selection.target,
+        delayedSyncBehavior: selection.behavior,
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Delayed sync configured.')));
+      return;
+    }
+
     await faultInjection.activateScenario(scenario);
 
     if (!mounted) return;
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text('${scenario.label} activated.')));
+  }
+
+  Future<void> _configureDelayedSync() async {
+    final faultInjection = context.read<FaultInjectionProvider>();
+    final selection = await _showDelayedSyncConfigurationDialog();
+    if (selection == null) {
+      return;
+    }
+
+    if (faultInjection.state.isDelayedSyncActive) {
+      await faultInjection.configureDelayedSync(
+        delayMs: selection.delayMs,
+        mode: selection.mode,
+        target: selection.target,
+        behavior: selection.behavior,
+      );
+    } else {
+      await faultInjection.activateScenario(
+        FaultInjectionScenario.delayedSync,
+        delayMs: selection.delayMs,
+        delayedSyncMode: selection.mode,
+        delayedSyncTarget: selection.target,
+        delayedSyncBehavior: selection.behavior,
+      );
+    }
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Delayed sync updated.')));
+  }
+
+  Future<_DelayedSyncSelection?> _showDelayedSyncConfigurationDialog() {
+    final faultState = context.read<FaultInjectionProvider>().state;
+    final initialSelection = _DelayedSyncSelection(
+      delayMs: faultState.isDelayedSyncActive
+          ? faultState.effectiveDelayMs!
+          : 5000,
+      mode: faultState.isDelayedSyncActive
+          ? faultState.effectiveDelayedSyncMode
+          : DelayedSyncMode.local,
+      target: faultState.isDelayedSyncActive
+          ? faultState.effectiveDelayedSyncTarget
+          : DelayedSyncTarget.fullPass,
+      behavior: faultState.isDelayedSyncActive
+          ? faultState.effectiveDelayedSyncBehavior
+          : DelayedSyncBehavior.persistent,
+    );
+
+    return showDialog<_DelayedSyncSelection>(
+      context: context,
+      builder: (dialogContext) =>
+          _DelayedSyncConfigurationDialog(initialSelection: initialSelection),
+    );
   }
 
   Future<void> _clearScenario() async {
@@ -592,36 +667,60 @@ class _LabLeftRailState extends State<LabLeftRail> {
                       faultState.isActive
                           ? faultState.activeSummary ??
                                 faultState.activeScenario.summary
-                          : 'Connectivity loss and delayed sync are available now. Expired auth and partial replay drop are the next planned operator scenarios.',
+                          : 'Connectivity loss is ready immediately. Delayed sync opens a setup modal with a recommended local 5 s persistent hold, while expired auth and partial replay drop remain planned.',
                       style: theme.textTheme.bodyMedium,
                     ),
                     if (faultState.activeScenario ==
                         FaultInjectionScenario.delayedSync) ...[
                       const SizedBox(height: 12),
-                      Text('Delay preset', style: theme.textTheme.titleSmall),
+                      Text(
+                        'Delayed sync setup',
+                        style: theme.textTheme.titleSmall,
+                      ),
                       const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: faultState.availableDelayPresets.map((
-                          delayMs,
-                        ) {
-                          final label = formatFaultInjectionDuration(delayMs);
-                          return ChoiceChip(
-                            label: Text(label),
-                            selected: faultState.effectiveDelayMs == delayMs,
-                            onSelected: (_) async {
-                              await faultInjection.setDelayedSyncDuration(
-                                delayMs,
-                              );
-                            },
-                          );
-                        }).toList(),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.surfaceContainer,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _line(
+                              context,
+                              'Mode',
+                              faultState.effectiveDelayedSyncMode.label,
+                            ),
+                            _line(
+                              context,
+                              'Target',
+                              faultState.effectiveDelayedSyncTarget.label,
+                            ),
+                            _line(
+                              context,
+                              'Behavior',
+                              faultState.effectiveDelayedSyncBehavior.label,
+                            ),
+                            _line(
+                              context,
+                              'Delay',
+                              faultState.delayLabel ?? '5 s',
+                            ),
+                          ],
+                        ),
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Use 5 s for most live walkthroughs. Use 10 s when you want extra narration time without making the behavior feel artificial.',
+                        'Recommended fast path: Local, Full pass, Persistent, 5 s. Reconfigure the scenario when you want transport or backend-shaped delay evidence.',
                         style: theme.textTheme.bodySmall,
+                      ),
+                      const SizedBox(height: 8),
+                      OutlinedButton.icon(
+                        onPressed: _configureDelayedSync,
+                        icon: const Icon(Icons.tune),
+                        label: const Text('Configure delayed sync'),
                       ),
                     ],
                     const SizedBox(height: 12),
@@ -798,5 +897,170 @@ class _LabLeftRailState extends State<LabLeftRail> {
       return value;
     }
     return '${value.substring(0, 6)}...${value.substring(value.length - 4)}';
+  }
+}
+
+class _DelayedSyncSelection {
+  const _DelayedSyncSelection({
+    required this.delayMs,
+    required this.mode,
+    required this.target,
+    required this.behavior,
+  });
+
+  final int delayMs;
+  final DelayedSyncMode mode;
+  final DelayedSyncTarget target;
+  final DelayedSyncBehavior behavior;
+}
+
+class _DelayedSyncConfigurationDialog extends StatefulWidget {
+  const _DelayedSyncConfigurationDialog({required this.initialSelection});
+
+  final _DelayedSyncSelection initialSelection;
+
+  @override
+  State<_DelayedSyncConfigurationDialog> createState() =>
+      _DelayedSyncConfigurationDialogState();
+}
+
+class _DelayedSyncConfigurationDialogState
+    extends State<_DelayedSyncConfigurationDialog> {
+  late int _delayMs;
+  late DelayedSyncMode _mode;
+  late DelayedSyncTarget _target;
+  late DelayedSyncBehavior _behavior;
+
+  @override
+  void initState() {
+    super.initState();
+    _delayMs = widget.initialSelection.delayMs;
+    _mode = widget.initialSelection.mode;
+    _target = widget.initialSelection.target;
+    _behavior = widget.initialSelection.behavior;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final availableTargets = delayedSyncTargetsForMode(_mode);
+    if (!availableTargets.contains(_target)) {
+      _target = availableTargets.first;
+    }
+
+    return AlertDialog(
+      title: const Text('Configure delayed sync'),
+      content: SizedBox(
+        width: 520,
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Start with the recommended local 5 s persistent hold for live demos, or switch to transport or backend-shaped seams when you want narrower evidence.',
+                style: theme.textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 16),
+              Text('Delay mode', style: theme.textTheme.titleSmall),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: DelayedSyncMode.values.map((mode) {
+                  return ChoiceChip(
+                    label: Text(mode.label),
+                    selected: _mode == mode,
+                    onSelected: (_) {
+                      setState(() {
+                        _mode = mode;
+                        _target = delayedSyncTargetsForMode(_mode).first;
+                      });
+                    },
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 8),
+              Text(_mode.summary, style: theme.textTheme.bodySmall),
+              const SizedBox(height: 16),
+              Text('Target seam', style: theme.textTheme.titleSmall),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: availableTargets.map((target) {
+                  return ChoiceChip(
+                    label: Text(target.label),
+                    selected: _target == target,
+                    onSelected: (_) {
+                      setState(() {
+                        _target = target;
+                      });
+                    },
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 16),
+              Text('Delay preset', style: theme.textTheme.titleSmall),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: delayedSyncPresetDurationsMs.map((delayMs) {
+                  return ChoiceChip(
+                    label: Text(formatFaultInjectionDuration(delayMs)),
+                    selected: _delayMs == delayMs,
+                    onSelected: (_) {
+                      setState(() {
+                        _delayMs = delayMs;
+                      });
+                    },
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 16),
+              Text('Delivery behavior', style: theme.textTheme.titleSmall),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: DelayedSyncBehavior.values.map((behavior) {
+                  return ChoiceChip(
+                    label: Text(behavior.label),
+                    selected: _behavior == behavior,
+                    onSelected: (_) {
+                      setState(() {
+                        _behavior = behavior;
+                      });
+                    },
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 8),
+              Text(_behavior.summary, style: theme.textTheme.bodySmall),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            Navigator.of(context).pop(
+              _DelayedSyncSelection(
+                delayMs: _delayMs,
+                mode: _mode,
+                target: _target,
+                behavior: _behavior,
+              ),
+            );
+          },
+          child: const Text('Apply scenario'),
+        ),
+      ],
+    );
   }
 }

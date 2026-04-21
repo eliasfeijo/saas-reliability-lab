@@ -219,8 +219,11 @@ void main() {
   );
 
   testWidgets(
-    'scenario controls activate delayed sync with live-demo presets',
+    'scenario controls open the delayed sync setup modal with recommended defaults',
     (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1200, 1600));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
       final repository = InMemoryTasksRepository([]);
       final runtimeDebug = RuntimeDebugProvider();
       addTearDown(runtimeDebug.dispose);
@@ -250,32 +253,42 @@ void main() {
       await tester.pumpAndSettle();
 
       await tester.scrollUntilVisible(find.text('Delayed sync'), 300);
-      await faultInjection.activateScenario(FaultInjectionScenario.delayedSync);
+      final delayedSyncChip = find.widgetWithText(ChoiceChip, 'Delayed sync');
+      await tester.ensureVisible(delayedSyncChip);
+      await tester.tap(delayedSyncChip);
       await tester.pumpAndSettle();
 
-      expect(
-        runtimeDebug.state.activeFaultInjectionLabel,
-        'Delayed sync (5 s)',
-      );
-      expect(find.text('Delay preset'), findsOneWidget);
+      expect(find.text('Configure delayed sync'), findsOneWidget);
+      expect(find.widgetWithText(ChoiceChip, 'Local'), findsOneWidget);
       expect(find.widgetWithText(ChoiceChip, '5 s'), findsOneWidget);
-      expect(
-        find.textContaining('Use 5 s for most live walkthroughs'),
-        findsOneWidget,
-      );
-      expect(find.textContaining('make a small task change'), findsOneWidget);
+      expect(find.text('Apply scenario'), findsOneWidget);
 
-      await tester.scrollUntilVisible(
-        find.widgetWithText(ChoiceChip, '10 s'),
-        300,
-      );
+      await tester.tap(find.widgetWithText(ChoiceChip, 'Transport'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ChoiceChip, 'Update'));
+      await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(ChoiceChip, '10 s'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ChoiceChip, 'One-shot'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Apply scenario'));
       await tester.pumpAndSettle();
 
       expect(
         runtimeDebug.state.activeFaultInjectionLabel,
         'Delayed sync (10 s)',
       );
+      expect(find.text('Delayed sync setup'), findsOneWidget);
+      expect(find.text('Transport'), findsWidgets);
+      expect(find.text('Update'), findsWidgets);
+      expect(find.text('One-shot'), findsWidgets);
+      expect(
+        find.textContaining(
+          'Recommended fast path: Local, Full pass, Persistent, 5 s.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.textContaining('transport hold at update'), findsOneWidget);
     },
   );
 

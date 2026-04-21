@@ -1,6 +1,7 @@
 import 'package:connectivity_plus_platform_interface/connectivity_plus_platform_interface.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:todo_flutter/models/fault_injection_scenario.dart';
+import 'package:todo_flutter/models/fault_injection_state.dart';
 import 'package:todo_flutter/models/runtime_debug_state.dart';
 import 'package:todo_flutter/providers/fault_injection_provider.dart';
 import 'package:todo_flutter/providers/runtime_debug_provider.dart';
@@ -63,7 +64,7 @@ void main() {
   );
 
   test(
-    'delayed sync uses a demo-friendly default delay and can be retuned live',
+    'delayed sync uses a demo-friendly default delay and can be reconfigured live',
     () async {
       final runtimeDebug = RuntimeDebugProvider();
       addTearDown(runtimeDebug.dispose);
@@ -83,17 +84,77 @@ void main() {
         runtimeDebug.state.activeFaultInjectionLabel,
         'Delayed sync (5 s)',
       );
+      expect(
+        faultInjection.state.effectiveDelayedSyncMode,
+        DelayedSyncMode.local,
+      );
+      expect(
+        faultInjection.state.effectiveDelayedSyncTarget,
+        DelayedSyncTarget.fullPass,
+      );
+      expect(
+        faultInjection.state.effectiveDelayedSyncBehavior,
+        DelayedSyncBehavior.persistent,
+      );
 
-      await faultInjection.setDelayedSyncDuration(10000);
+      await faultInjection.configureDelayedSync(
+        delayMs: 10000,
+        mode: DelayedSyncMode.transport,
+        target: DelayedSyncTarget.update,
+        behavior: DelayedSyncBehavior.oneShot,
+      );
 
       expect(faultInjection.state.effectiveDelayMs, 10000);
+      expect(
+        faultInjection.state.effectiveDelayedSyncMode,
+        DelayedSyncMode.transport,
+      );
+      expect(
+        faultInjection.state.effectiveDelayedSyncTarget,
+        DelayedSyncTarget.update,
+      );
+      expect(
+        faultInjection.state.effectiveDelayedSyncBehavior,
+        DelayedSyncBehavior.oneShot,
+      );
       expect(
         runtimeDebug.state.activeFaultInjectionLabel,
         'Delayed sync (10 s)',
       );
       expect(
         runtimeDebug.state.activeFaultInjectionInstruction,
-        contains('10 s'),
+        allOf(contains('10 s'), contains('transport hold at update')),
+      );
+    },
+  );
+
+  test(
+    'one-shot delayed sync clears itself after the configured seam is consumed',
+    () async {
+      final runtimeDebug = RuntimeDebugProvider();
+      addTearDown(runtimeDebug.dispose);
+      await Future<void>.delayed(Duration.zero);
+
+      final faultInjection = FaultInjectionProvider(runtimeDebug: runtimeDebug);
+      addTearDown(faultInjection.dispose);
+
+      await faultInjection.activateScenario(
+        FaultInjectionScenario.delayedSync,
+        delayMs: 2000,
+        delayedSyncMode: DelayedSyncMode.transport,
+        delayedSyncTarget: DelayedSyncTarget.insert,
+        delayedSyncBehavior: DelayedSyncBehavior.oneShot,
+      );
+
+      await faultInjection.consumeDelayedSyncIfNeeded(
+        appliedTarget: DelayedSyncTarget.insert,
+      );
+
+      expect(faultInjection.state.isActive, isFalse);
+      expect(runtimeDebug.state.activeFaultInjectionLabel, isNull);
+      expect(
+        runtimeDebug.state.recentEvents.first.message,
+        'Fault injection consumed: one-shot delayed sync cleared after insert.',
       );
     },
   );

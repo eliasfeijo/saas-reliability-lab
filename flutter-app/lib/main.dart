@@ -87,6 +87,8 @@ class _MyAppState extends State<MyApp> {
     );
     _faultInjectionPolicy = FaultInjectionPolicy(
       readState: () => _faultInjectionProvider.state,
+      consumeDelayedSync: (target) => _faultInjectionProvider
+          .consumeDelayedSyncIfNeeded(appliedTarget: target),
     );
     _taskSyncService = TaskSyncService(
       _tasksRepository,

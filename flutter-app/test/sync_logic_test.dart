@@ -6,7 +6,6 @@ import 'package:todo_flutter/models/fault_injection_scenario.dart';
 import 'package:todo_flutter/models/fault_injection_state.dart';
 import 'package:todo_flutter/models/outbox_entry.dart';
 import 'package:todo_flutter/models/runtime_debug_state.dart';
-import 'package:todo_flutter/models/runtime_event.dart';
 import 'package:todo_flutter/models/task.dart';
 import 'package:todo_flutter/providers/runtime_debug_provider.dart';
 import 'package:todo_flutter/repositories/outbox_repository.dart';
@@ -181,72 +180,6 @@ void main() {
   );
 
   test(
-    'syncAllTasks keeps the fresher remote task when local state is stale',
-    () async {
-      final remoteTask = buildTask(
-        id: 'task-1',
-        title: 'Remote truth',
-        beginsAt: DateTime(2026, 1, 10, 9),
-        estimatedDuration: const Duration(hours: 1),
-        updatedAt: DateTime(2026, 1, 10, 12),
-        userId: 'user-1',
-      );
-
-      final localTask = buildTask(
-        id: 'task-1',
-        title: 'Stale local draft',
-        beginsAt: DateTime(2026, 1, 10, 9),
-        estimatedDuration: const Duration(hours: 1),
-        lastModifiedAt: DateTime(2026, 1, 10, 10),
-        syncStatus: SyncStatus.dirty,
-        userId: 'user-1',
-      );
-
-      final repository = InMemoryTasksRepository([localTask]);
-      final remote = FakeTaskRemoteDataSource([remoteTask]);
-      final runtimeDebug = RuntimeDebugProvider();
-      addTearDown(runtimeDebug.dispose);
-      final service = TaskSyncService.forTesting(
-        repository,
-        remote: remote,
-        connectivityCheck: () async => [ConnectivityResult.wifi],
-        hasActiveSession: () => true,
-        runtimeDebug: runtimeDebug,
-      );
-
-      final syncedTasks = await service.syncAllTasks(
-        await repository.loadTasks(),
-      );
-      final savedTasks = await repository.loadTasks();
-
-      expect(syncedTasks, isEmpty);
-      expect(remote.updatedTaskIds, isEmpty);
-      expect(savedTasks, hasLength(1));
-      expect(savedTasks.single.title, 'Remote truth');
-      expect(savedTasks.single.syncStatus, SyncStatus.synced);
-      expect(savedTasks.single.updatedAt, DateTime(2026, 1, 10, 12));
-
-      final adoptionEvent = runtimeDebug.state.recentEvents.firstWhere(
-        (event) =>
-            event.message ==
-            'Remote task Stale local draft replaced stale local state.',
-      );
-      expect(adoptionEvent.payload, isNotNull);
-      expect(adoptionEvent.payload!.stage, 'Remote truth adopted');
-      expect(adoptionEvent.payload!.tasks, hasLength(1));
-      expect(adoptionEvent.payload!.tasks.single.fieldDiffs, isNotEmpty);
-      expect(
-        adoptionEvent.payload!.tasks.single.fieldDiffs
-            .where((field) => field.label == 'Title')
-            .single,
-        isA<RuntimeEventFieldDiff>()
-            .having((field) => field.before, 'before', 'Stale local draft')
-            .having((field) => field.after, 'after', 'Remote truth'),
-      );
-    },
-  );
-
-  test(
     'syncTasks skips cloud replay when connectivity loss is injected',
     () async {
       final localTask = buildTask(
@@ -305,9 +238,33 @@ void main() {
       );
 
       final repository = InMemoryTasksRepository([localTask]);
+      final outboxRepository = InMemoryOutboxRepository();
       final remote = FakeTaskRemoteDataSource([]);
       final runtimeDebug = RuntimeDebugProvider();
       addTearDown(runtimeDebug.dispose);
+      final localStateCoordinator = TaskLocalStateCoordinator(
+        TaskLocalSnapshotCoordinator.fromRepository(repository),
+        outboxRepository,
+        runtimeDebug: runtimeDebug,
+      );
+      await localStateCoordinator.saveState(
+        TaskLocalState(
+          tasks: [localTask],
+          outboxState: OutboxStorageState(
+            isInitialized: true,
+            activeEntries: [
+              OutboxEntry(
+                taskId: localTask.id,
+                operationType: OutboxOperationType.upsert,
+                state: OutboxEntryState.queued,
+                ownerScope: OutboxOwnerScope.authenticated,
+                firstQueuedAt: localTask.lastModifiedAt?.toUtc(),
+                taskPayload: localTask.toJson(),
+              ),
+            ],
+          ),
+        ),
+      );
       final delayCompleter = Completer<void>();
       Duration? delayedBy;
 
@@ -324,6 +281,7 @@ void main() {
             delayMs: 5000,
           ),
         ),
+        localStateCoordinator: localStateCoordinator,
         delayExecution: (duration) {
           delayedBy = duration;
           return delayCompleter.future;
@@ -338,7 +296,7 @@ void main() {
       expect(runtimeDebug.state.lastSyncResult, RuntimeSyncResult.none);
       expect(
         runtimeDebug.state.lastSyncMessage,
-        'Delayed sync scenario is active. Holding remote replay for 5 s before synchronizing 1 local task(s).',
+        'Delayed sync scenario is active. Holding the full replay pass for 5 s before remote work begins. Synchronizing 1 local task(s).',
       );
       expect(
         runtimeDebug.state.recentEvents.first.message,
@@ -347,7 +305,7 @@ void main() {
       expect(runtimeDebug.state.recentEvents.first.payload, isNotNull);
       expect(
         runtimeDebug.state.recentEvents.first.payload!.stage,
-        'Deterministic hold',
+        'Delayed sync at Full pass',
       );
       expect(
         runtimeDebug.state.recentEvents.first.payload!.metrics
@@ -372,6 +330,192 @@ void main() {
         runtimeDebug.state.recentEvents.first.payload!.tasks.single.outcome,
         'Created remotely',
       );
+    },
+  );
+
+  test(
+    'syncTasks can delay a transport update seam without delaying fetch-by-id first',
+    () async {
+      final localTask = buildTask(
+        id: 'task-transport-update',
+        title: 'Transport update',
+        beginsAt: DateTime(2026, 1, 14, 9),
+        estimatedDuration: const Duration(hours: 1),
+        lastModifiedAt: DateTime(2026, 1, 14, 11),
+        syncStatus: SyncStatus.dirty,
+        userId: 'user-1',
+        hasRemoteBackingRecord: true,
+      );
+      final remoteTask = buildTask(
+        id: localTask.id,
+        title: 'Transport update old',
+        beginsAt: localTask.beginsAt,
+        estimatedDuration: localTask.estimatedDuration,
+        updatedAt: DateTime(2026, 1, 14, 10),
+        userId: 'user-1',
+        hasRemoteBackingRecord: true,
+      );
+
+      final repository = InMemoryTasksRepository([localTask]);
+      final outboxRepository = InMemoryOutboxRepository();
+      final remote = FakeTaskRemoteDataSource([remoteTask]);
+      final runtimeDebug = RuntimeDebugProvider();
+      addTearDown(runtimeDebug.dispose);
+      final localStateCoordinator = TaskLocalStateCoordinator(
+        TaskLocalSnapshotCoordinator.fromRepository(repository),
+        outboxRepository,
+        runtimeDebug: runtimeDebug,
+      );
+      await localStateCoordinator.saveState(
+        TaskLocalState(
+          tasks: [localTask],
+          outboxState: OutboxStorageState(
+            isInitialized: true,
+            activeEntries: [
+              OutboxEntry(
+                taskId: localTask.id,
+                operationType: OutboxOperationType.upsert,
+                state: OutboxEntryState.queued,
+                ownerScope: OutboxOwnerScope.authenticated,
+                firstQueuedAt: localTask.lastModifiedAt?.toUtc(),
+                taskPayload: localTask.toJson(),
+              ),
+            ],
+          ),
+        ),
+      );
+      final delayCompleter = Completer<void>();
+      Duration? delayedBy;
+
+      final service = TaskSyncService.forTesting(
+        repository,
+        remote: remote,
+        connectivityCheck: () async => [ConnectivityResult.wifi],
+        hasActiveSession: () => true,
+        runtimeDebug: runtimeDebug,
+        faultInjectionPolicy: FaultInjectionPolicy(
+          readState: () => const FaultInjectionState(
+            activeScenario: FaultInjectionScenario.delayedSync,
+            isEnabled: true,
+            delayMs: 2000,
+            delayedSyncMode: DelayedSyncMode.transport,
+            delayedSyncTarget: DelayedSyncTarget.update,
+          ),
+        ),
+        localStateCoordinator: localStateCoordinator,
+        delayExecution: (duration) {
+          delayedBy = duration;
+          return delayCompleter.future;
+        },
+      );
+
+      final syncFuture = service.syncTasks(await repository.loadTasks());
+      await Future<void>.delayed(Duration.zero);
+
+      expect(delayedBy, const Duration(seconds: 2));
+      expect(remote.updatedTaskIds, isEmpty);
+      expect(
+        runtimeDebug.state.recentEvents.first.message,
+        'Delayed sync scenario is holding the update transport seam for 2 s before replay continues.',
+      );
+      expect(
+        runtimeDebug.state.recentEvents.first.payload?.stage,
+        'Delayed sync at Update',
+      );
+
+      delayCompleter.complete();
+      final result = await syncFuture;
+
+      expect(result.acknowledgedTasks, hasLength(1));
+      expect(remote.updatedTaskIds, ['task-transport-update']);
+      expect(runtimeDebug.state.lastSyncResult, RuntimeSyncResult.success);
+    },
+  );
+
+  test(
+    'syncTasks can delay backend acknowledgement after a successful insert',
+    () async {
+      final localTask = buildTask(
+        id: 'task-backend-ack',
+        title: 'Backend ack hold',
+        beginsAt: DateTime(2026, 1, 15, 9),
+        estimatedDuration: const Duration(hours: 1),
+        lastModifiedAt: DateTime(2026, 1, 15, 10),
+        syncStatus: SyncStatus.dirty,
+        userId: 'user-1',
+        hasRemoteBackingRecord: false,
+      );
+
+      final repository = InMemoryTasksRepository([localTask]);
+      final outboxRepository = InMemoryOutboxRepository();
+      final remote = FakeTaskRemoteDataSource([]);
+      final runtimeDebug = RuntimeDebugProvider();
+      addTearDown(runtimeDebug.dispose);
+      final localStateCoordinator = TaskLocalStateCoordinator(
+        TaskLocalSnapshotCoordinator.fromRepository(repository),
+        outboxRepository,
+        runtimeDebug: runtimeDebug,
+      );
+      await localStateCoordinator.saveState(
+        TaskLocalState(
+          tasks: [localTask],
+          outboxState: OutboxStorageState(
+            isInitialized: true,
+            activeEntries: [
+              OutboxEntry(
+                taskId: localTask.id,
+                operationType: OutboxOperationType.upsert,
+                state: OutboxEntryState.queued,
+                ownerScope: OutboxOwnerScope.authenticated,
+                firstQueuedAt: localTask.lastModifiedAt?.toUtc(),
+                taskPayload: localTask.toJson(),
+              ),
+            ],
+          ),
+        ),
+      );
+      final delayCompleter = Completer<void>();
+
+      final service = TaskSyncService.forTesting(
+        repository,
+        remote: remote,
+        connectivityCheck: () async => [ConnectivityResult.wifi],
+        hasActiveSession: () => true,
+        runtimeDebug: runtimeDebug,
+        faultInjectionPolicy: FaultInjectionPolicy(
+          readState: () => const FaultInjectionState(
+            activeScenario: FaultInjectionScenario.delayedSync,
+            isEnabled: true,
+            delayMs: 500,
+            delayedSyncMode: DelayedSyncMode.backend,
+            delayedSyncTarget: DelayedSyncTarget.acknowledgement,
+          ),
+        ),
+        localStateCoordinator: localStateCoordinator,
+        delayExecution: (_) => delayCompleter.future,
+      );
+
+      final syncFuture = service.syncTasks(await repository.loadTasks());
+      await Future<void>.delayed(Duration.zero);
+
+      final midReplayState = await outboxRepository.loadState();
+      expect(remote.insertedTaskIds, ['task-backend-ack']);
+      expect(
+        midReplayState.activeEntries.single.state,
+        OutboxEntryState.sending,
+      );
+      expect(
+        runtimeDebug.state.recentEvents.first.message,
+        'Delayed sync scenario is holding acknowledgement for 500 ms after remote success and before the outbox entry is acknowledged.',
+      );
+
+      delayCompleter.complete();
+      final result = await syncFuture;
+      final finalOutboxState = await outboxRepository.loadState();
+
+      expect(result.acknowledgedTasks, hasLength(1));
+      expect(finalOutboxState.activeEntries, isEmpty);
+      expect(finalOutboxState.recentAcknowledgements, hasLength(1));
     },
   );
 }

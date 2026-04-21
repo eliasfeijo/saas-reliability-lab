@@ -2,6 +2,7 @@ import 'package:connectivity_plus_platform_interface/connectivity_plus_platform_
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:todo_flutter/models/fault_injection_scenario.dart';
+import 'package:todo_flutter/models/fault_injection_state.dart';
 import 'package:todo_flutter/models/outbox_entry.dart';
 import 'package:todo_flutter/models/runtime_debug_state.dart';
 import 'package:todo_flutter/models/runtime_event.dart';
@@ -261,6 +262,55 @@ void main() {
     expect(find.text('Anonymous', skipOffstage: false), findsOneWidget);
   });
 
+  testWidgets('debug panel shows delayed sync configuration details', (
+    tester,
+  ) async {
+    final runtimeDebug = RuntimeDebugProvider();
+    addTearDown(runtimeDebug.dispose);
+    final faultInjection = FaultInjectionProvider(runtimeDebug: runtimeDebug);
+    addTearDown(faultInjection.dispose);
+
+    await faultInjection.activateScenario(
+      FaultInjectionScenario.delayedSync,
+      delayMs: 2000,
+      delayedSyncMode: DelayedSyncMode.transport,
+      delayedSyncTarget: DelayedSyncTarget.update,
+      delayedSyncBehavior: DelayedSyncBehavior.oneShot,
+    );
+
+    final repository = InMemoryTasksRepository([]);
+    final agenda = buildAgendaProviderForTesting(
+      repository,
+      TaskSyncService.forTesting(
+        repository,
+        remote: FakeTaskRemoteDataSource([]),
+        connectivityCheck: () async => [ConnectivityResult.wifi],
+        hasActiveSession: () => true,
+        runtimeDebug: runtimeDebug,
+      ),
+      runtimeDebug: runtimeDebug,
+    );
+    addTearDown(agenda.dispose);
+
+    await tester.pumpWidget(
+      RailHarness(
+        agenda: agenda,
+        runtimeDebug: runtimeDebug,
+        faultInjection: faultInjection,
+        child: const SyncDebugPanel(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(find.text('Fault Injection'), 300);
+
+    expect(find.text('Mode'), findsOneWidget);
+    expect(find.text('Transport'), findsWidgets);
+    expect(find.text('Target'), findsOneWidget);
+    expect(find.text('Update'), findsWidgets);
+    expect(find.text('Behavior'), findsOneWidget);
+    expect(find.text('One-shot'), findsWidgets);
+  });
   testWidgets(
     'retained acknowledgements can be cleared from runtime diagnostics',
     (tester) async {

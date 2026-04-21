@@ -18,20 +18,41 @@ class FaultInjectionProvider extends ChangeNotifier {
   List<FaultInjectionScenario> get availableScenarios =>
       implementedFaultInjectionScenarios;
 
-  Future<void> activateScenario(FaultInjectionScenario scenario) async {
+  Future<void> activateScenario(
+    FaultInjectionScenario scenario, {
+    int? delayMs,
+    DelayedSyncMode delayedSyncMode = DelayedSyncMode.local,
+    DelayedSyncTarget? delayedSyncTarget,
+    DelayedSyncBehavior delayedSyncBehavior = DelayedSyncBehavior.persistent,
+  }) async {
     if (!scenario.isImplemented) {
       return;
     }
 
-    if (_state.isActive && _state.activeScenario == scenario) {
+    final nextTarget =
+        delayedSyncTarget ?? delayedSyncTargetsForMode(delayedSyncMode).first;
+    final nextState = FaultInjectionState(
+      activeScenario: scenario,
+      isEnabled: true,
+      delayMs: scenario == FaultInjectionScenario.delayedSync
+          ? delayMs ?? 5000
+          : null,
+      delayedSyncMode: scenario == FaultInjectionScenario.delayedSync
+          ? delayedSyncMode
+          : DelayedSyncMode.local,
+      delayedSyncTarget: scenario == FaultInjectionScenario.delayedSync
+          ? nextTarget
+          : DelayedSyncTarget.fullPass,
+      delayedSyncBehavior: scenario == FaultInjectionScenario.delayedSync
+          ? delayedSyncBehavior
+          : DelayedSyncBehavior.persistent,
+    );
+
+    if (_state == nextState) {
       return;
     }
 
-    _state = FaultInjectionState(
-      activeScenario: scenario,
-      isEnabled: true,
-      delayMs: scenario == FaultInjectionScenario.delayedSync ? 5000 : null,
-    );
+    _state = nextState;
     _publishRuntimeState();
 
     if (scenario == FaultInjectionScenario.connectivityLoss) {
@@ -57,6 +78,21 @@ class FaultInjectionProvider extends ChangeNotifier {
               label: 'Injected delay',
               value: _state.delayLabel!,
             ),
+          if (_state.isDelayedSyncActive)
+            RuntimeEventMetric(
+              label: 'Mode',
+              value: _state.effectiveDelayedSyncMode.label,
+            ),
+          if (_state.isDelayedSyncActive)
+            RuntimeEventMetric(
+              label: 'Target',
+              value: _state.effectiveDelayedSyncTarget.label,
+            ),
+          if (_state.isDelayedSyncActive)
+            RuntimeEventMetric(
+              label: 'Behavior',
+              value: _state.effectiveDelayedSyncBehavior.label,
+            ),
         ],
         notes: [
           if (_state.activeSummary != null) _state.activeSummary!,
@@ -67,19 +103,35 @@ class FaultInjectionProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> setDelayedSyncDuration(int delayMs) async {
-    if (!_state.isActive ||
-        _state.activeScenario != FaultInjectionScenario.delayedSync ||
-        _state.effectiveDelayMs == delayMs) {
+  Future<void> configureDelayedSync({
+    required int delayMs,
+    required DelayedSyncMode mode,
+    required DelayedSyncTarget target,
+    required DelayedSyncBehavior behavior,
+  }) async {
+    if (!_state.isDelayedSyncActive) {
       return;
     }
 
-    _state = _state.copyWith(delayMs: delayMs);
+    final normalizedTarget = delayedSyncTargetsForMode(mode).contains(target)
+        ? target
+        : delayedSyncTargetsForMode(mode).first;
+    final nextState = _state.copyWith(
+      delayMs: delayMs,
+      delayedSyncMode: mode,
+      delayedSyncTarget: normalizedTarget,
+      delayedSyncBehavior: behavior,
+    );
+    if (_state == nextState) {
+      return;
+    }
+
+    _state = nextState;
     _publishRuntimeState();
     _runtimeDebug?.addEvent(
       category: RuntimeEventCategory.sync,
       message:
-          'Fault injection updated: delayed sync now holds the sync pass for ${_state.delayLabel}.',
+          'Fault injection updated: delayed sync now holds ${_state.effectiveDelayedSyncTarget.label.toLowerCase()} in ${_state.effectiveDelayedSyncMode.label.toLowerCase()} mode for ${_state.delayLabel}.',
       payload: RuntimeEventPayload(
         stage: 'Fault injection updated',
         summary:
@@ -91,6 +143,67 @@ class FaultInjectionProvider extends ChangeNotifier {
               label: 'Injected delay',
               value: _state.delayLabel!,
             ),
+          RuntimeEventMetric(
+            label: 'Mode',
+            value: _state.effectiveDelayedSyncMode.label,
+          ),
+          RuntimeEventMetric(
+            label: 'Target',
+            value: _state.effectiveDelayedSyncTarget.label,
+          ),
+          RuntimeEventMetric(
+            label: 'Behavior',
+            value: _state.effectiveDelayedSyncBehavior.label,
+          ),
+        ],
+      ),
+    );
+    notifyListeners();
+  }
+
+  Future<void> setDelayedSyncDuration(int delayMs) async {
+    if (!_state.isDelayedSyncActive) {
+      return;
+    }
+
+    await configureDelayedSync(
+      delayMs: delayMs,
+      mode: _state.effectiveDelayedSyncMode,
+      target: _state.effectiveDelayedSyncTarget,
+      behavior: _state.effectiveDelayedSyncBehavior,
+    );
+  }
+
+  Future<void> consumeDelayedSyncIfNeeded({
+    required DelayedSyncTarget appliedTarget,
+  }) async {
+    if (!_state.isDelayedSyncActive ||
+        _state.effectiveDelayedSyncBehavior != DelayedSyncBehavior.oneShot ||
+        _state.effectiveDelayedSyncTarget != appliedTarget) {
+      return;
+    }
+
+    final consumedState = _state;
+    _state = const FaultInjectionState();
+    _runtimeDebug?.clearActiveFaultInjection();
+    _runtimeDebug?.addEvent(
+      category: RuntimeEventCategory.sync,
+      message:
+          'Fault injection consumed: one-shot delayed sync cleared after ${appliedTarget.label.toLowerCase()}.',
+      payload: RuntimeEventPayload(
+        stage: 'Fault injection consumed',
+        summary:
+            'The one-shot delayed-sync scenario applied once and then cleared itself automatically.',
+        metrics: [
+          RuntimeEventMetric(
+            label: 'Scenario',
+            value: consumedState.activeLabel,
+          ),
+          RuntimeEventMetric(
+            label: 'Mode',
+            value: consumedState.effectiveDelayedSyncMode.label,
+          ),
+          RuntimeEventMetric(label: 'Target', value: appliedTarget.label),
         ],
       ),
     );

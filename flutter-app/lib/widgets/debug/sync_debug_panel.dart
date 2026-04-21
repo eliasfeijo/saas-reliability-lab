@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:todo_flutter/models/fault_injection_scenario.dart';
+import 'package:todo_flutter/models/fault_injection_state.dart';
 import 'package:todo_flutter/models/outbox_entry.dart';
 import 'package:todo_flutter/models/runtime_debug_state.dart';
 import 'package:todo_flutter/models/runtime_event.dart';
@@ -219,6 +220,33 @@ class SyncDebugPanel extends StatelessWidget {
                           context,
                           label: 'Injected delay',
                           value: faultInjection.state.delayLabel!,
+                        ),
+                      if (faultInjection.state.isDelayedSyncActive)
+                        _statusRow(
+                          context,
+                          label: 'Mode',
+                          value: faultInjection
+                              .state
+                              .effectiveDelayedSyncMode
+                              .label,
+                        ),
+                      if (faultInjection.state.isDelayedSyncActive)
+                        _statusRow(
+                          context,
+                          label: 'Target',
+                          value: faultInjection
+                              .state
+                              .effectiveDelayedSyncTarget
+                              .label,
+                        ),
+                      if (faultInjection.state.isDelayedSyncActive)
+                        _statusRow(
+                          context,
+                          label: 'Behavior',
+                          value: faultInjection
+                              .state
+                              .effectiveDelayedSyncBehavior
+                              .label,
                         ),
                       const SizedBox(height: 8),
                       Text('How to operate', style: theme.textTheme.titleSmall),
