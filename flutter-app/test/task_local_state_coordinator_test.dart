@@ -139,6 +139,49 @@ void main() {
   );
 
   test(
+    'local state coordinator prunes orphaned deleted account tombstones with no active replay entry on load',
+    () async {
+      final runtimeDebug = RuntimeDebugProvider();
+      addTearDown(runtimeDebug.dispose);
+      final deletedAccountTask = buildTask(
+        id: 'task-orphaned-deleted',
+        title: 'Poisoned deleted tombstone',
+        beginsAt: DateTime(2026, 4, 11, 11),
+        estimatedDuration: const Duration(hours: 1),
+        syncStatus: SyncStatus.deleted,
+        userId: 'user-1',
+        hasRemoteBackingRecord: true,
+      );
+
+      final repository = InMemoryTasksRepository([deletedAccountTask]);
+      final outboxRepository = InMemoryOutboxRepository();
+      await outboxRepository.saveState(
+        const OutboxStorageState(isInitialized: true),
+      );
+      final coordinator = TaskLocalStateCoordinator(
+        TaskLocalSnapshotCoordinator.fromRepository(repository),
+        outboxRepository,
+        runtimeDebug: runtimeDebug,
+      );
+
+      final state = await coordinator.loadState();
+      final savedTasks = await repository.loadTasks();
+
+      expect(state.tasks, isEmpty);
+      expect(savedTasks, isEmpty);
+      expect(
+        runtimeDebug.state.recentEvents.any(
+          (event) =>
+              event.category == RuntimeEventCategory.storage &&
+              event.payload?.stage == 'Local snapshot repaired',
+        ),
+        isTrue,
+      );
+      expect(runtimeDebug.state.deletedTaskCount, 0);
+    },
+  );
+
+  test(
     'local state coordinator clears outbox storage when local state is cleared',
     () async {
       final repository = InMemoryTasksRepository([

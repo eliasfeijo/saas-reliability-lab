@@ -60,6 +60,16 @@ class TaskSyncRunResult {
   final bool hadRecoverableErrors;
 }
 
+class _MergedSyncPersistenceResult {
+  const _MergedSyncPersistenceResult({
+    required this.state,
+    required this.preservedConcurrentEntries,
+  });
+
+  final TaskLocalState state;
+  final List<OutboxEntry> preservedConcurrentEntries;
+}
+
 abstract class TaskSyncGateway {
   Future<TaskSyncRunResult> syncTasks(List<TaskModel> tasks);
 
@@ -273,7 +283,35 @@ class TaskSyncService implements TaskSyncGateway {
       ),
     );
     await _applyInjectedPreSyncDelay(effectiveTasks);
-    return _syncTasksWithOutbox(localState);
+
+    final refreshedLocalState = await _localStateCoordinator.loadState();
+    if (_didReplayInputChangeDuringHold(localState, refreshedLocalState)) {
+      _runtimeDebug?.updateTaskCounts(refreshedLocalState.tasks);
+      _runtimeDebug?.updateOutboxState(refreshedLocalState.outboxState);
+      _runtimeDebug?.addEvent(
+        category: RuntimeEventCategory.sync,
+        message:
+            'Local replay input changed during the delayed hold and was refreshed before remote work began.',
+        payload: _buildSyncPayload(
+          stage: 'Replay input refreshed',
+          summary:
+              'The delayed sync hold ended with newer local state than the pass started with, so the runtime reloaded the latest local snapshot before replay began.',
+          tasks: refreshedLocalState.tasks,
+          extraMetrics: [
+            RuntimeEventMetric(
+              label: 'Active entries',
+              value: refreshedLocalState.outboxState.activeEntries.length
+                  .toString(),
+            ),
+          ],
+          notes: const [
+            'This refresh happens before remote replay starts, so the newer local mutations are included in the same pass instead of being dropped.',
+          ],
+        ),
+      );
+    }
+
+    return _syncTasksWithOutbox(refreshedLocalState);
   }
 
   Future<TaskSyncRunResult> _syncTasksWithOutbox(
@@ -284,9 +322,39 @@ class TaskSyncService implements TaskSyncGateway {
           .map((task) => task.copyWith())
           .toList();
       var outboxState = _resetBlockedEntriesForReplay(localState.outboxState);
+      final managedEntryIds = outboxState.activeEntries
+          .map((entry) => entry.id)
+          .toSet();
+      final managedTaskIds = outboxState.activeEntries
+          .map((entry) => entry.taskId)
+          .toSet();
+      final reportedConcurrentEntryIds = <String>{};
       final acknowledgedTasks = <TaskModel>[];
       final acknowledgedTaskDetails = <RuntimeEventTaskDetail>[];
       var hadRecoverableErrors = false;
+
+      Future<TaskLocalState> persistCurrentSyncState({
+        List<OutboxEntry> removedEntries = const <OutboxEntry>[],
+      }) async {
+        final persistenceResult = await _persistMergedSyncState(
+          syncState: TaskLocalState(
+            tasks: workingTasks,
+            outboxState: outboxState,
+          ),
+          managedEntryIds: managedEntryIds,
+          managedTaskIds: managedTaskIds,
+          removedEntries: removedEntries,
+        );
+        _reportPreservedConcurrentEntries(
+          persistenceResult.preservedConcurrentEntries,
+          reportedConcurrentEntryIds,
+          managedEntryIds,
+          persistenceResult.state.tasks,
+        );
+        return persistenceResult.state;
+      }
+
+      await persistCurrentSyncState();
 
       final orderedEntries = [...outboxState.activeEntries]
         ..sort((left, right) {
@@ -308,9 +376,7 @@ class TaskSyncService implements TaskSyncGateway {
           lastError: null,
         );
         outboxState = _replaceActiveEntry(outboxState, sendingEntry);
-        await _persistLocalState(
-          TaskLocalState(tasks: workingTasks, outboxState: outboxState),
-        );
+        await persistCurrentSyncState();
 
         try {
           if (entry.operationType == OutboxOperationType.delete) {
@@ -337,6 +403,7 @@ class TaskSyncService implements TaskSyncGateway {
                     'A locally deleted task was confirmed and removed from the cloud record.',
               ),
             );
+            await persistCurrentSyncState(removedEntries: [sendingEntry]);
             continue;
           }
 
@@ -378,6 +445,7 @@ class TaskSyncService implements TaskSyncGateway {
               ),
             );
             outboxState = _acknowledgeEntry(outboxState, sendingEntry);
+            await persistCurrentSyncState(removedEntries: [sendingEntry]);
             continue;
           }
 
@@ -411,6 +479,7 @@ class TaskSyncService implements TaskSyncGateway {
               ),
             );
             outboxState = _acknowledgeEntry(outboxState, sendingEntry);
+            await persistCurrentSyncState(removedEntries: [sendingEntry]);
             continue;
           }
 
@@ -477,9 +546,7 @@ class TaskSyncService implements TaskSyncGateway {
           );
         }
 
-        await _persistLocalState(
-          TaskLocalState(tasks: workingTasks, outboxState: outboxState),
-        );
+        await persistCurrentSyncState();
       }
 
       await _applyInjectedDelay(
@@ -487,26 +554,46 @@ class TaskSyncService implements TaskSyncGateway {
         tasks: workingTasks,
       );
       final remoteTasks = await _remote.fetchAllTasks();
+      final latestLocalState = await _localStateCoordinator.loadState();
+      final localTasksForFinalMerge = _mergeTasksForPersistence(
+        latestTasks: latestLocalState.tasks,
+        syncTasks: workingTasks,
+        managedTaskIds: managedTaskIds,
+        preservedConcurrentEntries: const <OutboxEntry>[],
+      );
       final mergedTasks = _mergeRemoteTasksWithLocalState(
-        workingTasks,
+        localTasksForFinalMerge,
         remoteTasks,
       );
-      await _persistLocalState(
-        TaskLocalState(tasks: mergedTasks, outboxState: outboxState),
+      final finalState = await _persistMergedSyncState(
+        syncState: TaskLocalState(tasks: mergedTasks, outboxState: outboxState),
+        managedEntryIds: managedEntryIds,
+        managedTaskIds: managedTaskIds,
       );
-      _runtimeDebug?.updateTaskCounts(mergedTasks);
+      _reportPreservedConcurrentEntries(
+        finalState.preservedConcurrentEntries,
+        reportedConcurrentEntryIds,
+        managedEntryIds,
+        finalState.state.tasks,
+      );
+      _runtimeDebug?.updateTaskCounts(finalState.state.tasks);
 
       final summary =
           'Sync completed. ${acknowledgedTasks.length} task(s) acknowledged.';
-      if (hadRecoverableErrors ||
-          outboxState.activeEntries.any(_isBlockingEntry)) {
+      final blockingEntries = finalState.state.outboxState.activeEntries
+          .where(_isBlockingEntry)
+          .length;
+      final queuedFollowUpEntries = finalState.state.outboxState.activeEntries
+          .where((entry) => entry.state == OutboxEntryState.queued)
+          .length;
+      if (hadRecoverableErrors || blockingEntries > 0) {
         _runtimeDebug?.markSyncPartial(
           '$summary Some operations need review.',
           payload: _buildSyncPayload(
             stage: 'Replay completed with review needed',
             summary:
                 'The outbox replay pass finished, but one or more operations still need operator review.',
-            tasks: mergedTasks,
+            tasks: finalState.state.tasks,
             highlightedTasks: acknowledgedTaskDetails,
             extraMetrics: [
               RuntimeEventMetric(
@@ -515,26 +602,40 @@ class TaskSyncService implements TaskSyncGateway {
               ),
               RuntimeEventMetric(
                 label: 'Remaining entries',
-                value: outboxState.activeEntries.length.toString(),
+                value: finalState.state.outboxState.activeEntries.length
+                    .toString(),
               ),
             ],
           ),
         );
       } else {
+        final successMessage = queuedFollowUpEntries > 0
+            ? '$summary $queuedFollowUpEntries newer local change(s) remain queued for a follow-up sync.'
+            : summary;
         _runtimeDebug?.markSyncSuccess(
-          summary,
+          successMessage,
           payload: _buildSyncPayload(
             stage: 'Replay completed',
             summary:
                 'All replayable outbox entries in this pass were reconciled without warning-level issues.',
-            tasks: mergedTasks,
+            tasks: finalState.state.tasks,
             highlightedTasks: acknowledgedTaskDetails,
             extraMetrics: [
               RuntimeEventMetric(
                 label: 'Acknowledged',
                 value: acknowledgedTasks.length.toString(),
               ),
+              if (queuedFollowUpEntries > 0)
+                RuntimeEventMetric(
+                  label: 'Queued follow-up',
+                  value: queuedFollowUpEntries.toString(),
+                ),
             ],
+            notes: queuedFollowUpEntries > 0
+                ? const [
+                    'Newer local mutations landed while this replay pass was already running. They were preserved locally and need another sync pass.',
+                  ]
+                : const [],
           ),
         );
       }
@@ -616,6 +717,259 @@ class TaskSyncService implements TaskSyncGateway {
 
   Future<void> _persistLocalState(TaskLocalState state) async {
     await _localStateCoordinator.saveState(state);
+  }
+
+  bool _didReplayInputChangeDuringHold(
+    TaskLocalState beforeDelay,
+    TaskLocalState afterDelay,
+  ) {
+    if (beforeDelay.tasks.length != afterDelay.tasks.length ||
+        beforeDelay.outboxState.activeEntries.length !=
+            afterDelay.outboxState.activeEntries.length) {
+      return true;
+    }
+
+    final beforeTaskSignatures = {
+      for (final task in beforeDelay.tasks)
+        task.id:
+            '${task.syncStatus.name}:${task.lastModifiedAt?.toUtc().toIso8601String() ?? ''}:${task.userId ?? ''}:${task.hasRemoteBackingRecord}',
+    };
+    final afterTaskSignatures = {
+      for (final task in afterDelay.tasks)
+        task.id:
+            '${task.syncStatus.name}:${task.lastModifiedAt?.toUtc().toIso8601String() ?? ''}:${task.userId ?? ''}:${task.hasRemoteBackingRecord}',
+    };
+    if (!mapEquals(beforeTaskSignatures, afterTaskSignatures)) {
+      return true;
+    }
+
+    final beforeEntrySignatures = {
+      for (final entry in beforeDelay.outboxState.activeEntries)
+        entry.id:
+            '${entry.state.name}:${entry.updatedAt.toUtc().toIso8601String()}:${entry.taskId}',
+    };
+    final afterEntrySignatures = {
+      for (final entry in afterDelay.outboxState.activeEntries)
+        entry.id:
+            '${entry.state.name}:${entry.updatedAt.toUtc().toIso8601String()}:${entry.taskId}',
+    };
+    return !mapEquals(beforeEntrySignatures, afterEntrySignatures);
+  }
+
+  Future<_MergedSyncPersistenceResult> _persistMergedSyncState({
+    required TaskLocalState syncState,
+    required Set<String> managedEntryIds,
+    required Set<String> managedTaskIds,
+    List<OutboxEntry> removedEntries = const <OutboxEntry>[],
+  }) async {
+    final latestState = await _localStateCoordinator.loadState();
+    final latestEntriesById = {
+      for (final entry in latestState.outboxState.activeEntries)
+        entry.id: entry,
+    };
+    final syncEntriesById = {
+      for (final entry in syncState.outboxState.activeEntries)
+        if (managedEntryIds.contains(entry.id)) entry.id: entry,
+    };
+    final removedEntriesById = {
+      for (final entry in removedEntries) entry.id: entry,
+    };
+    final preservedConcurrentEntries = <OutboxEntry>[];
+    final mergedActiveEntries = <OutboxEntry>[];
+
+    for (final latestEntry in latestState.outboxState.activeEntries) {
+      if (managedEntryIds.contains(latestEntry.id)) {
+        continue;
+      }
+      mergedActiveEntries.add(latestEntry);
+      preservedConcurrentEntries.add(latestEntry);
+    }
+
+    for (final entryId in managedEntryIds) {
+      final syncEntry = syncEntriesById[entryId];
+      final latestEntry = latestEntriesById[entryId];
+      final removedEntry = removedEntriesById[entryId];
+
+      if (syncEntry == null) {
+        if (latestEntry != null &&
+            removedEntry != null &&
+            _wasOutboxEntryMutatedAfter(latestEntry, removedEntry)) {
+          mergedActiveEntries.add(latestEntry);
+          preservedConcurrentEntries.add(latestEntry);
+        }
+        continue;
+      }
+
+      if (latestEntry != null &&
+          _shouldPreserveLatestManagedEntry(latestEntry, syncEntry)) {
+        mergedActiveEntries.add(latestEntry);
+        preservedConcurrentEntries.add(latestEntry);
+        continue;
+      }
+
+      mergedActiveEntries.add(syncEntry);
+    }
+
+    mergedActiveEntries.sort((left, right) {
+      final leftTime = left.firstQueuedAt ?? left.createdAt;
+      final rightTime = right.firstQueuedAt ?? right.createdAt;
+      return leftTime.compareTo(rightTime);
+    });
+
+    final mergedRecentAcknowledgements = [
+      ...syncState.outboxState.recentAcknowledgements,
+      ...latestState.outboxState.recentAcknowledgements.where(
+        (candidate) => !syncState.outboxState.recentAcknowledgements.any(
+          (existing) => existing.id == candidate.id,
+        ),
+      ),
+    ].take(10).toList(growable: false);
+
+    final mergedTasks = _mergeTasksForPersistence(
+      latestTasks: latestState.tasks,
+      syncTasks: syncState.tasks,
+      managedTaskIds: managedTaskIds,
+      preservedConcurrentEntries: preservedConcurrentEntries,
+    );
+
+    final mergedState = TaskLocalState(
+      tasks: mergedTasks,
+      outboxState: latestState.outboxState.copyWith(
+        isInitialized: true,
+        activeEntries: mergedActiveEntries,
+        recentAcknowledgements: mergedRecentAcknowledgements,
+      ),
+    );
+    await _persistLocalState(mergedState);
+    _runtimeDebug?.updateTaskCounts(mergedState.tasks);
+
+    return _MergedSyncPersistenceResult(
+      state: mergedState,
+      preservedConcurrentEntries: preservedConcurrentEntries,
+    );
+  }
+
+  List<TaskModel> _mergeTasksForPersistence({
+    required List<TaskModel> latestTasks,
+    required List<TaskModel> syncTasks,
+    required Set<String> managedTaskIds,
+    required List<OutboxEntry> preservedConcurrentEntries,
+  }) {
+    final latestTasksById = {for (final task in latestTasks) task.id: task};
+    final syncTasksById = {for (final task in syncTasks) task.id: task};
+    final preservedEntriesByTaskId = {
+      for (final entry in preservedConcurrentEntries) entry.taskId: entry,
+    };
+    final mergedTasks = <String, TaskModel>{};
+
+    for (final task in latestTasks) {
+      if (!managedTaskIds.contains(task.id) ||
+          preservedEntriesByTaskId.containsKey(task.id)) {
+        mergedTasks[task.id] = task;
+      }
+    }
+
+    for (final taskId in managedTaskIds) {
+      if (preservedEntriesByTaskId.containsKey(taskId)) {
+        final latestTask = latestTasksById[taskId];
+        if (latestTask != null) {
+          mergedTasks[taskId] = latestTask;
+          continue;
+        }
+
+        final preservedEntry = preservedEntriesByTaskId[taskId]!;
+        if (preservedEntry.operationType != OutboxOperationType.delete) {
+          mergedTasks[taskId] = TaskModel.fromJson(preservedEntry.taskPayload);
+        }
+        continue;
+      }
+
+      final syncTask = syncTasksById[taskId];
+      if (syncTask != null) {
+        mergedTasks[taskId] = syncTask;
+      }
+    }
+
+    return mergedTasks.values.toList(growable: false)
+      ..sort((left, right) => left.beginsAt.compareTo(right.beginsAt));
+  }
+
+  bool _shouldPreserveLatestManagedEntry(
+    OutboxEntry latestEntry,
+    OutboxEntry syncEntry,
+  ) {
+    return _wasOutboxEntryMutatedAfter(latestEntry, syncEntry);
+  }
+
+  bool _wasOutboxEntryMutatedAfter(
+    OutboxEntry latestEntry,
+    OutboxEntry previousEntry,
+  ) {
+    final latestUpdatedAt = latestEntry.updatedAt.toUtc();
+    final previousUpdatedAt = previousEntry.updatedAt.toUtc();
+    if (latestUpdatedAt.isAfter(previousUpdatedAt)) {
+      return true;
+    }
+
+    if (!latestUpdatedAt.isAtSameMomentAs(previousUpdatedAt)) {
+      return false;
+    }
+
+    return !mapEquals(latestEntry.taskPayload, previousEntry.taskPayload);
+  }
+
+  void _reportPreservedConcurrentEntries(
+    List<OutboxEntry> preservedConcurrentEntries,
+    Set<String> reportedConcurrentEntryIds,
+    Set<String> managedEntryIds,
+    List<TaskModel> tasks,
+  ) {
+    final newConcurrentEntries = preservedConcurrentEntries
+        .where((entry) => reportedConcurrentEntryIds.add(entry.id))
+        .toList(growable: false);
+    if (newConcurrentEntries.isEmpty) {
+      return;
+    }
+
+    final preservedInFlightEntries = newConcurrentEntries
+        .where((entry) => managedEntryIds.contains(entry.id))
+        .length;
+    _runtimeDebug?.addEvent(
+      category: RuntimeEventCategory.sync,
+      message:
+          'Newer local mutation(s) were preserved while replay was already in progress.',
+      level: RuntimeEventLevel.warning,
+      payload: _buildSyncPayload(
+        stage: 'Concurrent local mutations preserved',
+        summary:
+            'The current replay pass did not fold newer local mutations into work that was already in flight. Those newer intents were kept locally and remain queued for a follow-up sync instead of being discarded silently.',
+        tasks: tasks,
+        highlightedTasks: newConcurrentEntries
+            .map(
+              (entry) => RuntimeEventTaskDetail(
+                title: _taskTitleForEntry(entry),
+                taskId: entry.taskId,
+                syncStatus: entry.state.name,
+                outcome: 'Queued for follow-up replay',
+                description: managedEntryIds.contains(entry.id)
+                    ? 'A newer local mutation landed for a task that already had an older replay attempt in flight, so the newer intent was preserved locally.'
+                    : 'A new local mutation was staged while the current replay pass was already running, so it was left queued for the next pass.',
+              ),
+            )
+            .toList(growable: false),
+        extraMetrics: [
+          RuntimeEventMetric(
+            label: 'Preserved entries',
+            value: newConcurrentEntries.length.toString(),
+          ),
+          RuntimeEventMetric(
+            label: 'In-flight replacements',
+            value: preservedInFlightEntries.toString(),
+          ),
+        ],
+        notes: const ['Run Sync now again to replay the preserved work.'],
+      ),
+    );
   }
 
   OutboxStorageState _updateEntriesForBlockedNoSession(

@@ -334,6 +334,235 @@ void main() {
   );
 
   test(
+    'syncTasks refreshes local replay input after a full-pass delay so newer mutations are not discarded',
+    () async {
+      final initialTask = buildTask(
+        id: 'task-delayed-initial',
+        title: 'Initial queued task',
+        beginsAt: DateTime(2026, 1, 16, 9),
+        estimatedDuration: const Duration(hours: 1),
+        lastModifiedAt: DateTime(2026, 1, 16, 10),
+        syncStatus: SyncStatus.dirty,
+        userId: 'user-1',
+        hasRemoteBackingRecord: false,
+      );
+      final followUpTask = buildTask(
+        id: 'task-delayed-follow-up',
+        title: 'Added during hold',
+        beginsAt: DateTime(2026, 1, 16, 11),
+        estimatedDuration: const Duration(hours: 1),
+        lastModifiedAt: DateTime(2026, 1, 16, 10, 30),
+        syncStatus: SyncStatus.dirty,
+        userId: 'user-1',
+        hasRemoteBackingRecord: false,
+      );
+
+      final repository = InMemoryTasksRepository([initialTask]);
+      final outboxRepository = InMemoryOutboxRepository();
+      final remote = FakeTaskRemoteDataSource([]);
+      final runtimeDebug = RuntimeDebugProvider();
+      addTearDown(runtimeDebug.dispose);
+      final localStateCoordinator = TaskLocalStateCoordinator(
+        TaskLocalSnapshotCoordinator.fromRepository(repository),
+        outboxRepository,
+        runtimeDebug: runtimeDebug,
+      );
+      await localStateCoordinator.saveState(
+        TaskLocalState(
+          tasks: [initialTask],
+          outboxState: OutboxStorageState(
+            isInitialized: true,
+            activeEntries: [
+              OutboxEntry(
+                taskId: initialTask.id,
+                operationType: OutboxOperationType.upsert,
+                state: OutboxEntryState.queued,
+                ownerScope: OutboxOwnerScope.authenticated,
+                firstQueuedAt: initialTask.lastModifiedAt?.toUtc(),
+                taskPayload: initialTask.toJson(),
+              ),
+            ],
+          ),
+        ),
+      );
+      final delayCompleter = Completer<void>();
+
+      final service = TaskSyncService.forTesting(
+        repository,
+        remote: remote,
+        connectivityCheck: () async => [ConnectivityResult.wifi],
+        hasActiveSession: () => true,
+        runtimeDebug: runtimeDebug,
+        faultInjectionPolicy: FaultInjectionPolicy(
+          readState: () => const FaultInjectionState(
+            activeScenario: FaultInjectionScenario.delayedSync,
+            isEnabled: true,
+            delayMs: 5000,
+          ),
+        ),
+        localStateCoordinator: localStateCoordinator,
+        delayExecution: (_) => delayCompleter.future,
+      );
+
+      final syncFuture = service.syncTasks(await repository.loadTasks());
+      await Future<void>.delayed(Duration.zero);
+
+      await localStateCoordinator.saveTaskSnapshot(
+        [initialTask, followUpTask],
+        changedTaskIds: {followUpTask.id},
+      );
+
+      delayCompleter.complete();
+      final result = await syncFuture;
+      final savedTasks = await repository.loadTasks();
+
+      expect(result.acknowledgedTasks, hasLength(2));
+      expect(
+        remote.insertedTaskIds,
+        containsAll(['task-delayed-initial', 'task-delayed-follow-up']),
+      );
+      expect(remote.insertedTaskIds, hasLength(2));
+      expect(savedTasks, hasLength(2));
+      expect(
+        savedTasks.every((task) => task.syncStatus == SyncStatus.synced),
+        isTrue,
+      );
+      expect(
+        runtimeDebug.state.recentEvents.any(
+          (event) =>
+              event.payload?.stage == 'Replay input refreshed' &&
+              event.message.contains('refreshed before remote work began'),
+        ),
+        isTrue,
+      );
+    },
+  );
+
+  test(
+    'syncTasks preserves newer local mutations staged during acknowledgement delay and leaves follow-up replay evidence',
+    () async {
+      final initialTask = buildTask(
+        id: 'task-ack-initial',
+        title: 'Initial in-flight task',
+        beginsAt: DateTime(2026, 1, 17, 9),
+        estimatedDuration: const Duration(hours: 1),
+        lastModifiedAt: DateTime(2026, 1, 17, 10),
+        syncStatus: SyncStatus.dirty,
+        userId: 'user-1',
+        hasRemoteBackingRecord: false,
+      );
+      final followUpTask = buildTask(
+        id: 'task-ack-follow-up',
+        title: 'Created mid-replay',
+        beginsAt: DateTime(2026, 1, 17, 11),
+        estimatedDuration: const Duration(hours: 1),
+        lastModifiedAt: DateTime(2026, 1, 17, 10, 15),
+        syncStatus: SyncStatus.dirty,
+        userId: 'user-1',
+        hasRemoteBackingRecord: false,
+      );
+
+      final repository = InMemoryTasksRepository([initialTask]);
+      final outboxRepository = InMemoryOutboxRepository();
+      final remote = FakeTaskRemoteDataSource([]);
+      final runtimeDebug = RuntimeDebugProvider();
+      addTearDown(runtimeDebug.dispose);
+      final localStateCoordinator = TaskLocalStateCoordinator(
+        TaskLocalSnapshotCoordinator.fromRepository(repository),
+        outboxRepository,
+        runtimeDebug: runtimeDebug,
+      );
+      await localStateCoordinator.saveState(
+        TaskLocalState(
+          tasks: [initialTask],
+          outboxState: OutboxStorageState(
+            isInitialized: true,
+            activeEntries: [
+              OutboxEntry(
+                taskId: initialTask.id,
+                operationType: OutboxOperationType.upsert,
+                state: OutboxEntryState.queued,
+                ownerScope: OutboxOwnerScope.authenticated,
+                firstQueuedAt: initialTask.lastModifiedAt?.toUtc(),
+                taskPayload: initialTask.toJson(),
+              ),
+            ],
+          ),
+        ),
+      );
+      final delayCompleter = Completer<void>();
+
+      final service = TaskSyncService.forTesting(
+        repository,
+        remote: remote,
+        connectivityCheck: () async => [ConnectivityResult.wifi],
+        hasActiveSession: () => true,
+        runtimeDebug: runtimeDebug,
+        faultInjectionPolicy: FaultInjectionPolicy(
+          readState: () => const FaultInjectionState(
+            activeScenario: FaultInjectionScenario.delayedSync,
+            isEnabled: true,
+            delayMs: 500,
+            delayedSyncMode: DelayedSyncMode.backend,
+            delayedSyncTarget: DelayedSyncTarget.acknowledgement,
+          ),
+        ),
+        localStateCoordinator: localStateCoordinator,
+        delayExecution: (_) => delayCompleter.future,
+      );
+
+      final syncFuture = service.syncTasks(await repository.loadTasks());
+      await Future<void>.delayed(Duration.zero);
+
+      final inFlightState = await localStateCoordinator.loadState();
+      await localStateCoordinator.saveTaskSnapshot(
+        [...inFlightState.tasks, followUpTask],
+        changedTaskIds: {followUpTask.id},
+      );
+
+      delayCompleter.complete();
+      final result = await syncFuture;
+      final finalState = await localStateCoordinator.loadState();
+
+      expect(result.acknowledgedTasks, hasLength(1));
+      expect(remote.insertedTaskIds, ['task-ack-initial']);
+      expect(finalState.tasks, hasLength(2));
+      final syncedTask = finalState.tasks
+          .where((task) => task.id == initialTask.id)
+          .single;
+      final queuedTask = finalState.tasks
+          .where((task) => task.id == followUpTask.id)
+          .single;
+      expect(syncedTask.syncStatus, SyncStatus.synced);
+      expect(queuedTask.syncStatus, SyncStatus.dirty);
+      expect(finalState.outboxState.activeEntries, hasLength(1));
+      expect(
+        finalState.outboxState.activeEntries.single.taskId,
+        followUpTask.id,
+      );
+      expect(
+        finalState.outboxState.activeEntries.single.state,
+        OutboxEntryState.queued,
+      );
+      expect(finalState.outboxState.recentAcknowledgements, hasLength(1));
+      expect(
+        runtimeDebug.state.recentEvents.any(
+          (event) =>
+              event.payload?.stage == 'Concurrent local mutations preserved' &&
+              event.message.contains(
+                'preserved while replay was already in progress',
+              ),
+        ),
+        isTrue,
+      );
+      expect(
+        runtimeDebug.state.lastSyncMessage,
+        'Sync completed. 1 task(s) acknowledged. 1 newer local change(s) remain queued for a follow-up sync.',
+      );
+    },
+  );
+
+  test(
     'syncTasks can delay a transport update seam without delaying fetch-by-id first',
     () async {
       final localTask = buildTask(

@@ -59,8 +59,39 @@ class TaskLocalStateCoordinator {
       return TaskLocalState(tasks: tasks, outboxState: initializedState);
     }
 
+    final repairedTasks = _repairOrphanedDeletedTasks(
+      tasks,
+      currentState.activeEntries,
+    );
+    if (repairedTasks.length != tasks.length) {
+      await _snapshotCoordinator.saveSnapshot(repairedTasks);
+      _runtimeDebug?.addEvent(
+        category: RuntimeEventCategory.storage,
+        message:
+            'Local snapshot repair removed deleted task tombstone(s) that no longer had replay evidence.',
+        level: RuntimeEventLevel.warning,
+        payload: RuntimeEventPayload(
+          stage: 'Local snapshot repaired',
+          summary:
+              'The runtime found deleted local tasks that no longer had an active outbox entry to explain or replay them, so those orphaned tombstones were removed during local-state load.',
+          metrics: [
+            RuntimeEventMetric(
+              label: 'Removed tombstones',
+              value: (tasks.length - repairedTasks.length).toString(),
+            ),
+          ],
+          notes: const [
+            'This repair path prevents poisoned deleted local state from surviving page reloads when replay evidence is already gone.',
+          ],
+        ),
+      );
+      _runtimeDebug?.updateTaskCounts(repairedTasks);
+      _runtimeDebug?.updateOutboxState(currentState);
+      return TaskLocalState(tasks: repairedTasks, outboxState: currentState);
+    }
+
     _runtimeDebug?.updateOutboxState(currentState);
-    return TaskLocalState(tasks: tasks, outboxState: currentState);
+    return TaskLocalState(tasks: repairedTasks, outboxState: currentState);
   }
 
   Future<OutboxStorageState> loadOutboxState() async {
@@ -349,6 +380,26 @@ class TaskLocalStateCoordinator {
     return TaskModel.fromJson(
       snapshot,
     ).copyWith(syncStatus: SyncStatus.synced, hasRemoteBackingRecord: true);
+  }
+
+  List<TaskModel> _repairOrphanedDeletedTasks(
+    List<TaskModel> tasks,
+    List<OutboxEntry> activeEntries,
+  ) {
+    final activeDeletedTaskIds = activeEntries
+        .where((entry) => entry.operationType == OutboxOperationType.delete)
+        .map((entry) => entry.taskId)
+        .toSet();
+
+    return tasks
+        .where((task) {
+          if (task.syncStatus != SyncStatus.deleted) {
+            return true;
+          }
+
+          return activeDeletedTaskIds.contains(task.id);
+        })
+        .toList(growable: false);
   }
 
   String _taskTitleForEntry(OutboxEntry entry) {

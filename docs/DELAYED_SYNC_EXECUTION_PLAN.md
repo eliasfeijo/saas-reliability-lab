@@ -20,12 +20,34 @@ Implemented today:
 - the operator rail now opens a delayed-sync setup modal with a recommended `local` + `5 s` + `persistent` fast path and exposes the active configuration after activation
 - the sync runtime now applies stage-aware delay injection at explicit outbox replay seams such as full-pass hold, outbound update, and acknowledgement hold, and keeps `Syncing` visibly active during the hold
 - the runtime diagnostics rail and event timeline now expose the active delay mode, target seam, behavior, and injected delay label for the current delayed-sync slice
+- the sync runtime now refreshes replay input after a delayed full-pass hold before any remote work starts, and preserves newer local mutations staged during an in-flight pass as queued follow-up work with explicit event-timeline evidence
 
 Current implementation boundary:
 
 - the shipped delayed-sync slice is still client-owned inside `TaskSyncService` and the current replay seam hooks
 - the `transport` and `backend` modes are honest client-side simulations on the explicit outbox replay path, not a true server-owned execution contract
 - a future server-owned mutation boundary is still required before the repository can claim real backend execution delay or backend-owned replay semantics
+
+## Recommended mitigation for concurrent local mutations
+
+Given the current repository state, the recommended mitigation is:
+
+1. if the delay happens before remote replay starts, reload the latest local task-plus-outbox state and use that refreshed input for the same pass
+2. if a newer local mutation lands after replay is already in flight, preserve that newer intent locally as queued outbox work instead of trying to fold it into the active pass
+3. write an explicit event-timeline record when either handling path occurs so operators can see that replay input was refreshed or deferred rather than assuming the runtime ignored the change
+4. surface a follow-up sync notice when preserved queued work remains so the operator can intentionally run the next pass
+
+Why this is the right mitigation now:
+
+- it preserves the repo's local-first interaction contract instead of freezing local edits while replay is running
+- it avoids pretending that the current client-owned replay seam can safely absorb newer writes into an already-running remote operation
+- it matches the current Objective 1 boundary: explicit local outbox evidence first, stronger server-owned mutation execution later
+
+What this mitigation does not claim yet:
+
+- it does not provide a true backend-owned mutation queue
+- it does not guarantee that a later local mutation will be replayed in the same pass once remote work has already started
+- it still relies on a follow-up replay pass, which is an honest limitation until the repository adopts a stronger server-owned mutation boundary or a dedicated pending-resync handoff
 
 ## Desired state
 
@@ -207,6 +229,8 @@ The event timeline should record:
 - mode or preset changes
 - the specific replay seam where a delay was applied
 - the task or outbox entry affected when available
+- replay-input refresh when a full-pass hold ends with newer local state than the pass started with
+- preserved queued follow-up work when newer local mutations land after replay is already in flight
 - scenario reset
 
 ## Step-by-step plan

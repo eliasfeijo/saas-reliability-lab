@@ -42,10 +42,12 @@ Current implication:
 - the implemented delayed-sync scenario now supports three client-owned modes on the explicit outbox replay path: `local` full-pass hold, `transport` seam delay, and `backend` acknowledgement delay
 - explicit outbox replay now exists when the runtime is using the coordinated local task-plus-outbox state layer
 - failed, blocked, conflict, queued, sending, and recent acknowledgement evidence now surface through runtime diagnostics and workspace notices
+- delayed-sync replay now reloads local state after a full-pass hold before remote work begins, and newer local mutations that arrive after replay has already started are preserved as queued follow-up work instead of being silently discarded
 - recent acknowledgements are currently retained as a rolling local history of up to 10 entries, and the diagnostics rail exposes a manual clear action for clean recording or demo setup
 - the operator rail now exposes a soft demo reset action that clears transient diagnostics history, retained acknowledgements, sync outcome surfaces, and fault-injection UI state while preserving auth state, push state truth, local tasks, and active outbox entries
 - the operator rail now exposes a hard reset action that confirms the remote deletion replay for authenticated remote-backed tasks before wiping all local task and outbox state on the current device
 - the event timeline in the diagnostics rail now exposes its own clear action so operators can trim retained runtime evidence without invoking the broader reset controls
+- when replay input changes during a delayed hold or newer local mutations are preserved for a later pass, the event timeline records the handling decision explicitly so deferred work and replay boundaries remain operator-visible
 - the wide-layout operator rail, task workspace split panes, and diagnostics rail now use explicit grab-friendly scrollbars so long vertical panels remain usable with mouse-driven scrolling on desktop-sized screens
 - the sync runtime now uses the coordinated local task-plus-outbox state layer as the active replay authority rather than preserving a legacy task-shaped fallback path
 

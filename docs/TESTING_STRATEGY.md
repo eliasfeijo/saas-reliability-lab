@@ -158,6 +158,7 @@ Implemented focused coverage in the current repo includes:
 - local-state initialization and persistence repair checks in `task_local_state_coordinator_test.dart`
 - mutation compaction checks in `task_mutation_coordinator_test.dart`
 - outbox replay acknowledgement, blocked-session, conflict-path, and delayed-sync seam checks in `sync_logic_test.dart`
+- outbox replay acknowledgement, blocked-session, conflict-path, delayed-sync seam checks, replay-input refresh after full-pass delay, and preserve-and-requeue behavior for newer mid-pass local mutations in `sync_logic_test.dart`
 - diagnostics evidence rendering, delayed-sync configuration visibility, and conflict-action coverage in `sync_debug_panel_test.dart`, with operator-rail modal configuration and soft-reset confirmation coverage in `lab_left_rail_test.dart`
 - hard-reset remote-delete replay and local wipe coverage in `agenda_provider_test.dart`
 - local-state conflict resolution coverage in `task_local_state_coordinator_test.dart` and signed-out workspace clearing coverage in `workspace_session_coordinator_test.dart`
