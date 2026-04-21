@@ -149,6 +149,7 @@ void main() {
         estimatedDuration: const Duration(hours: 1),
         syncStatus: SyncStatus.synced,
         userId: 'user-1',
+        hasRemoteBackingRecord: true,
       );
 
       final repository = InMemoryTasksRepository([accountTask]);
@@ -174,6 +175,85 @@ void main() {
       expect(agenda.totalTasks, 0);
       expect(agenda.pendingTasksCount, 0);
       expect(agenda.anonymousTasks, isEmpty);
+    },
+  );
+
+  test(
+    'hardResetWorkspace deletes remote-backed account tasks before wiping local state',
+    () async {
+      final remoteTask = buildTask(
+        id: 'task-remote',
+        title: 'Remote-backed task',
+        beginsAt: DateTime(2026, 2, 17, 9),
+        estimatedDuration: const Duration(hours: 1),
+        userId: 'user-1',
+        syncStatus: SyncStatus.synced,
+        hasRemoteBackingRecord: true,
+      );
+      final alreadyDeletedRemoteTask = buildTask(
+        id: 'task-remote-deleted',
+        title: 'Already deleted remotely-backed task',
+        beginsAt: DateTime(2026, 2, 17, 11),
+        estimatedDuration: const Duration(hours: 1),
+        userId: 'user-1',
+        syncStatus: SyncStatus.deleted,
+        hasRemoteBackingRecord: true,
+      );
+      final localOnlyTask = buildTask(
+        id: 'task-local-only',
+        title: 'Local-only account task',
+        beginsAt: DateTime(2026, 2, 17, 13),
+        estimatedDuration: const Duration(hours: 1),
+        userId: 'user-1',
+        syncStatus: SyncStatus.dirty,
+        hasRemoteBackingRecord: false,
+      );
+      final anonymousTask = buildTask(
+        id: 'task-anonymous',
+        title: 'Anonymous local task',
+        beginsAt: DateTime(2026, 2, 17, 15),
+        estimatedDuration: const Duration(hours: 1),
+        syncStatus: SyncStatus.dirty,
+      );
+
+      final repository = InMemoryTasksRepository([
+        remoteTask,
+        alreadyDeletedRemoteTask,
+        localOnlyTask,
+        anonymousTask,
+      ]);
+      final remote = FakeTaskRemoteDataSource([
+        remoteTask,
+        alreadyDeletedRemoteTask,
+      ]);
+      final service = TaskSyncService.forTesting(
+        repository,
+        remote: remote,
+        connectivityCheck: () async => [ConnectivityResult.wifi],
+        hasActiveSession: () => true,
+      );
+      final agenda = buildAgendaProviderForTesting(repository, service)
+        ..userId = 'user-1'
+        ..tasks = [
+          remoteTask,
+          alreadyDeletedRemoteTask,
+          localOnlyTask,
+          anonymousTask,
+        ];
+
+      final preview = agenda.hardResetPreview;
+
+      expect(preview.remoteDeleteCount, 2);
+      expect(preview.authenticatedLocalOnlyRemovalCount, 1);
+      expect(preview.anonymousRemovalCount, 1);
+
+      await agenda.hardResetWorkspace();
+
+      expect(await repository.loadTasks(), isEmpty);
+      expect(await remote.fetchAllTasks(), isEmpty);
+      expect(agenda.tasks, isEmpty);
+      expect(agenda.filteredTasks, isEmpty);
+      expect(agenda.totalTasks, 0);
     },
   );
 
@@ -231,6 +311,7 @@ void main() {
         beginsAt: DateTime(2026, 2, 16, 11),
         estimatedDuration: const Duration(hours: 1),
         userId: 'user-1',
+        hasRemoteBackingRecord: true,
       );
 
       final repository = InMemoryTasksRepository([anonymousTask, accountTask]);

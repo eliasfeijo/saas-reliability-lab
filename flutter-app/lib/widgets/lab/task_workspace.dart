@@ -348,6 +348,45 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
+                    const SizedBox(height: 8),
+                    Consumer<RuntimeDebugProvider>(
+                      builder: (context, runtimeDebug, child) {
+                        final debugState = runtimeDebug.state;
+                        if (debugState.failedEntryCount == 0 &&
+                            debugState.conflictEntryCount == 0 &&
+                            debugState.blockedAnonymousReviewEntryCount == 0) {
+                          return const SizedBox.shrink();
+                        }
+
+                        return Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            if (debugState.failedEntryCount > 0)
+                              _buildOperationNoticeChip(
+                                theme,
+                                label:
+                                    '${debugState.failedEntryCount} failed operation(s)',
+                                color: theme.colorScheme.tertiary,
+                              ),
+                            if (debugState.conflictEntryCount > 0)
+                              _buildOperationNoticeChip(
+                                theme,
+                                label:
+                                    '${debugState.conflictEntryCount} conflict(s)',
+                                color: theme.colorScheme.error,
+                              ),
+                            if (debugState.blockedAnonymousReviewEntryCount > 0)
+                              _buildOperationNoticeChip(
+                                theme,
+                                label:
+                                    '${debugState.blockedAnonymousReviewEntryCount} waiting for review',
+                                color: theme.colorScheme.secondary,
+                              ),
+                          ],
+                        );
+                      },
+                    ),
                   ],
                 ),
               ),
@@ -370,6 +409,22 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
           );
         },
       ),
+    );
+  }
+
+  Widget _buildOperationNoticeChip(
+    ThemeData theme, {
+    required String label,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.28)),
+      ),
+      child: Text(label, style: theme.textTheme.labelMedium),
     );
   }
 

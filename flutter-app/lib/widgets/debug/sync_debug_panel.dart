@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:todo_flutter/models/fault_injection_scenario.dart';
+import 'package:todo_flutter/models/outbox_entry.dart';
 import 'package:todo_flutter/models/runtime_debug_state.dart';
 import 'package:todo_flutter/models/runtime_event.dart';
+import 'package:todo_flutter/providers/agenda_provider.dart';
 import 'package:todo_flutter/providers/fault_injection_provider.dart';
 import 'package:todo_flutter/providers/runtime_debug_provider.dart';
 import 'package:todo_flutter/widgets/debug/debug_status_card.dart';
@@ -18,6 +20,7 @@ class SyncDebugPanel extends StatelessWidget {
 
     return Consumer2<RuntimeDebugProvider, FaultInjectionProvider>(
       builder: (context, runtimeDebug, faultInjection, child) {
+        final agenda = context.watch<AgendaProvider>();
         final state = runtimeDebug.state;
 
         return Container(
@@ -41,6 +44,57 @@ class SyncDebugPanel extends StatelessWidget {
                 style: theme.textTheme.bodyMedium,
               ),
               const SizedBox(height: 20),
+              DebugStatusCard(
+                title: 'Reset Controls',
+                subtitle:
+                    'Operator-friendly cleanup paths for recording and destructive reset workflows.',
+                leading: const Icon(Icons.video_settings_outlined),
+                accentColor: theme.colorScheme.primary,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Use these controls when you need a cleaner diagnostics surface for demos or a confirmed full workspace reset without explaining the mechanics on-screen.',
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                    const SizedBox(height: 12),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: () => _confirmSoftReset(
+                            context,
+                            agenda: agenda,
+                            runtimeDebug: runtimeDebug,
+                            faultInjection: faultInjection,
+                          ),
+                          icon: const Icon(Icons.auto_fix_high_outlined),
+                          label: const Text('Soft demo reset'),
+                        ),
+                        const SizedBox(height: 8),
+                        FilledButton.icon(
+                          style: FilledButton.styleFrom(
+                            backgroundColor: theme.colorScheme.errorContainer,
+                            foregroundColor: theme.colorScheme.onErrorContainer,
+                          ),
+                          onPressed: () => _confirmHardReset(
+                            context,
+                            agenda: agenda,
+                            runtimeDebug: runtimeDebug,
+                            faultInjection: faultInjection,
+                            hasAuthenticatedSession:
+                                state.hasAuthenticatedSession,
+                            preview: agenda.hardResetPreview,
+                          ),
+                          icon: const Icon(Icons.delete_forever_outlined),
+                          label: const Text('Hard reset'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
               DebugStatusCard(
                 title: 'Sync State',
                 subtitle: 'Current connectivity and synchronization lifecycle.',
@@ -290,11 +344,15 @@ class SyncDebugPanel extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               DebugStatusCard(
-                title: 'Future Operation States',
+                title: 'Operation States',
                 subtitle:
-                    'Reserved space for the explicit outbox and conflict model.',
+                    'Current outbox state across queued, blocked, in-flight, and reviewed work.',
                 leading: const Icon(Icons.account_tree_outlined),
-                accentColor: theme.colorScheme.outline,
+                accentColor: state.conflictEntryCount > 0
+                    ? theme.colorScheme.error
+                    : state.failedEntryCount > 0
+                    ? theme.colorScheme.tertiary
+                    : theme.colorScheme.outline,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -302,17 +360,231 @@ class SyncDebugPanel extends StatelessWidget {
                       spacing: 8,
                       runSpacing: 8,
                       children: [
-                        _placeholderStateChip(context, 'Queued'),
-                        _placeholderStateChip(context, 'Sending'),
-                        _placeholderStateChip(context, 'Acknowledged'),
-                        _placeholderStateChip(context, 'Failed'),
-                        _placeholderStateChip(context, 'Conflict'),
+                        _stateCountChip(
+                          context,
+                          'Queued',
+                          state.queuedEntryCount,
+                          theme.colorScheme.primary,
+                        ),
+                        _stateCountChip(
+                          context,
+                          'Sending',
+                          state.sendingEntryCount,
+                          theme.colorScheme.secondary,
+                        ),
+                        _stateCountChip(
+                          context,
+                          'Acknowledged',
+                          state.acknowledgedEntryCount,
+                          theme.colorScheme.tertiary,
+                        ),
+                        _stateCountChip(
+                          context,
+                          'Failed',
+                          state.failedEntryCount,
+                          theme.colorScheme.error,
+                        ),
+                        _stateCountChip(
+                          context,
+                          'Conflict',
+                          state.conflictEntryCount,
+                          theme.colorScheme.error,
+                        ),
+                        _stateCountChip(
+                          context,
+                          'Blocked Review',
+                          state.blockedAnonymousReviewEntryCount,
+                          theme.colorScheme.secondary,
+                        ),
+                        _stateCountChip(
+                          context,
+                          'Blocked Session',
+                          state.blockedNoSessionEntryCount,
+                          theme.colorScheme.secondary,
+                        ),
                       ],
                     ),
                     const SizedBox(height: 12),
-                    Text(
-                      'The current sync engine is task-based rather than operation-based. These placeholders deliberately reserve UI real estate so the explicit outbox can land here without another shell redesign.',
-                      style: theme.textTheme.bodyMedium,
+                    _statusRow(
+                      context,
+                      label: 'Queued',
+                      value: state.queuedEntryCount.toString(),
+                    ),
+                    _statusRow(
+                      context,
+                      label: 'Sending',
+                      value: state.sendingEntryCount.toString(),
+                    ),
+                    _statusRow(
+                      context,
+                      label: 'Failed',
+                      value: state.failedEntryCount.toString(),
+                    ),
+                    _statusRow(
+                      context,
+                      label: 'Conflict',
+                      value: state.conflictEntryCount.toString(),
+                    ),
+                    _statusRow(
+                      context,
+                      label: 'Blocked review',
+                      value: state.blockedAnonymousReviewEntryCount.toString(),
+                    ),
+                    _statusRow(
+                      context,
+                      label: 'Blocked session',
+                      value: state.blockedNoSessionEntryCount.toString(),
+                    ),
+                    if (state.conflictEntries.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'Conflict review',
+                        style: theme.textTheme.titleSmall,
+                      ),
+                      const SizedBox(height: 6),
+                      ...state.conflictEntries
+                          .take(3)
+                          .map(
+                            (entry) => Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: theme.colorScheme.errorContainer
+                                      .withValues(alpha: 0.24),
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                    color: theme.colorScheme.error.withValues(
+                                      alpha: 0.22,
+                                    ),
+                                  ),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      _taskTitleForEntry(entry),
+                                      style: theme.textTheme.titleSmall,
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      entry.lastError ??
+                                          'Remote state changed after this operation was queued.',
+                                      style: theme.textTheme.bodySmall,
+                                    ),
+                                    if (_remoteSnapshotTitle(entry) !=
+                                        null) ...[
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'Remote version: ${_remoteSnapshotTitle(entry)}',
+                                        style: theme.textTheme.bodySmall,
+                                      ),
+                                    ],
+                                    const SizedBox(height: 8),
+                                    Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.stretch,
+                                      children: [
+                                        OutlinedButton(
+                                          onPressed: () async {
+                                            await context
+                                                .read<AgendaProvider>()
+                                                .keepRemoteConflict(
+                                                  entry.taskId,
+                                                );
+                                            if (!context.mounted) {
+                                              return;
+                                            }
+                                            ScaffoldMessenger.of(
+                                              context,
+                                            ).showSnackBar(
+                                              SnackBar(
+                                                content: Text(
+                                                  'Kept remote state for ${_taskTitleForEntry(entry)}.',
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                          child: const Text(
+                                            'Keep remote version',
+                                          ),
+                                        ),
+                                        const SizedBox(height: 8),
+                                        FilledButton(
+                                          onPressed: () async {
+                                            await context
+                                                .read<AgendaProvider>()
+                                                .reapplyLocalConflict(
+                                                  entry.taskId,
+                                                );
+                                            if (!context.mounted) {
+                                              return;
+                                            }
+                                            ScaffoldMessenger.of(
+                                              context,
+                                            ).showSnackBar(
+                                              SnackBar(
+                                                content: Text(
+                                                  'Re-queued local intent for ${_taskTitleForEntry(entry)}.',
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                          child: const Text(
+                                            'Reapply local intent',
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                    ],
+                    if (state.recentAcknowledgements.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'Recent acknowledgements',
+                        style: theme.textTheme.titleSmall,
+                      ),
+                      const SizedBox(height: 6),
+                      ...state.recentAcknowledgements
+                          .take(3)
+                          .map(
+                            (entry) => Padding(
+                              padding: const EdgeInsets.only(bottom: 4),
+                              child: Text(
+                                '${entry.operationType.name} ${entry.taskId}',
+                                style: theme.textTheme.bodySmall,
+                              ),
+                            ),
+                          ),
+                    ],
+                    if (state.recentAcknowledgements.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Text(
+                          'Retained acknowledgements stay in local outbox storage until they are displaced by newer acknowledgements or explicitly cleared here.',
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        if (state.recentAcknowledgements.isNotEmpty)
+                          OutlinedButton.icon(
+                            onPressed: () async {
+                              await context
+                                  .read<AgendaProvider>()
+                                  .clearRetainedAcknowledgements();
+                            },
+                            icon: const Icon(Icons.cleaning_services_outlined),
+                            label: const Text('Clear retained history'),
+                          ),
+                      ],
                     ),
                   ],
                 ),
@@ -411,6 +683,150 @@ class SyncDebugPanel extends StatelessWidget {
     );
   }
 
+  Future<void> _confirmSoftReset(
+    BuildContext context, {
+    required AgendaProvider agenda,
+    required RuntimeDebugProvider runtimeDebug,
+    required FaultInjectionProvider faultInjection,
+  }) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Soft demo reset?'),
+          content: const Text(
+            'This clears retained acknowledgements, sync outcome history, the in-memory event timeline, and active fault-injection evidence. It keeps live auth state, push state, local tasks, and active outbox entries intact.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Soft reset'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) {
+      return;
+    }
+
+    await agenda.clearRetainedAcknowledgements();
+    await faultInjection.clearScenario();
+    runtimeDebug.resetDemoSurface();
+
+    if (!context.mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Soft demo reset cleared transient diagnostics while preserving live task and push state.',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _confirmHardReset(
+    BuildContext context, {
+    required AgendaProvider agenda,
+    required RuntimeDebugProvider runtimeDebug,
+    required FaultInjectionProvider faultInjection,
+    required bool hasAuthenticatedSession,
+    required HardResetPreview preview,
+  }) async {
+    final requiresSession =
+        preview.remoteDeleteCount > 0 && !hasAuthenticatedSession;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Hard reset workspace?'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Hard reset immediately replays authenticated remote deletions to the database, then clears every local task and outbox entry on this device.',
+              ),
+              const SizedBox(height: 12),
+              Text('Remote deletes: ${preview.remoteDeleteCount}'),
+              Text(
+                'Authenticated local-only removals: ${preview.authenticatedLocalOnlyRemovalCount}',
+              ),
+              Text(
+                'Anonymous local removals: ${preview.anonymousRemovalCount}',
+              ),
+              if (requiresSession) ...[
+                const SizedBox(height: 12),
+                Text(
+                  'A live authenticated session is required before this action can confirm remote deletions.',
+                  style: Theme.of(dialogContext).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(dialogContext).colorScheme.error,
+                  ),
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: Text(requiresSession ? 'Close' : 'Cancel'),
+            ),
+            if (!requiresSession)
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: Theme.of(
+                    dialogContext,
+                  ).colorScheme.errorContainer,
+                  foregroundColor: Theme.of(
+                    dialogContext,
+                  ).colorScheme.onErrorContainer,
+                ),
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text('Delete and wipe'),
+              ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) {
+      return;
+    }
+
+    try {
+      final completedPreview = await agenda.hardResetWorkspace();
+      await faultInjection.clearScenario();
+      runtimeDebug.resetDemoSurface();
+
+      if (!context.mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Hard reset deleted ${completedPreview.remoteDeleteCount} remote-backed task(s) and cleared all local task state.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.toString())));
+    }
+  }
+
   Widget _statusRow(
     BuildContext context, {
     required String label,
@@ -431,6 +847,21 @@ class SyncDebugPanel extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  String _taskTitleForEntry(OutboxEntry entry) {
+    return (entry.taskPayload['title'] as String?)?.trim().isNotEmpty == true
+        ? entry.taskPayload['title'] as String
+        : 'Untitled task';
+  }
+
+  String? _remoteSnapshotTitle(OutboxEntry entry) {
+    final title = entry.remoteSnapshot?['title'] as String?;
+    if (title == null || title.trim().isEmpty) {
+      return null;
+    }
+
+    return title;
   }
 
   Widget _metricPill(BuildContext context, String label, String value) {
@@ -506,17 +937,22 @@ class SyncDebugPanel extends StatelessWidget {
     );
   }
 
-  Widget _placeholderStateChip(BuildContext context, String label) {
+  Widget _stateCountChip(
+    BuildContext context,
+    String label,
+    int count,
+    Color color,
+  ) {
     final theme = Theme.of(context);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainer,
+        color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: theme.colorScheme.outlineVariant),
+        border: Border.all(color: color.withValues(alpha: 0.28)),
       ),
-      child: Text(label, style: theme.textTheme.labelLarge),
+      child: Text('$label: $count', style: theme.textTheme.labelLarge),
     );
   }
 

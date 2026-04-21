@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:todo_flutter/controllers/task_workspace_interaction_controller.dart';
+import 'package:todo_flutter/models/outbox_entry.dart';
 import 'package:todo_flutter/models/task.dart';
 import 'package:todo_flutter/providers/runtime_debug_provider.dart';
 import 'package:todo_flutter/repositories/tasks_repository.dart';
@@ -11,6 +12,21 @@ import 'package:todo_flutter/services/task_mutation_coordinator.dart';
 import 'package:todo_flutter/services/task_sync_coordinator.dart';
 import 'package:todo_flutter/services/task_sync_flow_coordinator.dart';
 import 'package:todo_flutter/services/task_sync_service.dart';
+
+class HardResetPreview {
+  const HardResetPreview({
+    required this.remoteDeleteCount,
+    required this.authenticatedLocalOnlyRemovalCount,
+    required this.anonymousRemovalCount,
+  });
+
+  final int remoteDeleteCount;
+  final int authenticatedLocalOnlyRemovalCount;
+  final int anonymousRemovalCount;
+
+  int get localOnlyRemovalCount =>
+      authenticatedLocalOnlyRemovalCount + anonymousRemovalCount;
+}
 
 class AgendaProvider extends ChangeNotifier {
   // Private fields
@@ -228,6 +244,107 @@ class AgendaProvider extends ChangeNotifier {
 
   Future<void> clearAllTasks() async {
     _applyTasks(await _taskListStateCoordinator.clearTasks());
+  }
+
+  Future<void> clearRetainedAcknowledgements() async {
+    await _taskListStateCoordinator.clearRecentAcknowledgements();
+  }
+
+  Future<void> keepRemoteConflict(String taskId) async {
+    _applyTasks(
+      await _taskListStateCoordinator.resolveConflictKeepingRemote(taskId),
+    );
+  }
+
+  Future<void> reapplyLocalConflict(String taskId) async {
+    _applyTasks(
+      await _taskListStateCoordinator.reapplyConflictAsQueued(taskId),
+    );
+
+    if (_userId == null || _userId!.isEmpty || hasPendingAnonymousReview) {
+      return;
+    }
+
+    await syncAllTasks();
+  }
+
+  OutboxEntry? conflictEntryForTask(
+    String taskId,
+    Iterable<OutboxEntry> entries,
+  ) {
+    return entries.where((entry) => entry.taskId == taskId).firstOrNull;
+  }
+
+  HardResetPreview get hardResetPreview {
+    var remoteDeleteCount = 0;
+    var authenticatedLocalOnlyRemovalCount = 0;
+    var anonymousRemovalCount = 0;
+
+    for (final task in _tasks) {
+      if (task.userId == null || task.userId!.isEmpty) {
+        anonymousRemovalCount += 1;
+        continue;
+      }
+
+      if (task.hasRemoteBackingRecord) {
+        remoteDeleteCount += 1;
+        continue;
+      }
+
+      authenticatedLocalOnlyRemovalCount += 1;
+    }
+
+    return HardResetPreview(
+      remoteDeleteCount: remoteDeleteCount,
+      authenticatedLocalOnlyRemovalCount: authenticatedLocalOnlyRemovalCount,
+      anonymousRemovalCount: anonymousRemovalCount,
+    );
+  }
+
+  Future<HardResetPreview> hardResetWorkspace() async {
+    final preview = hardResetPreview;
+    final remoteDeleteIds = _tasks
+        .where(_isAuthenticatedRemoteBackedTask)
+        .map((task) => task.id)
+        .toSet();
+
+    if (remoteDeleteIds.isNotEmpty && (_userId == null || _userId!.isEmpty)) {
+      throw StateError(
+        'Hard reset requires an authenticated session before remote-backed tasks can be deleted from the database.',
+      );
+    }
+
+    if (remoteDeleteIds.isNotEmpty) {
+      final stagedTasks = _tasks
+          .where((task) => remoteDeleteIds.contains(task.id))
+          .map((task) => _stageTaskForHardReset(task, deleteRemotely: true))
+          .toList(growable: false);
+
+      final storedTasks = await _taskListStateCoordinator.saveTasks(
+        stagedTasks,
+        changedTaskIds: remoteDeleteIds,
+      );
+      _applyTasks(storedTasks);
+
+      final result = await _taskSyncFlowCoordinator.syncAllTasks(
+        tasks: storedTasks,
+        userId: _userId,
+        hasPendingAnonymousReview: false,
+        isLoading: _isLoading,
+        setLoading: _setLoading,
+        applyTasks: _applyTasks,
+      );
+
+      if (result.hadRecoverableErrors ||
+          _tasks.any(_isAuthenticatedRemoteBackedTask)) {
+        throw StateError(
+          'Hard reset stopped because one or more remote deletions were not confirmed. The remaining remote-backed tasks were left in local state so they can be retried.',
+        );
+      }
+    }
+
+    await clearAllTasksFromLocalStorage();
+    return preview;
   }
 
   // Selected Task Management
@@ -498,5 +615,24 @@ class AgendaProvider extends ChangeNotifier {
     await _persistMutationResult(
       _taskMutationCoordinator.deleteTasks(_tasks, targetIds),
     );
+  }
+
+  bool _isAuthenticatedRemoteBackedTask(TaskModel task) {
+    return task.userId != null &&
+        task.userId!.isNotEmpty &&
+        task.hasRemoteBackingRecord;
+  }
+
+  TaskModel _stageTaskForHardReset(
+    TaskModel task, {
+    required bool deleteRemotely,
+  }) {
+    final stagedTask = task.copyWith();
+    if (!deleteRemotely || stagedTask.syncStatus == SyncStatus.deleted) {
+      return stagedTask;
+    }
+
+    stagedTask.markAsDeleted();
+    return stagedTask;
   }
 }

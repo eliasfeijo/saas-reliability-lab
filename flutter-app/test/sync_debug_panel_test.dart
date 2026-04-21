@@ -2,11 +2,19 @@ import 'package:connectivity_plus_platform_interface/connectivity_plus_platform_
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:todo_flutter/models/fault_injection_scenario.dart';
+import 'package:todo_flutter/models/outbox_entry.dart';
 import 'package:todo_flutter/models/runtime_debug_state.dart';
 import 'package:todo_flutter/models/runtime_event.dart';
 import 'package:todo_flutter/models/task.dart';
+import 'package:todo_flutter/providers/agenda_provider.dart';
 import 'package:todo_flutter/providers/fault_injection_provider.dart';
 import 'package:todo_flutter/providers/runtime_debug_provider.dart';
+import 'package:todo_flutter/repositories/outbox_repository.dart';
+import 'package:todo_flutter/services/task_list_state_coordinator.dart';
+import 'package:todo_flutter/services/task_local_snapshot_coordinator.dart';
+import 'package:todo_flutter/services/task_local_state_coordinator.dart';
+import 'package:todo_flutter/services/task_sync_coordinator.dart';
+import 'package:todo_flutter/services/task_sync_flow_coordinator.dart';
 import 'package:todo_flutter/services/task_sync_service.dart';
 import 'package:todo_flutter/widgets/debug/sync_debug_panel.dart';
 
@@ -75,6 +83,43 @@ void main() {
         userId: 'user-1',
       ),
     ]);
+    runtimeDebug.updateOutboxState(
+      OutboxStorageState(
+        isInitialized: true,
+        activeEntries: [
+          OutboxEntry(
+            taskId: 'task-dirty',
+            operationType: OutboxOperationType.upsert,
+            state: OutboxEntryState.queued,
+            ownerScope: OutboxOwnerScope.authenticated,
+            taskPayload: const {'id': 'task-dirty'},
+          ),
+          OutboxEntry(
+            taskId: 'task-anon',
+            operationType: OutboxOperationType.upsert,
+            state: OutboxEntryState.blockedAnonymousReview,
+            ownerScope: OutboxOwnerScope.anonymous,
+            taskPayload: const {'id': 'task-anon'},
+          ),
+          OutboxEntry(
+            taskId: 'task-deleted',
+            operationType: OutboxOperationType.delete,
+            state: OutboxEntryState.conflict,
+            ownerScope: OutboxOwnerScope.authenticated,
+            taskPayload: const {'id': 'task-deleted'},
+          ),
+        ],
+        recentAcknowledgements: [
+          OutboxEntry(
+            taskId: 'task-ack',
+            operationType: OutboxOperationType.upsert,
+            state: OutboxEntryState.acknowledged,
+            ownerScope: OutboxOwnerScope.authenticated,
+            taskPayload: const {'id': 'task-ack'},
+          ),
+        ],
+      ),
+    );
     runtimeDebug.markSyncPartial(
       'Sync completed. Some operations need review.',
     );
@@ -148,6 +193,17 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Runtime Diagnostics'), findsOneWidget);
+    expect(find.text('Reset Controls'), findsOneWidget);
+    expect(find.text('Soft demo reset'), findsOneWidget);
+    expect(find.text('Hard reset'), findsOneWidget);
+    expect(find.textContaining('Hard reset preview:'), findsNothing);
+    expect(top(tester, 'Soft demo reset') < top(tester, 'Sync State'), isTrue);
+    expect(
+      tester
+          .getSize(find.widgetWithText(OutlinedButton, 'Soft demo reset'))
+          .width,
+      tester.getSize(find.widgetWithText(FilledButton, 'Hard reset')).width,
+    );
     expect(find.text('Online'), findsWidgets);
 
     await tester.scrollUntilVisible(find.text('Fault Injection'), 300);
@@ -189,8 +245,23 @@ void main() {
     );
     expect(find.text('Push State'), findsOneWidget);
     expect(find.text('Registered'), findsWidgets);
-    expect(find.text('Queued', skipOffstage: false), findsOneWidget);
-    expect(find.text('Conflict', skipOffstage: false), findsOneWidget);
+    expect(find.text('Queued: 1', skipOffstage: false), findsOneWidget);
+    expect(find.text('Conflict: 1', skipOffstage: false), findsOneWidget);
+    expect(find.text('Blocked Review: 1', skipOffstage: false), findsOneWidget);
+    expect(find.text('Conflict review', skipOffstage: false), findsOneWidget);
+    expect(
+      find.text('Keep remote version', skipOffstage: false),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Reapply local intent', skipOffstage: false),
+      findsOneWidget,
+    );
+    expect(find.text('upsert task-ack', skipOffstage: false), findsOneWidget);
+    expect(
+      find.text('Clear retained history', skipOffstage: false),
+      findsOneWidget,
+    );
     expect(
       find.text('Timeline event for diagnostics.', skipOffstage: false),
       findsOneWidget,
@@ -199,6 +270,243 @@ void main() {
     expect(find.text('Deleted', skipOffstage: false), findsOneWidget);
     expect(find.text('Anonymous', skipOffstage: false), findsOneWidget);
   });
+
+  testWidgets(
+    'retained acknowledgements can be cleared from runtime diagnostics',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1200, 1600));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final runtimeDebug = RuntimeDebugProvider();
+      addTearDown(runtimeDebug.dispose);
+      final faultInjection = FaultInjectionProvider(runtimeDebug: runtimeDebug);
+      addTearDown(faultInjection.dispose);
+      final repository = InMemoryTasksRepository([]);
+      final outboxRepository = InMemoryOutboxRepository();
+      final snapshotCoordinator = TaskLocalSnapshotCoordinator.fromRepository(
+        repository,
+      );
+      final localStateCoordinator = TaskLocalStateCoordinator(
+        snapshotCoordinator,
+        outboxRepository,
+        runtimeDebug: runtimeDebug,
+      );
+      final syncService = TaskSyncService.forTesting(
+        repository,
+        remote: FakeTaskRemoteDataSource([]),
+        connectivityCheck: () async => [ConnectivityResult.wifi],
+        hasActiveSession: () => true,
+        runtimeDebug: runtimeDebug,
+        localStateCoordinator: localStateCoordinator,
+      );
+      final taskListStateCoordinator = TaskListStateCoordinator(
+        snapshotCoordinator,
+        runtimeDebug: runtimeDebug,
+        localStateCoordinator: localStateCoordinator,
+      );
+      final agenda = AgendaProvider(
+        taskListStateCoordinator: taskListStateCoordinator,
+        taskSyncFlowCoordinator: TaskSyncFlowCoordinator(
+          taskListStateCoordinator,
+          TaskSyncCoordinator(
+            snapshotCoordinator,
+            syncService,
+            runtimeDebug: runtimeDebug,
+            localStateCoordinator: localStateCoordinator,
+          ),
+        ),
+      );
+      addTearDown(agenda.dispose);
+
+      await localStateCoordinator.saveOutboxState(
+        OutboxStorageState(
+          isInitialized: true,
+          activeEntries: [
+            OutboxEntry(
+              taskId: 'task-queued',
+              operationType: OutboxOperationType.upsert,
+              state: OutboxEntryState.queued,
+              ownerScope: OutboxOwnerScope.authenticated,
+              taskPayload: const {'id': 'task-queued'},
+            ),
+          ],
+          recentAcknowledgements: [
+            OutboxEntry(
+              taskId: 'task-ack',
+              operationType: OutboxOperationType.upsert,
+              state: OutboxEntryState.acknowledged,
+              ownerScope: OutboxOwnerScope.authenticated,
+              taskPayload: const {'id': 'task-ack'},
+            ),
+          ],
+        ),
+      );
+
+      await tester.pumpWidget(
+        RailHarness(
+          agenda: agenda,
+          runtimeDebug: runtimeDebug,
+          faultInjection: faultInjection,
+          child: const SyncDebugPanel(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.scrollUntilVisible(
+        find.text('Clear retained history', skipOffstage: false),
+        300,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.widgetWithText(OutlinedButton, 'Clear retained history'),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('upsert task-ack', skipOffstage: false), findsNothing);
+      expect(runtimeDebug.state.acknowledgedEntryCount, 0);
+      expect(runtimeDebug.state.queuedEntryCount, 1);
+    },
+  );
+
+  testWidgets(
+    'soft demo reset clears diagnostics history while preserving auth, push, and active outbox counts',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1200, 1800));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final runtimeDebug = RuntimeDebugProvider();
+      addTearDown(runtimeDebug.dispose);
+      final faultInjection = FaultInjectionProvider(runtimeDebug: runtimeDebug);
+      addTearDown(faultInjection.dispose);
+      final repository = InMemoryTasksRepository([]);
+      final outboxRepository = InMemoryOutboxRepository();
+      final snapshotCoordinator = TaskLocalSnapshotCoordinator.fromRepository(
+        repository,
+      );
+      final localStateCoordinator = TaskLocalStateCoordinator(
+        snapshotCoordinator,
+        outboxRepository,
+        runtimeDebug: runtimeDebug,
+      );
+      final syncService = TaskSyncService.forTesting(
+        repository,
+        remote: FakeTaskRemoteDataSource([]),
+        connectivityCheck: () async => [ConnectivityResult.wifi],
+        hasActiveSession: () => true,
+        runtimeDebug: runtimeDebug,
+        localStateCoordinator: localStateCoordinator,
+      );
+      final taskListStateCoordinator = TaskListStateCoordinator(
+        snapshotCoordinator,
+        runtimeDebug: runtimeDebug,
+        localStateCoordinator: localStateCoordinator,
+      );
+      final agenda = AgendaProvider(
+        taskListStateCoordinator: taskListStateCoordinator,
+        taskSyncFlowCoordinator: TaskSyncFlowCoordinator(
+          taskListStateCoordinator,
+          TaskSyncCoordinator(
+            snapshotCoordinator,
+            syncService,
+            runtimeDebug: runtimeDebug,
+            localStateCoordinator: localStateCoordinator,
+          ),
+        ),
+      );
+      addTearDown(agenda.dispose);
+
+      runtimeDebug.setUserState(
+        cachedUserId: 'cached-user-123456',
+        activeUserId: 'active-user-123456',
+        hasAuthenticatedSession: true,
+      );
+      runtimeDebug.markSyncPartial(
+        'Sync completed. Some operations need review.',
+      );
+      runtimeDebug.setPushPermission(
+        PushPermissionState.granted,
+        logEvent: false,
+      );
+      runtimeDebug.setPushSubscriptionState(
+        PushSubscriptionState.registered,
+        message: 'Push registration is active.',
+      );
+      runtimeDebug.addEvent(
+        category: RuntimeEventCategory.sync,
+        message: 'Timeline event for diagnostics.',
+      );
+      await faultInjection.activateScenario(
+        FaultInjectionScenario.connectivityLoss,
+      );
+
+      await localStateCoordinator.saveOutboxState(
+        OutboxStorageState(
+          isInitialized: true,
+          activeEntries: [
+            OutboxEntry(
+              taskId: 'task-queued',
+              operationType: OutboxOperationType.upsert,
+              state: OutboxEntryState.queued,
+              ownerScope: OutboxOwnerScope.authenticated,
+              taskPayload: const {'id': 'task-queued'},
+            ),
+          ],
+          recentAcknowledgements: [
+            OutboxEntry(
+              taskId: 'task-ack',
+              operationType: OutboxOperationType.upsert,
+              state: OutboxEntryState.acknowledged,
+              ownerScope: OutboxOwnerScope.authenticated,
+              taskPayload: const {'id': 'task-ack'},
+            ),
+          ],
+        ),
+      );
+
+      await tester.pumpWidget(
+        RailHarness(
+          agenda: agenda,
+          runtimeDebug: runtimeDebug,
+          faultInjection: faultInjection,
+          child: const SyncDebugPanel(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final softResetButton = find.widgetWithText(
+        OutlinedButton,
+        'Soft demo reset',
+      );
+      await tester.ensureVisible(softResetButton);
+      await tester.pumpAndSettle();
+      await tester.tap(softResetButton);
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Soft reset'));
+      await tester.pumpAndSettle();
+
+      expect(runtimeDebug.state.hasAuthenticatedSession, isTrue);
+      expect(runtimeDebug.state.activeUserId, 'active-user-123456');
+      expect(runtimeDebug.state.queuedEntryCount, 1);
+      expect(runtimeDebug.state.acknowledgedEntryCount, 0);
+      expect(runtimeDebug.state.lastSyncResult, RuntimeSyncResult.none);
+      expect(runtimeDebug.state.lastSyncMessage, isNull);
+      expect(
+        runtimeDebug.state.pushSubscriptionState,
+        PushSubscriptionState.registered,
+      );
+      expect(
+        runtimeDebug.state.lastPushMessage,
+        'Push registration is active.',
+      );
+      expect(runtimeDebug.state.activeFaultInjectionLabel, isNull);
+      expect(runtimeDebug.state.recentEvents, isEmpty);
+      expect(find.text('upsert task-ack', skipOffstage: false), findsNothing);
+      expect(
+        find.text('Timeline event for diagnostics.', skipOffstage: false),
+        findsNothing,
+      );
+    },
+  );
 
   testWidgets('timeline context can be revealed and hidden', (tester) async {
     await tester.binding.setSurfaceSize(const Size(1200, 2200));
@@ -259,7 +567,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final detailsButton = find.widgetWithText(TextButton, 'View context');
+    await tester.scrollUntilVisible(
+      find.text('Timeline event for diagnostics.', skipOffstage: false),
+      300,
+    );
+
+    final detailsButton = find.text('View context', skipOffstage: false);
 
     expect(detailsButton, findsOneWidget);
 
@@ -269,8 +582,8 @@ void main() {
     await tester.tap(detailsButton);
     await tester.pumpAndSettle();
 
-    expect(find.text('Hide context'), findsOneWidget);
-    expect(find.text('Operator summary'), findsOneWidget);
+    expect(find.text('Hide context', skipOffstage: false), findsOneWidget);
+    expect(find.text('Operator summary', skipOffstage: false), findsOneWidget);
     expect(
       find.text(
         'The sync pass finished and captured structured operator evidence.',
@@ -283,7 +596,7 @@ void main() {
     expect(find.text('Before: Dirty task (local)'), findsOneWidget);
     expect(find.text('After: Dirty task'), findsOneWidget);
 
-    await tester.tap(find.widgetWithText(TextButton, 'Hide context'));
+    await tester.tap(find.text('Hide context', skipOffstage: false));
     await tester.pumpAndSettle();
 
     expect(find.text('Operator summary'), findsNothing);
