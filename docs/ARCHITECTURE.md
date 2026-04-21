@@ -30,17 +30,29 @@ Why:
 
 ### 3. The sync engine is intentionally transitional
 
-The current sync service is task-based reconciliation, not a durable outbox.
+The current sync service now supports an explicit outbox replay path, but the overall sync boundary is still transitional.
 
 Why:
 
 - the shell needed runtime evidence before a true operation model could be rendered responsibly
-- the next backend and data-model step is explicit outbox semantics, not more UI churn
+- the first Objective 1 slice prioritizes honest local operation state before a stronger backend mutation boundary or stronger local durability
 
 Current implication:
 
 - the implemented delayed-sync scenario is currently a client-owned pre-replay hold, not a true transport-latency or backend-acknowledgement delay
-- the outbox planned in Objective 1 is the architectural step that will allow delay, retry, duplicate, partial, and conflict scenarios to be modeled at an operation boundary instead of only at the whole-pass level
+- explicit outbox replay now exists when the runtime is using the coordinated local task-plus-outbox state layer
+- failed, blocked, conflict, queued, sending, and recent acknowledgement evidence now surface through runtime diagnostics and workspace notices
+- recent acknowledgements are currently retained as a rolling local history of up to 10 entries, and the diagnostics rail exposes a manual clear action for clean recording or demo setup
+- the diagnostics rail also exposes a soft demo reset action that clears transient diagnostics history, retained acknowledgements, sync outcome surfaces, and fault-injection UI state while preserving auth state, push state truth, local tasks, and active outbox entries
+- the diagnostics rail also exposes a hard reset action that confirms the remote deletion replay for authenticated remote-backed tasks before wiping all local task and outbox state on the current device
+- older task-shaped sync seams still exist as a fallback path for flows that are not yet running through the coordinated outbox state layer
+
+Current Objective 1 implication:
+
+- the repository now uses an explicit two-layer state-machine model for the first outbox slice:
+  - a per-operation outbox state machine for queued, sending, acknowledged, failed, blocked, and conflict states
+  - a higher-level sync-run state machine for runtime phases such as idle, syncing, offline, blocked-on-session, blocked-on-anonymous-review, and error
+- the operation-state machine currently owns replay only on the client-side direct CRUD path; first-slice conflict resolution is implemented, sign-out still clears the local workspace boundary, and stronger durability remains a later step
 
 ### 4. Runtime evidence must be visible in the product UI
 
@@ -249,6 +261,7 @@ Responsibilities:
 - reserve future UI slots for queued, sending, acknowledged, failed, and conflict operation states
 
 ### 6. Runtime diagnostics model
+
 Primary files:
 
 - `lib/providers/runtime_debug_provider.dart`
@@ -299,6 +312,7 @@ Responsibilities:
 Architectural significance:
 
 The current sync engine is still task-based, but the rest of the app no longer needs to depend directly on the concrete service shape to start or reload a sync pass.
+Objective 1 is the step that turns this seam into a true state-machine boundary instead of only a task-pass orchestration seam.
 
 ### 9. Current backend contract boundary
 
@@ -325,6 +339,9 @@ Current boundary:
 Architectural significance:
 
 Objective 0 now has a clearer frontend-facing sync boundary, but the long-term backend mutation surface is still intentionally undecided. The repository should describe that as a transitional contract rather than pretending the final backend shape already exists.
+
+The planned Objective 1 state machine therefore starts on the client side first.
+The client will model explicit operation states before the repository commits to a server-owned mutation gateway or stronger backend idempotency contract.
 
 ### 10. Scheduled delivery boundary
 
@@ -604,15 +621,15 @@ flowchart TD
 
 ## State ownership
 
-| Concern | Current source of truth | Notes |
-| --- | --- | --- |
-| Authenticated session | Supabase auth | Cached `userId` is only a mirror |
-| Cached identity | SharedPreferences | UI comparison context only |
-| Local task snapshot | SharedPreferences task list | Includes unsynced local mutations |
-| Authenticated canonical tasks | Supabase `tasks` table | Pulled back during sync |
-| Runtime diagnostics state | `RuntimeDebugProvider` | UI-facing evidence model |
-| Push subscription per browser profile | Supabase `push_subscriptions` | One account can have multiple subscriptions |
-| Notification dispatch timing | Supabase + Cloudflare Worker cron | Current cadence is every 5 minutes |
+| Concern                               | Current source of truth           | Notes                                       |
+| ------------------------------------- | --------------------------------- | ------------------------------------------- |
+| Authenticated session                 | Supabase auth                     | Cached `userId` is only a mirror            |
+| Cached identity                       | SharedPreferences                 | UI comparison context only                  |
+| Local task snapshot                   | SharedPreferences task list       | Includes unsynced local mutations           |
+| Authenticated canonical tasks         | Supabase `tasks` table            | Pulled back during sync                     |
+| Runtime diagnostics state             | `RuntimeDebugProvider`            | UI-facing evidence model                    |
+| Push subscription per browser profile | Supabase `push_subscriptions`     | One account can have multiple subscriptions |
+| Notification dispatch timing          | Supabase + Cloudflare Worker cron | Current cadence is every 5 minutes          |
 
 ## Deployment architecture
 

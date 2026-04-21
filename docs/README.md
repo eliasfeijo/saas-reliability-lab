@@ -164,15 +164,15 @@ That target shape is described in more detail in [`ARCHITECTURE.md`](ARCHITECTUR
 - `TaskList` remains only as a compatibility wrapper
 - runtime state is modeled explicitly through `RuntimeDebugProvider` and `RuntimeDebugState`
 - the client now routes workspace interaction state, session flow, sync entry, local snapshot handling, and task mutation rules through dedicated seams around `TaskWorkspace` and `AgendaProvider`
+- the client now replays an explicit local outbox with per-operation queued, sending, acknowledged, failed, conflict, blocked-review, and blocked-session states
+- diagnostics now expose first-slice conflict resolution actions and demo-safe reset controls alongside retained acknowledgement evidence
 - sync, auth, connectivity, local counts, and push state are visible in the UI
 - push notifications work end to end for signed-in browser profiles
 
 ### Still missing
 
-- durable outbox semantics
-- per-operation acknowledgement and retry state
-- explicit conflict capture and resolution
 - fault-injection controls
+- stronger local durability than SharedPreferences
 - stronger structured logging and metrics
 - broad automated coverage across multi-device and failure scenarios
 
@@ -202,6 +202,7 @@ The goal is to make reliability behavior inspectable.
 - [`ARCHITECTURE.md`](ARCHITECTURE.md): implemented topology, state ownership, and evolution path
 - [`OBJECTIVE_0_FOUNDATION_PLAN.md`](OBJECTIVE_0_FOUNDATION_PLAN.md): completed Objective 0 execution record and handoff for the finished foundation refactor
 - [`OBJECTIVE_1_OUTBOX_ENTRY_PLAN.md`](OBJECTIVE_1_OUTBOX_ENTRY_PLAN.md): active Objective 1 entry plan for the next outbox-focused phase
+- [`OBJECTIVE_1_OUTBOX_EXECUTION_PLAN.md`](OBJECTIVE_1_OUTBOX_EXECUTION_PLAN.md): execution-ready first-slice plan for building the explicit outbox on the current Objective 0 seams
 - [`FAULT_INJECTION_PLAN.md`](FAULT_INJECTION_PLAN.md): end-to-end plan for turning scenario placeholders into real fault-injection controls, starting with connectivity loss and delayed sync
 - [`DEPLOYMENT.md`](DEPLOYMENT.md): GitHub Actions workflows, GitHub Pages integration, worker deployment, and environment matrix
 - [`LOCAL_DEVELOPMENT.md`](LOCAL_DEVELOPMENT.md): repository-root workflow, local commands, and developer setup for running the projects locally

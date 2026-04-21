@@ -46,7 +46,7 @@ The app reads `SUPABASE_URL` and `SUPABASE_ANON_KEY` at startup, and the browser
 - local persistence uses SharedPreferences, so local state behavior is part of the product contract
 - `AgendaProvider` now sits on top of explicit coordination seams for local snapshot handling, task mutation rules, sync orchestration, and workspace session flow
 - push behavior depends on both `web\push.js` and the dedicated `web\push-sw.js` asset
-- the current sync engine is still task-based rather than operation-based, so UI expectations should stay aligned with the existing docs
+- the current Objective 1 slice now uses an explicit client-side outbox replay path with first-slice conflict resolution, while sign-out still clears the local workspace and stronger durability plus a future backend mutation boundary remain later work
 
 ## Related docs
 

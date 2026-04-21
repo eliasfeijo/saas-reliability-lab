@@ -127,6 +127,57 @@ Current state:
 - schema or backend-contract validation in CI
 - real end-to-end verification for deployed push and scheduled-runtime behavior
 
+## Objective 1 state-machine coverage
+
+Objective 1 is introducing a real outbox state machine rather than only extending the current task-diff sync logic.
+
+That means the repo should test two related but distinct concerns:
+
+- the per-entry outbox state machine
+- the higher-level sync-run phase machine shown in runtime diagnostics
+
+### Outbox entry state-machine coverage
+
+The first Objective 1 slice now verifies these transition points directly, while broader multi-device and backend-contract scenarios remain later coverage work:
+
+- legacy dirty-task migration into `queued` entries
+- legacy deleted-task migration into `queued` delete entries
+- anonymous local work migration into `blockedAnonymousReview`
+- `blockedAnonymousReview -> queued` on keep after sign-in
+- `blockedAnonymousReview -> removed` on discard
+- `blockedNoSession -> queued` when a valid session returns
+- `queued -> sending -> acknowledged` on successful replay
+- `queued -> sending -> failed` on recoverable replay failure
+- `queued -> sending -> conflict` on remote-version mismatch or expected-row-missing cases
+- `failed -> queued` on retry
+- `conflict -> queued` on reapply-local resolution
+- `conflict -> removed` on keep-remote resolution
+
+Implemented focused coverage in the current repo includes:
+
+- migration and persistence repair checks in `task_local_state_coordinator_test.dart`
+- mutation compaction checks in `task_mutation_coordinator_test.dart`
+- outbox replay acknowledgement, blocked-session, and conflict-path checks in `sync_logic_test.dart`
+- diagnostics evidence rendering, conflict-action visibility, and soft-reset confirmation coverage in `sync_debug_panel_test.dart`
+- hard-reset remote-delete replay and local wipe coverage in `agenda_provider_test.dart`
+- local-state conflict resolution coverage in `task_local_state_coordinator_test.dart` and signed-out workspace clearing coverage in `workspace_session_coordinator_test.dart`
+- mutation-to-persistence handoff checks in `task_sync_flow_coordinator_test.dart`
+
+### Sync-run phase coverage
+
+The first Objective 1 slice should also verify the higher-level runtime phases:
+
+- `initialLoad` during startup restore and migration
+- `idle` once local state settles
+- `offline` when replay is requested without connectivity
+- `blockedNoSession` when replay is requested without a live session
+- `blockedAnonymousReview` when anonymous review gates replay
+- `syncing` while replay is active
+- partial or failed outcome evidence when the run does not settle cleanly
+
+This coverage matters because the outbox is not only a storage concern.
+It is the behavior contract that makes the reliability lab observable and explainable.
+
 ## Testing principles
 
 ### 1. Test by reliability concern, not by leftover default filenames
@@ -166,14 +217,14 @@ flowchart TD
     Contract --> EndToEnd["End-to-end or manual<br/>browser push and scheduled runtime"]
 ```
 
-| Layer | Primary concern | Examples in this repo |
-| --- | --- | --- |
-| Unit | pure logic, model behavior, reconciliation rules | `TaskModel`, task ordering, sync merge rules, session helpers |
-| Widget | render behavior, interaction flows, responsive layout, shell ownership | `LabShell`, `TaskWorkspace`, `LabLeftRail`, `SyncDebugPanel` |
-| Integration | multi-step app flows inside Flutter runtime | anonymous create -> login review, offline create -> reconnect -> sync |
-| Worker | notification dispatch logic and repository interactions | stale subscription cleanup, successful send, partial send failure, multi-subscription fan-out |
-| End-to-end | real deployed or near-real infrastructure behavior | push registration, scheduled dispatch, multi-profile delivery |
-| Manual experiment | exploratory or operational scenarios not yet automated | auth churn, external provider behavior, deployed cron timing verification |
+| Layer             | Primary concern                                                        | Examples in this repo                                                                         |
+| ----------------- | ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Unit              | pure logic, model behavior, reconciliation rules                       | `TaskModel`, task ordering, sync merge rules, session helpers                                 |
+| Widget            | render behavior, interaction flows, responsive layout, shell ownership | `LabShell`, `TaskWorkspace`, `LabLeftRail`, `SyncDebugPanel`                                  |
+| Integration       | multi-step app flows inside Flutter runtime                            | anonymous create -> login review, offline create -> reconnect -> sync                         |
+| Worker            | notification dispatch logic and repository interactions                | stale subscription cleanup, successful send, partial send failure, multi-subscription fan-out |
+| End-to-end        | real deployed or near-real infrastructure behavior                     | push registration, scheduled dispatch, multi-profile delivery                                 |
+| Manual experiment | exploratory or operational scenarios not yet automated                 | auth churn, external provider behavior, deployed cron timing verification                     |
 
 ## What should be tested where
 
