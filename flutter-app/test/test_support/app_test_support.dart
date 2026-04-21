@@ -29,26 +29,31 @@ AgendaProvider buildAgendaProviderForTesting(
   TasksRepository repository,
   TaskSyncGateway taskSyncGateway, {
   RuntimeDebugProvider? runtimeDebug,
+  TaskLocalStateCoordinator? localStateCoordinator,
+  OutboxRepository? outboxRepository,
 }) {
-  final outboxRepository = InMemoryOutboxRepository();
   final snapshotCoordinator = TaskLocalSnapshotCoordinator.fromRepository(
     repository,
   );
-  final localStateCoordinator = TaskLocalStateCoordinator(
-    snapshotCoordinator,
-    outboxRepository,
-    runtimeDebug: runtimeDebug,
-  );
+  final resolvedOutboxRepository =
+      outboxRepository ?? InMemoryOutboxRepository();
+  final resolvedLocalStateCoordinator =
+      localStateCoordinator ??
+      TaskLocalStateCoordinator(
+        snapshotCoordinator,
+        resolvedOutboxRepository,
+        runtimeDebug: runtimeDebug,
+      );
   final taskListStateCoordinator = TaskListStateCoordinator(
     snapshotCoordinator,
     runtimeDebug: runtimeDebug,
-    localStateCoordinator: localStateCoordinator,
+    localStateCoordinator: resolvedLocalStateCoordinator,
   );
   final taskSyncCoordinator = TaskSyncCoordinator(
     snapshotCoordinator,
     taskSyncGateway,
     runtimeDebug: runtimeDebug,
-    localStateCoordinator: localStateCoordinator,
+    localStateCoordinator: resolvedLocalStateCoordinator,
   );
 
   return AgendaProvider(

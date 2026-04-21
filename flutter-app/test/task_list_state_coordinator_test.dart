@@ -3,6 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:todo_flutter/models/task.dart';
 import 'package:todo_flutter/providers/runtime_debug_provider.dart';
 import 'package:todo_flutter/services/task_list_state_coordinator.dart';
+import 'package:todo_flutter/services/task_local_snapshot_coordinator.dart';
+import 'package:todo_flutter/services/task_local_state_coordinator.dart';
 
 import 'test_support/app_test_support.dart';
 
@@ -52,9 +54,19 @@ void main() {
         deletedAnonymousTask,
         dirtyAccountTask,
       ]);
+      final outboxRepository = InMemoryOutboxRepository();
       final runtimeDebug = RuntimeDebugProvider();
+      final snapshotCoordinator = TaskLocalSnapshotCoordinator.fromRepository(
+        repository,
+      );
       final coordinator = TaskListStateCoordinator.fromRepository(
         repository,
+        outboxRepository: outboxRepository,
+        localStateCoordinator: TaskLocalStateCoordinator(
+          snapshotCoordinator,
+          outboxRepository,
+          runtimeDebug: runtimeDebug,
+        ),
         runtimeDebug: runtimeDebug,
       );
 
@@ -91,9 +103,19 @@ void main() {
     );
 
     final repository = InMemoryTasksRepository(const []);
+    final outboxRepository = InMemoryOutboxRepository();
     final runtimeDebug = RuntimeDebugProvider();
+    final snapshotCoordinator = TaskLocalSnapshotCoordinator.fromRepository(
+      repository,
+    );
     final coordinator = TaskListStateCoordinator.fromRepository(
       repository,
+      outboxRepository: outboxRepository,
+      localStateCoordinator: TaskLocalStateCoordinator(
+        snapshotCoordinator,
+        outboxRepository,
+        runtimeDebug: runtimeDebug,
+      ),
       runtimeDebug: runtimeDebug,
     );
 

@@ -1,9 +1,13 @@
 import 'package:connectivity_plus_platform_interface/connectivity_plus_platform_interface.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:todo_flutter/models/outbox_entry.dart';
 import 'package:todo_flutter/models/runtime_debug_state.dart';
 import 'package:todo_flutter/models/task.dart';
 import 'package:todo_flutter/providers/runtime_debug_provider.dart';
+import 'package:todo_flutter/repositories/outbox_repository.dart';
+import 'package:todo_flutter/services/task_local_snapshot_coordinator.dart';
+import 'package:todo_flutter/services/task_local_state_coordinator.dart';
 import 'package:todo_flutter/services/task_sync_coordinator.dart';
 import 'package:todo_flutter/services/task_sync_service.dart';
 
@@ -45,8 +49,17 @@ void main() {
       );
 
       final repository = InMemoryTasksRepository([anonymousTask]);
+      final outboxRepository = InMemoryOutboxRepository();
       final runtimeDebug = RuntimeDebugProvider();
       addTearDown(runtimeDebug.dispose);
+      final snapshotCoordinator = TaskLocalSnapshotCoordinator.fromRepository(
+        repository,
+      );
+      final localStateCoordinator = TaskLocalStateCoordinator(
+        snapshotCoordinator,
+        outboxRepository,
+        runtimeDebug: runtimeDebug,
+      );
 
       final service = TaskSyncService.forTesting(
         repository,
@@ -54,10 +67,13 @@ void main() {
         connectivityCheck: () async => [ConnectivityResult.wifi],
         hasActiveSession: () => true,
         runtimeDebug: runtimeDebug,
+        localStateCoordinator: localStateCoordinator,
       );
       final coordinator = TaskSyncCoordinator.fromRepository(
         repository,
         service,
+        outboxRepository: outboxRepository,
+        localStateCoordinator: localStateCoordinator,
         runtimeDebug: runtimeDebug,
       );
 
@@ -94,9 +110,36 @@ void main() {
       );
 
       final repository = InMemoryTasksRepository([dirtyTask]);
+      final outboxRepository = InMemoryOutboxRepository();
       final remote = FakeTaskRemoteDataSource([]);
       final runtimeDebug = RuntimeDebugProvider();
       addTearDown(runtimeDebug.dispose);
+      final snapshotCoordinator = TaskLocalSnapshotCoordinator.fromRepository(
+        repository,
+      );
+      final localStateCoordinator = TaskLocalStateCoordinator(
+        snapshotCoordinator,
+        outboxRepository,
+        runtimeDebug: runtimeDebug,
+      );
+      await localStateCoordinator.saveState(
+        TaskLocalState(
+          tasks: [dirtyTask],
+          outboxState: OutboxStorageState(
+            isInitialized: true,
+            activeEntries: [
+              OutboxEntry(
+                taskId: dirtyTask.id,
+                operationType: OutboxOperationType.upsert,
+                state: OutboxEntryState.queued,
+                ownerScope: OutboxOwnerScope.authenticated,
+                firstQueuedAt: dirtyTask.lastModifiedAt?.toUtc(),
+                taskPayload: dirtyTask.toJson(),
+              ),
+            ],
+          ),
+        ),
+      );
 
       final service = TaskSyncService.forTesting(
         repository,
@@ -104,10 +147,13 @@ void main() {
         connectivityCheck: () async => [ConnectivityResult.wifi],
         hasActiveSession: () => true,
         runtimeDebug: runtimeDebug,
+        localStateCoordinator: localStateCoordinator,
       );
       final coordinator = TaskSyncCoordinator.fromRepository(
         repository,
         service,
+        outboxRepository: outboxRepository,
+        localStateCoordinator: localStateCoordinator,
         runtimeDebug: runtimeDebug,
       );
 

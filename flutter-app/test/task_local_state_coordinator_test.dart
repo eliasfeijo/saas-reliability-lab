@@ -29,7 +29,7 @@ void main() {
   });
 
   test(
-    'local state coordinator migrates legacy task sync markers into explicit outbox storage',
+    'local state coordinator initializes empty outbox storage without deriving legacy entries',
     () async {
       final runtimeDebug = RuntimeDebugProvider();
       addTearDown(runtimeDebug.dispose);
@@ -88,39 +88,14 @@ void main() {
       final state = await coordinator.loadState();
       final persistedState = await outboxRepository.loadState();
 
-      expect(state.didMigrateLegacySyncState, isTrue);
       expect(state.tasks.map((task) => task.id), [
         'task-state-dirty',
         'task-state-deleted',
         'task-state-anonymous',
       ]);
       expect(persistedState.isInitialized, isTrue);
-      expect(persistedState.activeEntries, hasLength(3));
-
-      final dirtyEntry = persistedState.activeEntries.firstWhere(
-        (entry) => entry.taskId == dirtyAccountTask.id,
-      );
-      expect(dirtyEntry.operationType, OutboxOperationType.upsert);
-      expect(dirtyEntry.state, OutboxEntryState.queued);
-      expect(dirtyEntry.ownerScope, OutboxOwnerScope.authenticated);
-
-      final deletedEntry = persistedState.activeEntries.firstWhere(
-        (entry) => entry.taskId == deletedAccountTask.id,
-      );
-      expect(deletedEntry.operationType, OutboxOperationType.delete);
-      expect(deletedEntry.state, OutboxEntryState.queued);
-
-      final anonymousEntry = persistedState.activeEntries.firstWhere(
-        (entry) => entry.taskId == anonymousTask.id,
-      );
-      expect(anonymousEntry.operationType, OutboxOperationType.upsert);
-      expect(anonymousEntry.state, OutboxEntryState.blockedAnonymousReview);
-      expect(anonymousEntry.ownerScope, OutboxOwnerScope.anonymous);
-
-      expect(
-        runtimeDebug.state.recentEvents.first.message,
-        'Initialized explicit outbox storage from legacy local sync markers.',
-      );
+      expect(persistedState.activeEntries, isEmpty);
+      expect(runtimeDebug.state.recentEvents, isEmpty);
     },
   );
 

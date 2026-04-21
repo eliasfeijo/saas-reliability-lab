@@ -16,10 +16,10 @@ typedef SyncedTasksCallback = FutureOr<void> Function(List<TaskModel> tasks);
 
 class TaskSyncCoordinator {
   TaskSyncCoordinator(
-    this._localSnapshotCoordinator,
+    TaskLocalSnapshotCoordinator _,
     this._taskSyncGateway, {
     RuntimeDebugProvider? runtimeDebug,
-    TaskLocalStateCoordinator? localStateCoordinator,
+    required TaskLocalStateCoordinator localStateCoordinator,
   }) : _runtimeDebug = runtimeDebug,
        _localStateCoordinator = localStateCoordinator;
 
@@ -33,27 +33,25 @@ class TaskSyncCoordinator {
     final snapshotCoordinator = TaskLocalSnapshotCoordinator.fromRepository(
       repository,
     );
+    final resolvedLocalStateCoordinator =
+        localStateCoordinator ??
+        TaskLocalStateCoordinator(
+          snapshotCoordinator,
+          outboxRepository ?? SharedPreferencesOutboxRepository(),
+          runtimeDebug: runtimeDebug,
+        );
 
     return TaskSyncCoordinator(
       snapshotCoordinator,
       taskSyncGateway,
       runtimeDebug: runtimeDebug,
-      localStateCoordinator:
-          localStateCoordinator ??
-          (outboxRepository == null
-              ? null
-              : TaskLocalStateCoordinator(
-                  snapshotCoordinator,
-                  outboxRepository,
-                  runtimeDebug: runtimeDebug,
-                )),
+      localStateCoordinator: resolvedLocalStateCoordinator,
     );
   }
 
-  final TaskLocalSnapshotCoordinator _localSnapshotCoordinator;
   final TaskSyncGateway _taskSyncGateway;
   final RuntimeDebugProvider? _runtimeDebug;
-  final TaskLocalStateCoordinator? _localStateCoordinator;
+  final TaskLocalStateCoordinator _localStateCoordinator;
 
   Future<TaskSyncRunResult> syncAllTasks({
     required List<TaskModel> tasks,
@@ -149,9 +147,7 @@ class TaskSyncCoordinator {
   }
 
   Future<void> _reloadTasks(SyncedTasksCallback onTasksReloaded) async {
-    final reloadedTasks =
-        await (_localStateCoordinator?.loadTaskSnapshot() ??
-            _localSnapshotCoordinator.loadSnapshot());
+    final reloadedTasks = await _localStateCoordinator.loadTaskSnapshot();
     await onTasksReloaded(reloadedTasks);
   }
 }

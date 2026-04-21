@@ -7,15 +7,10 @@ import 'package:todo_flutter/repositories/tasks_repository.dart';
 import 'package:todo_flutter/services/task_local_snapshot_coordinator.dart';
 
 class TaskLocalState {
-  const TaskLocalState({
-    required this.tasks,
-    required this.outboxState,
-    this.didMigrateLegacySyncState = false,
-  });
+  const TaskLocalState({required this.tasks, required this.outboxState});
 
   final List<TaskModel> tasks;
   final OutboxStorageState outboxState;
-  final bool didMigrateLegacySyncState;
 }
 
 class TaskLocalStateCoordinator {
@@ -57,12 +52,15 @@ class TaskLocalStateCoordinator {
     final tasks = await _snapshotCoordinator.loadSnapshot();
 
     final currentState = await _outboxRepository.loadState();
-    if (currentState.isInitialized) {
-      _runtimeDebug?.updateOutboxState(currentState);
-      return TaskLocalState(tasks: tasks, outboxState: currentState);
+    if (!currentState.isInitialized) {
+      const initializedState = OutboxStorageState(isInitialized: true);
+      await _outboxRepository.saveState(initializedState);
+      _runtimeDebug?.updateOutboxState(initializedState);
+      return TaskLocalState(tasks: tasks, outboxState: initializedState);
     }
 
-    return _persistDerivedLegacyOutbox(tasks, logMigrationEvent: true);
+    _runtimeDebug?.updateOutboxState(currentState);
+    return TaskLocalState(tasks: tasks, outboxState: currentState);
   }
 
   Future<OutboxStorageState> loadOutboxState() async {
@@ -222,107 +220,6 @@ class TaskLocalStateCoordinator {
       ),
     );
     return nextTasks;
-  }
-
-  List<OutboxEntry> _buildLegacyEntries(List<TaskModel> tasks) {
-    final entries = <OutboxEntry>[];
-
-    for (final task in tasks) {
-      if (task.userId == null) {
-        entries.add(
-          OutboxEntry(
-            taskId: task.id,
-            operationType: OutboxOperationType.upsert,
-            state: OutboxEntryState.blockedAnonymousReview,
-            ownerScope: OutboxOwnerScope.anonymous,
-            firstQueuedAt: task.lastModifiedAt?.toUtc(),
-            baseRemoteUpdatedAt: task.updatedAt?.toUtc(),
-            taskPayload: task.toJson(),
-          ),
-        );
-        continue;
-      }
-
-      if (task.syncStatus == SyncStatus.dirty) {
-        entries.add(
-          OutboxEntry(
-            taskId: task.id,
-            operationType: OutboxOperationType.upsert,
-            state: OutboxEntryState.queued,
-            ownerScope: OutboxOwnerScope.authenticated,
-            firstQueuedAt: task.lastModifiedAt?.toUtc(),
-            baseRemoteUpdatedAt: task.updatedAt?.toUtc(),
-            taskPayload: task.toJson(),
-          ),
-        );
-        continue;
-      }
-
-      if (task.syncStatus == SyncStatus.deleted) {
-        entries.add(
-          OutboxEntry(
-            taskId: task.id,
-            operationType: OutboxOperationType.delete,
-            state: OutboxEntryState.queued,
-            ownerScope: OutboxOwnerScope.authenticated,
-            firstQueuedAt: task.lastModifiedAt?.toUtc(),
-            baseRemoteUpdatedAt: task.updatedAt?.toUtc(),
-            taskPayload: task.toJson(),
-          ),
-        );
-      }
-    }
-
-    return entries;
-  }
-
-  void _logLegacyMigration(List<TaskModel> tasks, List<OutboxEntry> entries) {
-    _runtimeDebug?.addEvent(
-      category: RuntimeEventCategory.storage,
-      message:
-          'Initialized explicit outbox storage from legacy local sync markers.',
-      payload: RuntimeEventPayload(
-        stage: 'Legacy sync migration',
-        summary:
-            'The runtime derived an initial explicit outbox from the existing locally persisted task snapshot.',
-        metrics: [
-          RuntimeEventMetric(
-            label: 'Visible tasks',
-            value: tasks.length.toString(),
-          ),
-          RuntimeEventMetric(
-            label: 'Derived outbox entries',
-            value: entries.length.toString(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<TaskLocalState> _persistDerivedLegacyOutbox(
-    List<TaskModel> tasks, {
-    bool logMigrationEvent = false,
-  }) async {
-    final currentState = await _outboxRepository.loadState();
-    final nextEntries = _buildLegacyEntries(tasks);
-    final didMigrate = !currentState.isInitialized;
-    final nextState = currentState.copyWith(
-      isInitialized: true,
-      activeEntries: nextEntries,
-    );
-
-    await _outboxRepository.saveState(nextState);
-    _runtimeDebug?.updateOutboxState(nextState);
-
-    if (logMigrationEvent && didMigrate) {
-      _logLegacyMigration(tasks, nextEntries);
-    }
-
-    return TaskLocalState(
-      tasks: tasks,
-      outboxState: nextState,
-      didMigrateLegacySyncState: didMigrate,
-    );
   }
 
   Future<OutboxStorageState> _rebuildOutboxStateForTasks(

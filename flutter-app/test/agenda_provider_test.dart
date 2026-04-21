@@ -1,6 +1,9 @@
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:todo_flutter/models/task.dart';
+import 'package:todo_flutter/repositories/outbox_repository.dart';
+import 'package:todo_flutter/services/task_local_snapshot_coordinator.dart';
+import 'package:todo_flutter/services/task_local_state_coordinator.dart';
 import 'package:todo_flutter/services/task_sync_service.dart';
 
 import 'test_support/app_test_support.dart';
@@ -53,14 +56,24 @@ void main() {
 
       final repository = InMemoryTasksRepository([anonymousTask]);
       final remote = FakeTaskRemoteDataSource([]);
+      final outboxRepository = InMemoryOutboxRepository();
+      final localStateCoordinator = TaskLocalStateCoordinator(
+        TaskLocalSnapshotCoordinator.fromRepository(repository),
+        outboxRepository,
+      );
       final service = TaskSyncService.forTesting(
         repository,
         remote: remote,
         connectivityCheck: () async => [ConnectivityResult.wifi],
         hasActiveSession: () => true,
+        localStateCoordinator: localStateCoordinator,
       );
-      final agenda = buildAgendaProviderForTesting(repository, service)
-        ..userId = 'user-1';
+      final agenda = buildAgendaProviderForTesting(
+        repository,
+        service,
+        localStateCoordinator: localStateCoordinator,
+        outboxRepository: outboxRepository,
+      )..userId = 'user-1';
 
       agenda.tasks = [anonymousTask];
       await agenda.takeOwnershipOfAnonymousTasks();
@@ -226,20 +239,43 @@ void main() {
         remoteTask,
         alreadyDeletedRemoteTask,
       ]);
+      final outboxRepository = InMemoryOutboxRepository();
+      final localStateCoordinator = TaskLocalStateCoordinator(
+        TaskLocalSnapshotCoordinator.fromRepository(repository),
+        outboxRepository,
+      );
+      await localStateCoordinator.saveState(
+        TaskLocalState(
+          tasks: [
+            remoteTask,
+            alreadyDeletedRemoteTask,
+            localOnlyTask,
+            anonymousTask,
+          ],
+          outboxState: const OutboxStorageState(isInitialized: true),
+        ),
+      );
       final service = TaskSyncService.forTesting(
         repository,
         remote: remote,
         connectivityCheck: () async => [ConnectivityResult.wifi],
         hasActiveSession: () => true,
+        localStateCoordinator: localStateCoordinator,
       );
-      final agenda = buildAgendaProviderForTesting(repository, service)
-        ..userId = 'user-1'
-        ..tasks = [
-          remoteTask,
-          alreadyDeletedRemoteTask,
-          localOnlyTask,
-          anonymousTask,
-        ];
+      final agenda =
+          buildAgendaProviderForTesting(
+              repository,
+              service,
+              localStateCoordinator: localStateCoordinator,
+              outboxRepository: outboxRepository,
+            )
+            ..userId = 'user-1'
+            ..tasks = [
+              remoteTask,
+              alreadyDeletedRemoteTask,
+              localOnlyTask,
+              anonymousTask,
+            ];
 
       final preview = agenda.hardResetPreview;
 

@@ -7,9 +7,9 @@ import 'package:todo_flutter/services/task_local_state_coordinator.dart';
 
 class TaskListStateCoordinator {
   TaskListStateCoordinator(
-    this._localSnapshotCoordinator, {
+    TaskLocalSnapshotCoordinator _, {
     RuntimeDebugProvider? runtimeDebug,
-    TaskLocalStateCoordinator? localStateCoordinator,
+    required TaskLocalStateCoordinator localStateCoordinator,
   }) : _runtimeDebug = runtimeDebug,
        _localStateCoordinator = localStateCoordinator;
 
@@ -22,30 +22,26 @@ class TaskListStateCoordinator {
     final snapshotCoordinator = TaskLocalSnapshotCoordinator.fromRepository(
       repository,
     );
+    final resolvedLocalStateCoordinator =
+        localStateCoordinator ??
+        TaskLocalStateCoordinator(
+          snapshotCoordinator,
+          outboxRepository ?? SharedPreferencesOutboxRepository(),
+          runtimeDebug: runtimeDebug,
+        );
 
     return TaskListStateCoordinator(
       snapshotCoordinator,
       runtimeDebug: runtimeDebug,
-      localStateCoordinator:
-          localStateCoordinator ??
-          (outboxRepository == null
-              ? null
-              : TaskLocalStateCoordinator(
-                  snapshotCoordinator,
-                  outboxRepository,
-                  runtimeDebug: runtimeDebug,
-                )),
+      localStateCoordinator: resolvedLocalStateCoordinator,
     );
   }
 
-  final TaskLocalSnapshotCoordinator _localSnapshotCoordinator;
-  final TaskLocalStateCoordinator? _localStateCoordinator;
+  final TaskLocalStateCoordinator _localStateCoordinator;
   final RuntimeDebugProvider? _runtimeDebug;
 
   Future<List<TaskModel>> loadTasks() async {
-    final tasks =
-        await (_localStateCoordinator?.loadTaskSnapshot() ??
-            _localSnapshotCoordinator.loadSnapshot());
+    final tasks = await _localStateCoordinator.loadTaskSnapshot();
     publishTaskCounts(tasks);
     return tasks;
   }
@@ -54,12 +50,10 @@ class TaskListStateCoordinator {
     List<TaskModel> tasks, {
     Iterable<String> changedTaskIds = const <String>[],
   }) async {
-    final storedTasks =
-        await (_localStateCoordinator?.saveTaskSnapshot(
-              tasks,
-              changedTaskIds: changedTaskIds,
-            ) ??
-            _localSnapshotCoordinator.saveSnapshot(tasks));
+    final storedTasks = await _localStateCoordinator.saveTaskSnapshot(
+      tasks,
+      changedTaskIds: changedTaskIds,
+    );
     publishTaskCounts(storedTasks);
     return storedTasks;
   }
@@ -68,38 +62,36 @@ class TaskListStateCoordinator {
     List<TaskModel> tasks,
     Iterable<String> taskIds,
   ) async {
-    final nextTasks =
-        await (_localStateCoordinator?.removeTaskIds(tasks, taskIds) ??
-            _localSnapshotCoordinator.removeTaskIds(tasks, taskIds));
+    final nextTasks = await _localStateCoordinator.removeTaskIds(
+      tasks,
+      taskIds,
+    );
     publishTaskCounts(nextTasks);
     return nextTasks;
   }
 
   Future<List<TaskModel>> clearTasks() async {
-    final clearedTasks =
-        await (_localStateCoordinator?.clearLocalState() ??
-            _localSnapshotCoordinator.clearSnapshot());
+    final clearedTasks = await _localStateCoordinator.clearLocalState();
     publishTaskCounts(clearedTasks);
     return clearedTasks;
   }
 
   Future<void> clearRecentAcknowledgements() {
-    return _localStateCoordinator?.clearRecentAcknowledgements() ??
-        Future<void>.value();
+    return _localStateCoordinator.clearRecentAcknowledgements();
   }
 
   Future<List<TaskModel>> resolveConflictKeepingRemote(String taskId) async {
-    final nextTasks =
-        await (_localStateCoordinator?.resolveConflictKeepingRemote(taskId) ??
-            loadTasks());
+    final nextTasks = await _localStateCoordinator.resolveConflictKeepingRemote(
+      taskId,
+    );
     publishTaskCounts(nextTasks);
     return nextTasks;
   }
 
   Future<List<TaskModel>> reapplyConflictAsQueued(String taskId) async {
-    final nextTasks =
-        await (_localStateCoordinator?.reapplyConflictAsQueued(taskId) ??
-            loadTasks());
+    final nextTasks = await _localStateCoordinator.reapplyConflictAsQueued(
+      taskId,
+    );
     publishTaskCounts(nextTasks);
     return nextTasks;
   }

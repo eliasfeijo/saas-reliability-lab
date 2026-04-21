@@ -5,9 +5,11 @@ import 'package:todo_flutter/controllers/task_workspace_interaction_controller.d
 import 'package:todo_flutter/models/outbox_entry.dart';
 import 'package:todo_flutter/models/task.dart';
 import 'package:todo_flutter/providers/runtime_debug_provider.dart';
+import 'package:todo_flutter/repositories/outbox_repository.dart';
 import 'package:todo_flutter/repositories/tasks_repository.dart';
 import 'package:todo_flutter/services/task_list_state_coordinator.dart';
 import 'package:todo_flutter/services/task_local_snapshot_coordinator.dart';
+import 'package:todo_flutter/services/task_local_state_coordinator.dart';
 import 'package:todo_flutter/services/task_mutation_coordinator.dart';
 import 'package:todo_flutter/services/task_sync_coordinator.dart';
 import 'package:todo_flutter/services/task_sync_flow_coordinator.dart';
@@ -73,18 +75,25 @@ class AgendaProvider extends ChangeNotifier {
     final resolvedLocalSnapshotCoordinator =
         localSnapshotCoordinator ??
         TaskLocalSnapshotCoordinator.fromRepository(repository);
+    final resolvedLocalStateCoordinator = TaskLocalStateCoordinator(
+      resolvedLocalSnapshotCoordinator,
+      SharedPreferencesOutboxRepository(),
+      runtimeDebug: runtimeDebug,
+    );
     final resolvedTaskSyncCoordinator =
         taskSyncCoordinator ??
         TaskSyncCoordinator(
           resolvedLocalSnapshotCoordinator,
           taskSyncGateway,
           runtimeDebug: runtimeDebug,
+          localStateCoordinator: resolvedLocalStateCoordinator,
         );
     final resolvedTaskListStateCoordinator =
         taskListStateCoordinator ??
         TaskListStateCoordinator(
           resolvedLocalSnapshotCoordinator,
           runtimeDebug: runtimeDebug,
+          localStateCoordinator: resolvedLocalStateCoordinator,
         );
     final resolvedTaskSyncFlowCoordinator = TaskSyncFlowCoordinator(
       resolvedTaskListStateCoordinator,
