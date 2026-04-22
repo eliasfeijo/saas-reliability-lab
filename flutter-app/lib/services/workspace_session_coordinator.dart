@@ -42,8 +42,35 @@ class WorkspaceSessionCoordinator {
   final PushRegistrationCallback _registerPushSubscription;
   final ActiveUserIdResolver _activeUserId;
   final AuthenticatedSessionResolver _hasAuthenticatedSession;
+  Future<WorkspaceSessionResult>? _activeInitialization;
+  Future<void>? _activePushRegistration;
+  String? _activePushRegistrationUserId;
 
   Future<WorkspaceSessionResult> initialize({
+    required AgendaProvider agenda,
+    required RuntimeDebugProvider runtimeDebug,
+  }) async {
+    final inFlightInitialization = _activeInitialization;
+    if (inFlightInitialization != null) {
+      return inFlightInitialization;
+    }
+
+    final initializationFuture = _runInitialize(
+      agenda: agenda,
+      runtimeDebug: runtimeDebug,
+    );
+    _activeInitialization = initializationFuture;
+
+    try {
+      return await initializationFuture;
+    } finally {
+      if (identical(_activeInitialization, initializationFuture)) {
+        _activeInitialization = null;
+      }
+    }
+  }
+
+  Future<WorkspaceSessionResult> _runInitialize({
     required AgendaProvider agenda,
     required RuntimeDebugProvider runtimeDebug,
   }) async {
@@ -79,6 +106,11 @@ class WorkspaceSessionCoordinator {
     required AgendaProvider agenda,
     required RuntimeDebugProvider runtimeDebug,
   }) async {
+    final inFlightInitialization = _activeInitialization;
+    if (inFlightInitialization != null) {
+      await inFlightInitialization;
+    }
+
     runtimeDebug.setUserState(
       cachedUserId: agenda.userId,
       activeUserId: _activeUserId(),
@@ -87,9 +119,14 @@ class WorkspaceSessionCoordinator {
       message: 'Auth event: ${event.name}',
     );
 
-    if (event == AuthChangeEvent.signedIn) {
+    if (event == AuthChangeEvent.signedIn ||
+        event == AuthChangeEvent.initialSession) {
       final userId = _activeUserId();
       if (userId == null || userId.isEmpty) {
+        return const WorkspaceSessionResult();
+      }
+
+      if (agenda.userId == userId) {
         return const WorkspaceSessionResult();
       }
 
@@ -130,12 +167,43 @@ class WorkspaceSessionCoordinator {
         ),
       );
 
-      await _registerPushSubscription(runtimeDebug: runtimeDebug);
+      await _registerPushSubscriptionForActiveUser(runtimeDebug: runtimeDebug);
       return const WorkspaceSessionResult(shouldShowAnonymousTaskReview: true);
     }
 
     await agenda.syncAllTasks();
-    await _registerPushSubscription(runtimeDebug: runtimeDebug);
+    await _registerPushSubscriptionForActiveUser(runtimeDebug: runtimeDebug);
     return const WorkspaceSessionResult();
+  }
+
+  Future<void> _registerPushSubscriptionForActiveUser({
+    required RuntimeDebugProvider runtimeDebug,
+  }) async {
+    final userId = _activeUserId();
+    if (userId == null || userId.isEmpty) {
+      return;
+    }
+
+    final inFlightRegistration = _activePushRegistration;
+    if (inFlightRegistration != null &&
+        _activePushRegistrationUserId == userId) {
+      await inFlightRegistration;
+      return;
+    }
+
+    final registrationFuture = _registerPushSubscription(
+      runtimeDebug: runtimeDebug,
+    );
+    _activePushRegistration = registrationFuture;
+    _activePushRegistrationUserId = userId;
+
+    try {
+      await registrationFuture;
+    } finally {
+      if (identical(_activePushRegistration, registrationFuture)) {
+        _activePushRegistration = null;
+        _activePushRegistrationUserId = null;
+      }
+    }
   }
 }
