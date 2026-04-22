@@ -32,6 +32,7 @@ Current files:
 
 - `flutter-app\test\sync_logic_test.dart`
 - `flutter-app\test\agenda_provider_test.dart`
+- `flutter-app\test\task_local_state_coordinator_test.dart`
 - `flutter-app\test\task_list_state_coordinator_test.dart`
 - `flutter-app\test\task_sync_flow_coordinator_test.dart`
 - `flutter-app\test\task_local_snapshot_coordinator_test.dart`
@@ -129,7 +130,7 @@ Current state:
 
 ## Objective 1 state-machine coverage
 
-Objective 1 is introducing a real outbox state machine rather than only extending the current task-diff sync logic.
+Objective 1 now uses a real outbox state machine rather than only extending the older task-diff sync logic.
 
 That means the repo should test two related but distinct concerns:
 
@@ -356,6 +357,7 @@ The next high-value additions are:
 ## Relationship to other docs
 
 - `LOCAL_DEVELOPMENT.md` describes how to run the suites locally
-- `EXPERIMENTS.md` defines the behavior and evidence the lab aims to demonstrate
-- `LAB_SHELL_RESPONSIVE_SPEC.md` defines the responsive contract and its required automation strategy
-- `reliability_lab_checklist.md` tracks the larger milestone path for turning the prototype into a stronger lab
+- `guides/STATE_MODELS.md` documents the current outbox, sync-run, and auth/session state machines
+- `guides/EXPERIMENTS.md` defines the behavior and evidence the lab aims to demonstrate
+- `guides/RESPONSIVE_DESIGN.md` defines the responsive contract and its required automation strategy
+- `future/reliability_lab_checklist.md` tracks the larger milestone path for turning the prototype into a stronger lab

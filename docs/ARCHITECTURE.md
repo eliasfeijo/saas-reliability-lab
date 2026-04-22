@@ -311,14 +311,14 @@ Primary files:
 Responsibilities:
 
 - expose an app-facing sync gateway contract
-- keep the current task-level reconciliation engine behind that contract
+- keep an explicit client-side outbox replay engine behind that contract
 - normalize sync entry and reload behavior through `TaskSyncCoordinator`
 - keep runtime evidence wired to explicit sync outcomes while the underlying implementation remains transitional
 
 Architectural significance:
 
-The current sync engine is still task-based, but the rest of the app no longer needs to depend directly on the concrete service shape to start or reload a sync pass.
-Objective 1 is the step that turns this seam into a true state-machine boundary instead of only a task-pass orchestration seam.
+The current sync engine is now outbox-driven on the client side, but the rest of the contract is still transitional because backend mutation still goes through direct `tasks` table CRUD and local durability still relies on SharedPreferences.
+Objective 1 is the phase that made this seam an explicit client-side state-machine boundary, while stronger backend ownership and stronger durability remain later steps.
 
 ### 9. Current backend contract boundary
 
@@ -341,7 +341,7 @@ Current boundary:
 - the app-side sync gateway is `TaskSyncGateway`, implemented today by `TaskSyncService`
 - the backend-side task sync contract is still direct table access on `tasks`, not a dedicated RPC or Edge Function mutation gateway
 - push subscription management already uses a different backend contract on purpose
-- the next backend-evolution sketch is documented separately in `SERVER_OWNED_MUTATION_BOUNDARY_PLAN.md` so delayed-sync and replay experiments can stay honest about the current client-owned contract
+- the next backend-evolution sketch is documented separately in [`future/SERVER_OWNED_MUTATION_BOUNDARY_PLAN.md`](future/SERVER_OWNED_MUTATION_BOUNDARY_PLAN.md) so delayed-sync and replay experiments can stay honest about the current client-owned contract
 
 Architectural significance:
 
@@ -710,11 +710,13 @@ Server-side values:
 
 ## What is still missing
 
-- explicit operation outbox semantics
-- per-operation acknowledgement, retry, and failure state
-- user-visible conflict capture and resolution
-- fault-injection controls in the operator rail
+- stronger local durability than SharedPreferences for the current outbox model
+- richer retry and backoff behavior beyond the current first-slice state handling
+- broader conflict workflow beyond the current keep-remote and reapply-local actions
+- broader fault-injection controls beyond connectivity loss and delayed sync
 - structured logs and metrics beyond the in-app panel
+
+For the dedicated runtime state-machine view and the current documented gaps between implementation and aspiration, use [`guides/STATE_MODELS.md`](guides/STATE_MODELS.md).
 
 ## Planned evolution
 
@@ -754,7 +756,7 @@ Recommended evolution path:
 6. add failure injection paths and scenario tooling
 7. add audit tables for sync events and notification attempts
 
-See `OBJECTIVE_0_FOUNDATION_PLAN.md` for the concrete plan that now sits in front of outbox work.
+See [`archive/OBJECTIVE_0_FOUNDATION_PLAN.md`](archive/OBJECTIVE_0_FOUNDATION_PLAN.md) for the historical foundation record and [`phases/OBJECTIVE_1_OUTBOX.md`](phases/OBJECTIVE_1_OUTBOX.md) for the active outbox phase plan.
 
 ## Why this architecture matters
 

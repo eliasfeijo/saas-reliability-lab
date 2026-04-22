@@ -114,4 +114,4 @@ When this future slice begins, the repo should add:
 
 1. backend contract tests for mutation receipts and idempotency
 2. Flutter replay tests against the new receipt semantics
-3. docs updates in `ARCHITECTURE.md`, `TESTING_STRATEGY.md`, and `FAULT_INJECTION_PLAN.md` that clearly separate implemented backend ownership from planned work
+3. docs updates in `ARCHITECTURE.md`, `TESTING_STRATEGY.md`, and `guides/FAULT_INJECTION.md` that clearly separate implemented backend ownership from planned work

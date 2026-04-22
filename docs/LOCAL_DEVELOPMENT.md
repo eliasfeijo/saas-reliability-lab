@@ -66,7 +66,7 @@ Use that targeted command when working on:
 - dense-height behavior
 - attached details and batch-panel behavior
 
-See `LAB_SHELL_RESPONSIVE_SPEC.md` for the shell-wide responsive contract and the required resize-in-place automation strategy.
+See [`guides/RESPONSIVE_DESIGN.md`](guides/RESPONSIVE_DESIGN.md) for the consolidated responsive contract and the required resize-in-place automation strategy.
 
 ### Repository testing strategy
 

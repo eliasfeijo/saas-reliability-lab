@@ -27,16 +27,19 @@ Already present today:
 - [x] Scheduled notification dispatch through Cloudflare Worker
 - [x] Reliability-lab shell with operator rail, task workspace, and diagnostics rail
 - [x] Runtime diagnostics provider and event timeline for sync, auth, push, and local-state visibility
+- [x] Explicit client-side outbox replay with visible queued, blocked, failed, conflict, and acknowledgement evidence
+- [x] First-slice conflict visibility and resolution in the runtime diagnostics surface
+- [x] Operator-facing connectivity-loss and delayed-sync fault injection
 - [x] Dedicated architecture, experiments, analysis, and checklist documentation aligned with the lab shell
 
 Not yet present today:
 
-- [ ] Durable sync outbox
-- [ ] Idempotent mutation protocol
+- [ ] Stronger local durability for the explicit outbox
+- [ ] Server-side idempotent mutation protocol
 - [ ] Retry with exponential backoff and jitter
-- [ ] Conflict visibility and resolution workflow
+- [ ] Broader conflict workflow beyond the current first-slice actions
 - [ ] Structured logging and metrics across client and backend
-- [ ] Scenario-driven fault injection
+- [ ] Broader scenario-driven fault injection beyond connectivity loss and delayed sync
 - [ ] Strong automated coverage for reliability-critical paths
 
 ## Phase 1 - Document the system honestly
@@ -45,12 +48,12 @@ Goal: make the implemented structure, ownership, and current limitations explici
 
 - [x] Align `README.md` with the lab-shell transformation
 - [x] Align `docs/ARCHITECTURE.md` with `LabShell`, `TaskWorkspace`, `LabLeftRail`, and `SyncDebugPanel`
-- [x] Align `docs/project_analysis.md` with the current implementation rather than the pre-shell app
-- [x] Align `docs/EXPERIMENTS.md` with the current operator and diagnostics surfaces
-- [ ] Add a sync state-machine diagram covering local create, dirty, synced, deleted, conflict, and retry states
-- [ ] Add an auth/session state-machine diagram covering anonymous, signed-in, signed-out, expired-session, and startup-recovery paths
+- [x] Align `docs/archive/project_analysis.md` with the current implementation rather than the pre-shell app
+- [x] Align `docs/guides/EXPERIMENTS.md` with the current operator and diagnostics surfaces
+- [x] Refine the current sync-state documentation into a dedicated outbox-focused diagram set that stands on its own outside the broader architecture doc
+- [x] Add an auth/session state-machine diagram covering anonymous, signed-in, signed-out, expired-session, and startup-recovery paths
 - [x] Add an environment matrix for local development, GitHub Pages, Supabase, and Cloudflare Worker
-- [ ] Add an explicit "known mismatches between implementation and aspiration" section for the future outbox phase
+- [x] Add an explicit "known mismatches between implementation and aspiration" section for the future outbox phase
 
 Exit criteria:
 
@@ -82,7 +85,7 @@ Goal: make offline replay and convergence explicit, durable, and testable.
 
 Execution reference:
 
-- use [`OBJECTIVE_1_OUTBOX_EXECUTION_PLAN.md`](OBJECTIVE_1_OUTBOX_EXECUTION_PLAN.md) as the first-slice implementation contract for Objective 1
+- use [`../phases/OBJECTIVE_1_OUTBOX.md`](../phases/OBJECTIVE_1_OUTBOX.md) as the active Objective 1 implementation reference
 
 - [ ] Replace the implicit dirty-object model with an explicit local outbox
 - [ ] Persist each local mutation as an explicit operation entry, with first-slice compaction to the latest effective operation per task
@@ -221,7 +224,7 @@ Exit criteria:
 
 If the goal is maximum leverage from the current state, do these next:
 
-- [x] define the first-slice outbox model and document it in `OBJECTIVE_1_OUTBOX_EXECUTION_PLAN.md`
+- [x] define the first-slice outbox model and document it in `docs/phases/OBJECTIVE_1_OUTBOX.md`
 - [x] decide the first-slice ownership split between `Runtime Diagnostics` and `TaskWorkspace` for conflict and replay visibility
 - [ ] implement the documented outbox model and map it onto the reserved shell states
 - [ ] add structured sync and worker logging that complements the in-app diagnostics panel

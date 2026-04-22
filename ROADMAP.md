@@ -54,7 +54,7 @@ Completed now:
 
 - the visible lab shell stayed stable while the app moved onto clearer interaction, mutation, task-list state, sync-flow, and sync-entry seams
 - backend and scheduled-delivery boundaries are now documented explicitly enough for the next phase
-- Objective 0 now closes as a historical record and handoff in [`docs/OBJECTIVE_0_FOUNDATION_PLAN.md`](docs/OBJECTIVE_0_FOUNDATION_PLAN.md)
+- Objective 0 now closes as a historical record and handoff in [`docs/archive/OBJECTIVE_0_FOUNDATION_PLAN.md`](docs/archive/OBJECTIVE_0_FOUNDATION_PLAN.md)
 
 What this means:
 
@@ -91,7 +91,7 @@ Concrete outcomes to target:
 - a more stable base for later outbox, conflict, observability, and fault-injection work
 - reduced structural coupling between prototype-era assumptions and the next reliability-lab phases
 
-The completed Objective 0 execution record and the Objective 1 handoff now live in [`docs/OBJECTIVE_0_FOUNDATION_PLAN.md`](docs/OBJECTIVE_0_FOUNDATION_PLAN.md) and [`docs/OBJECTIVE_1_OUTBOX_ENTRY_PLAN.md`](docs/OBJECTIVE_1_OUTBOX_ENTRY_PLAN.md).
+The completed Objective 0 execution record and the active Objective 1 plan now live in [`docs/archive/OBJECTIVE_0_FOUNDATION_PLAN.md`](docs/archive/OBJECTIVE_0_FOUNDATION_PLAN.md) and [`docs/phases/OBJECTIVE_1_OUTBOX.md`](docs/phases/OBJECTIVE_1_OUTBOX.md).
 
 ### Objective 1: make sync semantics explicit
 
@@ -262,14 +262,14 @@ If the goal is the highest-leverage path from the current state, the recommended
 
 The clearest next objectives, based on the repo's current state, are:
 
-| Priority | Objective | Why it matters now |
-| --- | --- | --- |
-| 0 | Refactor the system foundation toward a cleaner target architecture | The current shell is ahead of the underlying structure, and fixing major seams first will raise the quality of every later objective |
-| 1 | Define the sync outbox model | It unlocks explicit replay, retries, conflicts, and better diagnostics |
-| 2 | Decide shell ownership for outbox and conflict states | The UI has placeholders, but not yet a committed interaction model |
-| 3 | Add structured sync and worker observability | The lab needs evidence beyond transient in-app state |
-| 4 | Expand high-value tests | The current shell and diagnostics need stronger regression protection |
-| 5 | Tighten CI/CD trust | The repo documents that deploys currently race verification |
+| Priority | Objective                                                           | Why it matters now                                                                                                                   |
+| -------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| 0        | Refactor the system foundation toward a cleaner target architecture | The current shell is ahead of the underlying structure, and fixing major seams first will raise the quality of every later objective |
+| 1        | Define the sync outbox model                                        | It unlocks explicit replay, retries, conflicts, and better diagnostics                                                               |
+| 2        | Decide shell ownership for outbox and conflict states               | The UI has placeholders, but not yet a committed interaction model                                                                   |
+| 3        | Add structured sync and worker observability                        | The lab needs evidence beyond transient in-app state                                                                                 |
+| 4        | Expand high-value tests                                             | The current shell and diagnostics need stronger regression protection                                                                |
+| 5        | Tighten CI/CD trust                                                 | The repo documents that deploys currently race verification                                                                          |
 
 ## Explicit non-goals for now
 

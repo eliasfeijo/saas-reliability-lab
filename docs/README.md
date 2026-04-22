@@ -2,10 +2,7 @@
 
 A web-first reliability lab built around a small task domain so sync, auth, push, and offline behavior can be observed directly in the product UI.
 
-This repository is in the middle of a deliberate structural transformation:
-
-- from a centered task-list app
-- to a reliability-lab workspace with a durable operator shell and live runtime diagnostics
+This repository is organized around a reliability-lab workspace with a durable operator shell and live runtime diagnostics.
 
 The task domain is still useful, but it is no longer the point.
 The point is to study what breaks, what recovers, and what remains visible when a small SaaS starts operating under imperfect conditions.
@@ -31,7 +28,7 @@ The current shell transformation is the foundation, not the finish line.
 
 The next major goals are:
 
-- replace task-level dirty-object sync with an explicit operation outbox
+- strengthen the explicit client-side outbox into a stronger end-to-end sync contract
 - surface conflict and blocked-sync states as first-class UI states
 - expand fault-injection controls beyond connectivity loss and delayed sync
 - strengthen observability beyond the in-app runtime panel
@@ -120,9 +117,8 @@ flowchart LR
 
 Important current constraint:
 
-The sync engine is still task-based, not operation-based.
-The UI is intentionally reserving space for an explicit outbox and conflict model that does not exist yet in the backend contract.
-That is also why a true archive or trash workflow is documented as the next safe evolution rather than implemented as a local-only patch today.
+The client-side sync model is now explicitly outbox-driven, but the backend mutation surface is still direct `tasks` table CRUD rather than a server-owned mutation gateway.
+That means the repository already exposes a real client-side outbox and conflict model while still treating stronger backend ownership, stronger durability, and fuller archive lifecycle semantics as later work.
 
 For the detailed runtime seams inside the Flutter app, use [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
@@ -153,7 +149,7 @@ flowchart TD
     Remote --> Delivery
 ```
 
-That target shape is described in more detail in [`ARCHITECTURE.md`](ARCHITECTURE.md), the completed Objective 0 record in [`OBJECTIVE_0_FOUNDATION_PLAN.md`](OBJECTIVE_0_FOUNDATION_PLAN.md), and the active next-phase plan in [`OBJECTIVE_1_OUTBOX_ENTRY_PLAN.md`](OBJECTIVE_1_OUTBOX_ENTRY_PLAN.md).
+That target shape is described in more detail in [`ARCHITECTURE.md`](ARCHITECTURE.md), the archived Objective 0 record in [`archive/OBJECTIVE_0_FOUNDATION_PLAN.md`](archive/OBJECTIVE_0_FOUNDATION_PLAN.md), and the active next-phase plan in [`phases/OBJECTIVE_1_OUTBOX.md`](phases/OBJECTIVE_1_OUTBOX.md).
 
 ## Current status
 
@@ -171,7 +167,7 @@ That target shape is described in more detail in [`ARCHITECTURE.md`](ARCHITECTUR
 
 ### Still missing
 
-- fault-injection controls
+- broader fault-injection controls beyond connectivity loss and delayed sync
 - stronger local durability than SharedPreferences
 - stronger structured logging and metrics
 - broad automated coverage across multi-device and failure scenarios
@@ -192,7 +188,10 @@ This repository exists to explore those situations before they show up in produc
 The goal is not to build a broad productivity product.
 The goal is to make reliability behavior inspectable.
 
-## Repository guide
+## Docs index
+
+This page is the main index for the repository's long-form docs.
+Use the links below based on what you are trying to understand today, then drill into the purpose-based folders only when you need deeper implementation context.
 
 - [`../README.md`](../README.md): root visitor-facing overview and monorepo entry point
 - [`GITHUB_AUTOMATION.md`](GITHUB_AUTOMATION.md): repository automation surface, workflows, and deployment-related GitHub Actions context
@@ -200,30 +199,35 @@ The goal is to make reliability behavior inspectable.
 - [`../notify-worker/README.md`](../notify-worker/README.md): Cloudflare Worker purpose, local commands, runtime expectations, and delivery concerns
 - [`../supabase/README.md`](../supabase/README.md): backend surface, local Supabase workflow, functions, migrations, and backend-specific concerns
 - [`ARCHITECTURE.md`](ARCHITECTURE.md): implemented topology, state ownership, and evolution path
-- [`OBJECTIVE_0_FOUNDATION_PLAN.md`](OBJECTIVE_0_FOUNDATION_PLAN.md): completed Objective 0 execution record and handoff for the finished foundation refactor
-- [`OBJECTIVE_1_OUTBOX_ENTRY_PLAN.md`](OBJECTIVE_1_OUTBOX_ENTRY_PLAN.md): active Objective 1 entry plan for the next outbox-focused phase
-- [`OBJECTIVE_1_OUTBOX_EXECUTION_PLAN.md`](OBJECTIVE_1_OUTBOX_EXECUTION_PLAN.md): execution-ready first-slice plan for building the explicit outbox on the current Objective 0 seams
-- [`FAULT_INJECTION_PLAN.md`](FAULT_INJECTION_PLAN.md): end-to-end plan for turning scenario placeholders into real fault-injection controls, starting with connectivity loss and delayed sync
-- [`DELAYED_SYNC_EXECUTION_PLAN.md`](DELAYED_SYNC_EXECUTION_PLAN.md): implemented delayed-sync batch record and remaining follow-up for local, transport-shaped, and backend-shaped delay simulation
-- [`TRY_THE_LAB_PLAN.md`](TRY_THE_LAB_PLAN.md): planned public-sandbox auth path for low-friction exploration without exposing shared credentials in the client
-- [`SERVER_OWNED_MUTATION_BOUNDARY_PLAN.md`](SERVER_OWNED_MUTATION_BOUNDARY_PLAN.md): future-state sketch for moving task mutation replay from direct client CRUD to a server-owned mutation gateway
 - [`DEPLOYMENT.md`](DEPLOYMENT.md): GitHub Actions workflows, GitHub Pages integration, worker deployment, and environment matrix
+- [`TESTING_STRATEGY.md`](TESTING_STRATEGY.md): repo-wide testing contract, current suite inventory, target test taxonomy, and the direction for CI verification and refactoring
+- [`guides/STATE_MODELS.md`](guides/STATE_MODELS.md): dedicated outbox, sync-run, and auth/session state-machine reference plus current known mismatches
+- [`phases/OBJECTIVE_1_OUTBOX.md`](phases/OBJECTIVE_1_OUTBOX.md): single active Objective 1 plan for the explicit outbox phase
+- [`guides/FAULT_INJECTION.md`](guides/FAULT_INJECTION.md): implemented and planned fault-injection behavior, including delayed-sync guidance
+- [`guides/RESPONSIVE_DESIGN.md`](guides/RESPONSIVE_DESIGN.md): single responsive contract for the shell and task workspace
+- [`guides/EXPERIMENTS.md`](guides/EXPERIMENTS.md): runnable and planned reliability scenarios
+- [`guides/TASK_DELETION_LIFECYCLE.md`](guides/TASK_DELETION_LIFECYCLE.md): current delete semantics and future archive direction
+- [`future/TRY_THE_LAB_PLAN.md`](future/TRY_THE_LAB_PLAN.md): planned public-sandbox auth path for low-friction exploration without exposing shared credentials in the client
+- [`future/SERVER_OWNED_MUTATION_BOUNDARY_PLAN.md`](future/SERVER_OWNED_MUTATION_BOUNDARY_PLAN.md): future-state sketch for moving task mutation replay from direct client CRUD to a server-owned mutation gateway
+- [`future/TASK_QUEUE_ACTIONS_PLAN.md`](future/TASK_QUEUE_ACTIONS_PLAN.md): future queue-action and explicit batch-action direction
+- [`future/reliability_lab_checklist.md`](future/reliability_lab_checklist.md): milestone checklist for turning the prototype into a stronger lab
+- [`archive/OBJECTIVE_0_FOUNDATION_PLAN.md`](archive/OBJECTIVE_0_FOUNDATION_PLAN.md): completed Objective 0 execution record and handoff for the finished foundation refactor
+- [`archive/project_analysis.md`](archive/project_analysis.md): historical current-state analysis captured after the shell transformation
 - [`LOCAL_DEVELOPMENT.md`](LOCAL_DEVELOPMENT.md): repository-root workflow, local commands, and developer setup for running the projects locally
 - [`AI_ASSISTED_DEVELOPMENT.md`](AI_ASSISTED_DEVELOPMENT.md): intended human-and-agent development loop, Copilot workflow, and low-friction lifecycle expectations
-- [`TESTING_STRATEGY.md`](TESTING_STRATEGY.md): repo-wide testing contract, current suite inventory, target test taxonomy, and the direction for CI verification and refactoring
-- [`EXPERIMENTS.md`](EXPERIMENTS.md): runnable and planned reliability scenarios
-- [`LAB_SHELL_RESPONSIVE_SPEC.md`](LAB_SHELL_RESPONSIVE_SPEC.md): shell-wide responsive contract for the lab layout, including live resize expectations across desktop, notebook, tablet, and phone widths
-- [`TASK_QUEUE_ACTIONS_PLAN.md`](TASK_QUEUE_ACTIONS_PLAN.md): recommended fix for the misleading completion control in Task Queue, plus the phased plan for explicit batch actions
-- [`TASK_WORKSPACE_RESPONSIVE_UX.md`](TASK_WORKSPACE_RESPONSIVE_UX.md): responsive Task Workspace strategy that preserves the desktop split layout while using attached compact panels on notebook and mobile widths
-- [`TASK_DELETION_LIFECYCLE.md`](TASK_DELETION_LIFECYCLE.md): current delete semantics, bug-fix rationale, and the recommended future archive model
-- [`reliability_lab_checklist.md`](reliability_lab_checklist.md): milestone checklist for turning the prototype into a stronger lab
-- [`project_analysis.md`](project_analysis.md): current-state analysis of the codebase after the shell transformation
 - `.tmp/ui_lab_redesign_plan.md`: local execution tracker for the UI redesign work
 
 ## Working with this folder
 
 This directory is the long-form explanation layer for the repository.
 Use the root README and subproject READMEs as entry points, then use the documents here when you need deeper product, architecture, deployment, or testing context.
+
+Use the purpose-based folders to avoid mixing live plans with historical or future-only notes:
+
+- `phases/` for the active implementation phase
+- `guides/` for operator- and behavior-focused deep dives
+- `future/` for forward-looking plans that are not active implementation contracts
+- `archive/` for historical records kept for context
 
 When code changes affect behavior, the docs here should stay aligned with:
 

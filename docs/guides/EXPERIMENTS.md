@@ -353,7 +353,7 @@ Study how the client behaves when a sync pass partially succeeds and then loses 
 
 Turn the lab from a passive observer into an active experiment harness.
 
-Implementation planning for this area now lives in [`FAULT_INJECTION_PLAN.md`](FAULT_INJECTION_PLAN.md).
+Implementation planning for this area now lives in [`FAULT_INJECTION.md`](FAULT_INJECTION.md).
 
 Implemented now:
 
