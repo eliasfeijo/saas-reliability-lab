@@ -716,6 +716,127 @@ void main() {
   );
 
   test(
+    'syncTasks keeps both follow-up updates queued when two managed tasks change during a delayed replay',
+    () async {
+      final firstTask = buildTask(
+        id: 'task-batch-follow-up-1',
+        title: 'Batch follow-up task 1',
+        beginsAt: DateTime(2026, 1, 19, 9),
+        estimatedDuration: const Duration(hours: 1),
+        lastModifiedAt: DateTime(2026, 1, 19, 10),
+        syncStatus: SyncStatus.dirty,
+        userId: 'user-1',
+        hasRemoteBackingRecord: true,
+        updatedAt: DateTime(2026, 1, 19, 8),
+      );
+      final secondTask = buildTask(
+        id: 'task-batch-follow-up-2',
+        title: 'Batch follow-up task 2',
+        beginsAt: DateTime(2026, 1, 19, 11),
+        estimatedDuration: const Duration(hours: 1),
+        lastModifiedAt: DateTime(2026, 1, 19, 10, 5),
+        syncStatus: SyncStatus.dirty,
+        userId: 'user-1',
+        hasRemoteBackingRecord: true,
+        updatedAt: DateTime(2026, 1, 19, 8, 5),
+      );
+
+      final repository = InMemoryTasksRepository([firstTask, secondTask]);
+      final outboxRepository = InMemoryOutboxRepository();
+      final remote = FakeTaskRemoteDataSource([
+        cloneTask(firstTask, syncStatus: SyncStatus.synced),
+        cloneTask(secondTask, syncStatus: SyncStatus.synced),
+      ]);
+      final runtimeDebug = RuntimeDebugProvider();
+      addTearDown(runtimeDebug.dispose);
+      final localStateCoordinator = TaskLocalStateCoordinator(
+        TaskLocalSnapshotCoordinator.fromRepository(repository),
+        outboxRepository,
+        runtimeDebug: runtimeDebug,
+      );
+      await localStateCoordinator.saveTaskSnapshot(
+        [firstTask, secondTask],
+        changedTaskIds: {firstTask.id, secondTask.id},
+      );
+
+      final firstDelayCompleter = Completer<void>();
+      var delayInvocationCount = 0;
+      final service = TaskSyncService.forTesting(
+        repository,
+        remote: remote,
+        connectivityCheck: () async => [ConnectivityResult.wifi],
+        hasActiveSession: () => true,
+        runtimeDebug: runtimeDebug,
+        faultInjectionPolicy: FaultInjectionPolicy(
+          readState: () => const FaultInjectionState(
+            activeScenario: FaultInjectionScenario.delayedSync,
+            isEnabled: true,
+            delayMs: 500,
+            delayedSyncMode: DelayedSyncMode.transport,
+            delayedSyncTarget: DelayedSyncTarget.update,
+            delayedSyncBehavior: DelayedSyncBehavior.persistent,
+          ),
+        ),
+        localStateCoordinator: localStateCoordinator,
+        delayExecution: (_) {
+          delayInvocationCount += 1;
+          if (delayInvocationCount == 1) {
+            return firstDelayCompleter.future;
+          }
+
+          return Future<void>.value();
+        },
+      );
+
+      final syncFuture = service.syncTasks(await repository.loadTasks());
+      await Future<void>.delayed(Duration.zero);
+
+      final inFlightState = await localStateCoordinator.loadState();
+      final completedFollowUpTasks = inFlightState.tasks
+          .map(
+            (task) => task.copyWith(
+              isCompleted: true,
+              completedAt: DateTime(2026, 1, 19, 12),
+              lastModifiedAt: DateTime(2026, 1, 19, 12),
+              syncStatus: SyncStatus.dirty,
+            ),
+          )
+          .toList(growable: false);
+      await localStateCoordinator.saveTaskSnapshot(
+        completedFollowUpTasks,
+        changedTaskIds: {firstTask.id, secondTask.id},
+      );
+
+      firstDelayCompleter.complete();
+      final result = await syncFuture;
+      final finalState = await localStateCoordinator.loadState();
+
+      expect(result.acknowledgedTasks, hasLength(2));
+      expect(finalState.tasks, hasLength(2));
+      expect(
+        finalState.tasks.where((task) => task.syncStatus == SyncStatus.dirty),
+        hasLength(2),
+      );
+      expect(finalState.tasks.where((task) => task.isCompleted), hasLength(2));
+      expect(finalState.outboxState.activeEntries, hasLength(2));
+      expect(
+        finalState.outboxState.activeEntries.where(
+          (entry) => entry.state == OutboxEntryState.queued,
+        ),
+        hasLength(2),
+      );
+      expect(
+        finalState.outboxState.activeEntries.map((entry) => entry.taskId),
+        containsAll([firstTask.id, secondTask.id]),
+      );
+      expect(
+        runtimeDebug.state.lastSyncMessage,
+        'Sync completed. 2 task(s) acknowledged. 2 newer local change(s) remain queued for a follow-up sync.',
+      );
+    },
+  );
+
+  test(
     'syncTasks can delay a transport update seam without delaying fetch-by-id first',
     () async {
       final localTask = buildTask(

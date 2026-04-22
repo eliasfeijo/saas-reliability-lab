@@ -279,7 +279,9 @@ class TaskSyncService implements TaskSyncGateway {
         summary:
             'The runtime is preparing local task mutations for cloud replay.',
         tasks: effectiveTasks,
-        notes: [if (plannedDelayDescription != null) plannedDelayDescription],
+        notes: plannedDelayDescription == null
+            ? const <String>[]
+            : <String>[plannedDelayDescription],
       ),
     );
     await _applyInjectedPreSyncDelay(effectiveTasks);
@@ -910,6 +912,20 @@ class TaskSyncService implements TaskSyncGateway {
       return false;
     }
 
+    final latestIntentUpdatedAt = _localIntentUpdatedAtForEntry(latestEntry);
+    final previousIntentUpdatedAt = _localIntentUpdatedAtForEntry(
+      previousEntry,
+    );
+    if (latestIntentUpdatedAt != null && previousIntentUpdatedAt != null) {
+      if (latestIntentUpdatedAt.isAfter(previousIntentUpdatedAt)) {
+        return true;
+      }
+
+      if (!latestIntentUpdatedAt.isAtSameMomentAs(previousIntentUpdatedAt)) {
+        return false;
+      }
+    }
+
     final latestUpdatedAt = latestEntry.updatedAt.toUtc();
     final previousUpdatedAt = previousEntry.updatedAt.toUtc();
     if (latestUpdatedAt.isAfter(previousUpdatedAt)) {
@@ -953,6 +969,15 @@ class TaskSyncService implements TaskSyncGateway {
       tags.join('\u0000'),
       payload['modified_at'] as String? ?? '',
     ].join('\u0001');
+  }
+
+  DateTime? _localIntentUpdatedAtForEntry(OutboxEntry entry) {
+    final rawModifiedAt = entry.taskPayload['modified_at'] as String?;
+    if (rawModifiedAt == null || rawModifiedAt.isEmpty) {
+      return null;
+    }
+
+    return DateTime.tryParse(rawModifiedAt)?.toUtc();
   }
 
   void _reportPreservedConcurrentEntries(
