@@ -82,11 +82,7 @@ class TaskFilterController {
     }
   }
 
-  int _compareByClosestToNow(
-    TaskModel a,
-    TaskModel b,
-    DateTime referenceNow,
-  ) {
+  int _compareByClosestToNow(TaskModel a, TaskModel b, DateTime referenceNow) {
     final aDistance = a.beginsAt.difference(referenceNow).inMilliseconds.abs();
     final bDistance = b.beginsAt.difference(referenceNow).inMilliseconds.abs();
     final distanceCompare = aDistance.compareTo(bDistance);

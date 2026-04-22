@@ -905,6 +905,10 @@ class TaskSyncService implements TaskSyncGateway {
     OutboxEntry latestEntry,
     OutboxEntry previousEntry,
   ) {
+    if (!_didOutboxEntryIntentChange(latestEntry, previousEntry)) {
+      return false;
+    }
+
     final latestUpdatedAt = latestEntry.updatedAt.toUtc();
     final previousUpdatedAt = previousEntry.updatedAt.toUtc();
     if (latestUpdatedAt.isAfter(previousUpdatedAt)) {
@@ -916,6 +920,38 @@ class TaskSyncService implements TaskSyncGateway {
     }
 
     return !mapEquals(latestEntry.taskPayload, previousEntry.taskPayload);
+  }
+
+  bool _didOutboxEntryIntentChange(
+    OutboxEntry latestEntry,
+    OutboxEntry previousEntry,
+  ) {
+    return latestEntry.taskId != previousEntry.taskId ||
+        latestEntry.operationType != previousEntry.operationType ||
+        latestEntry.ownerScope != previousEntry.ownerScope ||
+        latestEntry.baseRemoteUpdatedAt?.toUtc() !=
+            previousEntry.baseRemoteUpdatedAt?.toUtc() ||
+        _localIntentSignatureForEntry(latestEntry) !=
+            _localIntentSignatureForEntry(previousEntry);
+  }
+
+  String _localIntentSignatureForEntry(OutboxEntry entry) {
+    final payload = entry.taskPayload;
+    final tags = List<String>.from(
+      payload['tags'] as List<dynamic>? ?? const [],
+    );
+    return [
+      payload['id'] as String? ?? '',
+      payload['title'] as String? ?? '',
+      payload['start_date'] as String? ?? '',
+      payload['due_date'] as String? ?? '',
+      payload['completed']?.toString() ?? '',
+      payload['completed_at'] as String? ?? '',
+      payload['description'] as String? ?? '',
+      payload['priority']?.toString() ?? '',
+      tags.join('\u0000'),
+      payload['modified_at'] as String? ?? '',
+    ].join('\u0001');
   }
 
   void _reportPreservedConcurrentEntries(

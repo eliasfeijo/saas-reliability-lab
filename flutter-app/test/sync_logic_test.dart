@@ -99,6 +99,17 @@ void main() {
       expect(outboxState.activeEntries, isEmpty);
       expect(outboxState.recentAcknowledgements, hasLength(1));
       expect(outboxState.recentAcknowledgements.single.taskId, localTask.id);
+      expect(
+        runtimeDebug.state.recentEvents.any(
+          (event) =>
+              event.payload?.stage == 'Concurrent local mutations preserved',
+        ),
+        isFalse,
+      );
+      expect(
+        runtimeDebug.state.lastSyncMessage,
+        'Sync completed. 1 task(s) acknowledged.',
+      );
     },
   );
 
@@ -558,6 +569,100 @@ void main() {
       expect(
         runtimeDebug.state.lastSyncMessage,
         'Sync completed. 1 task(s) acknowledged. 1 newer local change(s) remain queued for a follow-up sync.',
+      );
+    },
+  );
+
+  test(
+    'syncTasks does not warn when an in-flight task is re-saved locally without a newer intent',
+    () async {
+      final localTask = buildTask(
+        id: 'task-noop-resave',
+        title: 'No-op resave task',
+        beginsAt: DateTime(2026, 1, 18, 9),
+        estimatedDuration: const Duration(hours: 1),
+        lastModifiedAt: DateTime(2026, 1, 18, 10),
+        syncStatus: SyncStatus.dirty,
+        userId: 'user-1',
+        hasRemoteBackingRecord: false,
+      );
+
+      final repository = InMemoryTasksRepository([localTask]);
+      final outboxRepository = InMemoryOutboxRepository();
+      final remote = FakeTaskRemoteDataSource([]);
+      final runtimeDebug = RuntimeDebugProvider();
+      addTearDown(runtimeDebug.dispose);
+      final localStateCoordinator = TaskLocalStateCoordinator(
+        TaskLocalSnapshotCoordinator.fromRepository(repository),
+        outboxRepository,
+        runtimeDebug: runtimeDebug,
+      );
+      await localStateCoordinator.saveState(
+        TaskLocalState(
+          tasks: [localTask],
+          outboxState: OutboxStorageState(
+            isInitialized: true,
+            activeEntries: [
+              OutboxEntry(
+                taskId: localTask.id,
+                operationType: OutboxOperationType.upsert,
+                state: OutboxEntryState.queued,
+                ownerScope: OutboxOwnerScope.authenticated,
+                firstQueuedAt: localTask.lastModifiedAt?.toUtc(),
+                taskPayload: localTask.toJson(),
+              ),
+            ],
+          ),
+        ),
+      );
+      final delayCompleter = Completer<void>();
+
+      final service = TaskSyncService.forTesting(
+        repository,
+        remote: remote,
+        connectivityCheck: () async => [ConnectivityResult.wifi],
+        hasActiveSession: () => true,
+        runtimeDebug: runtimeDebug,
+        faultInjectionPolicy: FaultInjectionPolicy(
+          readState: () => const FaultInjectionState(
+            activeScenario: FaultInjectionScenario.delayedSync,
+            isEnabled: true,
+            delayMs: 500,
+            delayedSyncMode: DelayedSyncMode.backend,
+            delayedSyncTarget: DelayedSyncTarget.acknowledgement,
+          ),
+        ),
+        localStateCoordinator: localStateCoordinator,
+        delayExecution: (_) => delayCompleter.future,
+      );
+
+      final syncFuture = service.syncTasks(await repository.loadTasks());
+      await Future<void>.delayed(Duration.zero);
+
+      await localStateCoordinator.saveTaskSnapshot(
+        [localTask.copyWith()],
+        changedTaskIds: {localTask.id},
+      );
+
+      delayCompleter.complete();
+      final result = await syncFuture;
+      final finalState = await localStateCoordinator.loadState();
+
+      expect(result.acknowledgedTasks, hasLength(1));
+      expect(remote.insertedTaskIds, ['task-noop-resave']);
+      expect(finalState.tasks, hasLength(1));
+      expect(finalState.tasks.single.syncStatus, SyncStatus.synced);
+      expect(finalState.outboxState.activeEntries, isEmpty);
+      expect(
+        runtimeDebug.state.recentEvents.any(
+          (event) =>
+              event.payload?.stage == 'Concurrent local mutations preserved',
+        ),
+        isFalse,
+      );
+      expect(
+        runtimeDebug.state.lastSyncMessage,
+        'Sync completed. 1 task(s) acknowledged.',
       );
     },
   );
