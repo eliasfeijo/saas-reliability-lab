@@ -471,58 +471,90 @@ Primary file:
 Current responsibilities:
 
 - verify connectivity and authenticated session presence
-- replay tombstoned deletions for authenticated tasks
-- reconcile dirty tasks against remote state
-- fetch remote tasks and write back a merged canonical local list
-- publish sync outcomes into the runtime diagnostics model
+- replay explicit outbox entries in FIFO order
+- move entries through queued, sending, acknowledged, failed, blocked, and conflict states
+- fetch remote tasks and write back a merged canonical local list without discarding newer local follow-up work
+- publish sync outcomes and outbox evidence into the runtime diagnostics model
 
 Current reconciliation rule:
 
-- local changes win only when `lastModifiedAt` is newer than the remote timestamp
-- otherwise the remote copy replaces the local one
+- local task mutations update the visible task projection immediately
+- the same mutation creates or compacts an outbox entry that becomes the authoritative replay record for cloud work
+- replay succeeds only when the queued entry is still safe against the latest remote version; otherwise the entry is marked as a visible conflict for operator review
 
 Backend timestamp requirement:
 
-- this rule depends on the remote `tasks.updated_at` value being refreshed on every task update
-- the Supabase schema now maintains that timestamp with a database trigger so the client-side comparison is not relying on insert-time defaults alone
+- safe replay depends on the remote `tasks.updated_at` value being refreshed on every task update
+- the Supabase schema now maintains that timestamp with a database trigger so the client can compare a queued entry's base remote version against the latest remote state
 
 Important constraint:
 
-This is still a task-based reconciliation pass, not a true outbox or per-operation replay protocol.
-Because of that, a future archive or trash workflow needs explicit backend lifecycle support instead of a local-only hidden state.
+The current implementation is now explicitly outbox-driven on the client side, but it still uses SharedPreferences as transitional local durability and direct `tasks` table CRUD as the backend mutation surface.
+That makes the replay model much more honest and observable today without claiming production-grade durability or a final server-owned mutation contract.
 
 Current implemented sync pass:
 
+High-level mental model:
+
+The browser treats each local task mutation as two things at once: an immediate local product update for the user, and a replayable outbox entry for the cloud.
+In the current implementation, the outbox does not persist one all-or-nothing transaction batch.
+It persists active entries keyed by task, compacts each task down to its latest effective `upsert` or `delete`, and then replays those entries one by one in FIFO order when sync is allowed.
+
 ```mermaid
 flowchart TD
-    LocalChange["Local task change"]
-    Agenda["AgendaProvider"]
-    Mutation["TaskMutationCoordinator"]
-    Persist["TaskLocalSnapshotCoordinator"]
-    SyncCoord["TaskSyncCoordinator"]
-    SyncGate{"Authenticated session<br/>and sync allowed?"}
-    Wait["Keep local state visible<br/>until sync can run"]
-    Sync["TaskSyncService"]
-    Checks["Check connectivity<br/>and live auth session"]
-    DeleteReplay["Replay authenticated deletes"]
-    Reconcile["Reconcile dirty local tasks<br/>against remote timestamps"]
-    Fetch["Fetch remote tasks"]
-    Merge["Write merged canonical<br/>local snapshot"]
-    Outcome["Publish sync outcome<br/>to runtime diagnostics"]
+    TaskMutation["A task is created, updated, or deleted locally"]
+    Projection["The task workspace updates immediately<br/>so the product stays responsive"]
+    OutboxEntry["The local state coordinator creates or compacts<br/>one outbox entry for that task"]
+    Gate{"Can replay start now?"}
+    Blocked["Keep the task visible locally<br/>and mark the entry blocked for sign-in or anonymous review"]
+    Queue["Entry stays queued in FIFO order<br/>until replay is allowed"]
+    Sending["TaskSyncService moves the entry to sending<br/>and calls Supabase CRUD directly"]
+    Ack["Accepted by Supabase<br/>entry moves to retained acknowledgement history"]
+    Failed["Temporary failure<br/>entry stays visible for retry"]
+    Conflict["Remote changed first<br/>entry becomes a conflict for operator review"]
+    Merge["Runtime reloads remote tasks and merges them back into the local snapshot"]
+    FollowUp["Newer local edits that arrive mid-sync<br/>stay queued for the next pass"]
+    Evidence["Runtime Diagnostics shows queued, sending, failed,<br/>conflict, blocked, and recent acknowledgement evidence"]
 
-    LocalChange --> Agenda
-    Agenda --> Mutation
-    Mutation --> Persist
-    Agenda --> SyncCoord
-    SyncCoord --> SyncGate
-    SyncGate -->|No| Wait
-    SyncGate -->|Yes| Sync
-    Sync --> Checks
-    Checks --> DeleteReplay
-    DeleteReplay --> Reconcile
-    Reconcile --> Fetch
-    Fetch --> Merge
-    Merge --> Outcome
+    TaskMutation --> Projection
+    TaskMutation --> OutboxEntry
+    OutboxEntry --> Gate
+    Gate -->|No| Blocked
+    Blocked --> Evidence
+    Gate -->|Yes| Queue
+    Queue --> Sending
+    Sending -->|Success| Ack
+    Sending -->|Recoverable error| Failed
+    Sending -->|Remote version mismatch| Conflict
+    Ack --> Merge
+    Failed --> Evidence
+    Conflict --> Evidence
+    Merge --> FollowUp
+    Merge --> Evidence
+```
+
+Alternative simplified view:
+
+This version keeps the same idea but strips away most of the implementation detail.
+It is meant to answer one simple question: how can the app feel instant locally while the cloud catches up later?
+
+```mermaid
+flowchart TD
+    LocalWork["You make a task change"]
+    InstantView["The app shows the result right away"]
+    PendingOp["The app saves one pending operation<br/>for that task in the outbox"]
+    ReadyCheck{"Is sync ready?"}
+    WaitLater["Not yet:<br/>keep it safe and wait"]
+    Replay["When ready, the app replays the pending operation to the cloud"]
+    Result["Then the system records success,<br/>failure, or conflict details"]
+
+    LocalWork --> InstantView
+    InstantView --> PendingOp
+    PendingOp --> ReadyCheck
+    ReadyCheck -->|No| WaitLater
+    WaitLater --> Replay
+    ReadyCheck -->|Yes| Replay
+    Replay --> Result
 ```
 
 ### 6. Session and identity handling
