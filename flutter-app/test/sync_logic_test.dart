@@ -114,6 +114,54 @@ void main() {
   );
 
   test(
+    'syncTasks persists remote tasks when local storage starts empty',
+    () async {
+      final remoteTask = buildTask(
+        id: 'task-remote-bootstrap',
+        title: 'Remote bootstrap task',
+        beginsAt: DateTime(2026, 1, 8, 9),
+        estimatedDuration: const Duration(hours: 1),
+        updatedAt: DateTime(2026, 1, 8, 10),
+        userId: 'user-1',
+        hasRemoteBackingRecord: true,
+      );
+
+      final repository = InMemoryTasksRepository(const <TaskModel>[]);
+      final outboxRepository = InMemoryOutboxRepository();
+      final runtimeDebug = RuntimeDebugProvider();
+      addTearDown(runtimeDebug.dispose);
+      final localStateCoordinator = TaskLocalStateCoordinator(
+        TaskLocalSnapshotCoordinator.fromRepository(repository),
+        outboxRepository,
+        runtimeDebug: runtimeDebug,
+      );
+
+      final service = TaskSyncService.forTesting(
+        repository,
+        remote: FakeTaskRemoteDataSource([remoteTask]),
+        connectivityCheck: () async => [ConnectivityResult.wifi],
+        hasActiveSession: () => true,
+        runtimeDebug: runtimeDebug,
+        localStateCoordinator: localStateCoordinator,
+      );
+
+      final result = await service.syncTasks(await repository.loadTasks());
+      final savedTasks = await repository.loadTasks();
+
+      expect(result.acknowledgedTasks, isEmpty);
+      expect(savedTasks, hasLength(1));
+      expect(savedTasks.single.id, remoteTask.id);
+      expect(savedTasks.single.syncStatus, SyncStatus.synced);
+      expect(savedTasks.single.userId, 'user-1');
+      expect(savedTasks.single.hasRemoteBackingRecord, isTrue);
+      expect(
+        runtimeDebug.state.lastSyncMessage,
+        'Sync completed. 0 task(s) acknowledged.',
+      );
+    },
+  );
+
+  test(
     'syncTasks marks queued outbox entries as conflict when remote changed after the base snapshot',
     () async {
       final localTask = buildTask(

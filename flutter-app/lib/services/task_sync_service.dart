@@ -856,16 +856,20 @@ class TaskSyncService implements TaskSyncGateway {
     required List<OutboxEntry> preservedConcurrentEntries,
   }) {
     final latestTasksById = {for (final task in latestTasks) task.id: task};
-    final syncTasksById = {for (final task in syncTasks) task.id: task};
     final preservedEntriesByTaskId = {
       for (final entry in preservedConcurrentEntries) entry.taskId: entry,
     };
-    final mergedTasks = <String, TaskModel>{};
+    final mergedTasks = {for (final task in syncTasks) task.id: task};
 
     for (final task in latestTasks) {
       if (!managedTaskIds.contains(task.id) ||
           preservedEntriesByTaskId.containsKey(task.id)) {
-        mergedTasks[task.id] = task;
+        if (task.syncStatus == SyncStatus.synced &&
+            !preservedEntriesByTaskId.containsKey(task.id)) {
+          mergedTasks.putIfAbsent(task.id, () => task);
+        } else {
+          mergedTasks[task.id] = task;
+        }
       }
     }
 
@@ -880,13 +884,10 @@ class TaskSyncService implements TaskSyncGateway {
         final preservedEntry = preservedEntriesByTaskId[taskId]!;
         if (preservedEntry.operationType != OutboxOperationType.delete) {
           mergedTasks[taskId] = TaskModel.fromJson(preservedEntry.taskPayload);
+        } else {
+          mergedTasks.remove(taskId);
         }
         continue;
-      }
-
-      final syncTask = syncTasksById[taskId];
-      if (syncTask != null) {
-        mergedTasks[taskId] = syncTask;
       }
     }
 
