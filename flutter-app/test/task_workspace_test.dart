@@ -285,7 +285,7 @@ void main() {
     tester,
   ) async {
     tester.view.devicePixelRatio = 1.0;
-    tester.view.physicalSize = const Size(1600, 2200);
+    tester.view.physicalSize = const Size(1600, 980);
     addTearDown(tester.view.resetDevicePixelRatio);
     addTearDown(tester.view.resetPhysicalSize);
 
@@ -372,9 +372,10 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Sync conflict needs review'), findsOneWidget);
-    expect(find.text('Review conflicts'), findsOneWidget);
 
-    await tester.tap(find.text('Review conflicts'));
+    await tester.tap(
+      find.byKey(const ValueKey('task-workspace-conflict-alert')),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('Conflict review'), findsOneWidget);
@@ -384,7 +385,29 @@ void main() {
     expect(find.text('Title'), findsOneWidget);
     expect(find.text('Local task title'), findsWidgets);
     expect(find.text('Remote task title'), findsWidgets);
+
+    await tester.scrollUntilVisible(
+      find.text('Keep remote version'),
+      200,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('task-workspace-keep-remote-button')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('task-workspace-keep-local-button')),
+      findsOneWidget,
+    );
     expect(find.text('Keep my local changes'), findsOneWidget);
     expect(find.text('Keep remote version'), findsOneWidget);
+
+    await tester.tap(find.text('Keep remote version'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Conflict review'), findsNothing);
+    expect(runtimeDebug.state.conflictEntryCount, 0);
   });
 }

@@ -685,15 +685,6 @@ class _SyncDebugPanelState extends State<SyncDebugPanel> {
         : 'Untitled task';
   }
 
-  String? _remoteSnapshotTitle(OutboxEntry entry) {
-    final title = entry.remoteSnapshot?['title'] as String?;
-    if (title == null || title.trim().isEmpty) {
-      return null;
-    }
-
-    return title;
-  }
-
   Widget _metricPill(BuildContext context, String label, String value) {
     final theme = Theme.of(context);
 

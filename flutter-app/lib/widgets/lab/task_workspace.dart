@@ -62,6 +62,30 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
         );
   }
 
+  Future<void> _initAgenda() async {
+    final agenda = context.read<AgendaProvider>();
+    final runtimeDebug = context.read<RuntimeDebugProvider>();
+    final sessionCoordinator = context.read<WorkspaceSessionCoordinator>();
+
+    try {
+      final result = await sessionCoordinator.initialize(
+        agenda: agenda,
+        runtimeDebug: runtimeDebug,
+      );
+      if (result.shouldShowAnonymousTaskReview) {
+        if (!mounted) {
+          return;
+        }
+        _showAnonymousTaskReviewDialog();
+      }
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to initialize the workspace.')),
+      );
+    }
+  }
+
   @override
   void dispose() {
     _authStateSubscription.cancel();
@@ -191,30 +215,6 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
         ),
       ),
     );
-  }
-
-  Future<void> _initAgenda() async {
-    final agenda = context.read<AgendaProvider>();
-    final runtimeDebug = context.read<RuntimeDebugProvider>();
-    final sessionCoordinator = context.read<WorkspaceSessionCoordinator>();
-
-    try {
-      final result = await sessionCoordinator.initialize(
-        agenda: agenda,
-        runtimeDebug: runtimeDebug,
-      );
-      if (result.shouldShowAnonymousTaskReview) {
-        if (!mounted) {
-          return;
-        }
-        _showAnonymousTaskReviewDialog();
-      }
-    } catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to initialize the workspace.')),
-      );
-    }
   }
 
   Widget _buildLoadingIndicator() {
@@ -610,15 +610,9 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
   }) {
     final theme = Theme.of(context);
     final conflictCount = debugState.conflictEntryCount;
-    final primaryEntry = debugState.conflictEntries.first;
-    final primaryTitle = _taskTitleForConflictEntry(primaryEntry);
     final title = conflictCount == 1
         ? 'Sync conflict needs review'
         : '$conflictCount sync conflicts need review';
-    final message = conflictCount == 1
-        ? 'Your local changes and the remote version for "$primaryTitle" diverged. Review the diff before the next replay.'
-        : 'Local changes and remote versions diverged for multiple tasks. Review each diff before the next replay.';
-
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -627,7 +621,7 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
         onTap: _showConflictReviewDialog,
         child: Container(
           width: double.infinity,
-          padding: EdgeInsets.all(dense ? 14 : 16),
+          padding: EdgeInsets.all(dense ? 10 : 12),
           decoration: BoxDecoration(
             color: theme.colorScheme.errorContainer,
             borderRadius: BorderRadius.circular(dense ? 18 : 20),
@@ -651,22 +645,6 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
                       title: title,
                       color: theme.colorScheme.onErrorContainer,
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      message,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onErrorContainer,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    FilledButton.tonalIcon(
-                      key: const ValueKey(
-                        'task-workspace-conflict-review-button',
-                      ),
-                      onPressed: _showConflictReviewDialog,
-                      icon: const Icon(Icons.compare_arrows_rounded),
-                      label: const Text('Review conflicts'),
-                    ),
                   ],
                 )
               : Row(
@@ -678,34 +656,17 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            title,
-                            style: theme.textTheme.titleSmall?.copyWith(
-                              color: theme.colorScheme.onErrorContainer,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            message,
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: theme.colorScheme.onErrorContainer,
-                            ),
-                          ),
-                        ],
+                      child: Text(
+                        title,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          color: theme.colorScheme.onErrorContainer,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    FilledButton.tonalIcon(
-                      key: const ValueKey(
-                        'task-workspace-conflict-review-button',
-                      ),
-                      onPressed: _showConflictReviewDialog,
-                      icon: const Icon(Icons.compare_arrows_rounded),
-                      label: const Text('Review conflicts'),
+                    Icon(
+                      Icons.open_in_full_rounded,
+                      color: theme.colorScheme.onErrorContainer,
                     ),
                   ],
                 ),
@@ -715,89 +676,178 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
   }
 
   Future<void> _showConflictReviewDialog() {
-    return showDialog<void>(
-      context: context,
-      builder: (dialogContext) {
-        final theme = Theme.of(dialogContext);
-        return Dialog(
-          insetPadding: const EdgeInsets.symmetric(
-            horizontal: 24,
-            vertical: 20,
-          ),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 860, maxHeight: 760),
-            child: Consumer2<AgendaProvider, RuntimeDebugProvider>(
-              builder: (dialogContext, agenda, runtimeDebug, child) {
-                final conflicts = runtimeDebug.state.conflictEntries;
-                return Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Conflict review',
-                                  style: theme.textTheme.headlineSmall,
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  conflicts.isEmpty
-                                      ? 'No sync conflicts are waiting for review now.'
-                                      : 'Compare your local version with the current remote version, then decide which side should win the next sync pass.',
-                                  style: theme.textTheme.bodyMedium,
-                                ),
-                              ],
+    return Navigator.of(context).push<void>(
+      PageRouteBuilder<void>(
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: Duration.zero,
+        fullscreenDialog: true,
+        pageBuilder: (routeContext, animation, secondaryAnimation) {
+          var selectedIndex = 0;
+          return StatefulBuilder(
+            builder: (dialogContext, setDialogState) {
+              final theme = Theme.of(dialogContext);
+              return Scaffold(
+                backgroundColor: theme.colorScheme.surfaceContainerLow,
+                appBar: AppBar(title: const Text('Conflict review')),
+                body: Consumer2<AgendaProvider, RuntimeDebugProvider>(
+                  builder: (dialogContext, agenda, runtimeDebug, child) {
+                    final conflicts = runtimeDebug.state.conflictEntries;
+                    final resolvedIndex = conflicts.isEmpty
+                        ? 0
+                        : selectedIndex.clamp(0, conflicts.length - 1);
+                    final selectedEntry = conflicts.isEmpty
+                        ? null
+                        : conflicts[resolvedIndex];
+
+                    return Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 860),
+                        child: ListView(
+                          padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
+                          children: [
+                            Text(
+                              conflicts.isEmpty
+                                  ? 'No sync conflicts are waiting for review now.'
+                                  : 'Compare one conflict at a time, then decide whether the remote state should win or your local change should be replayed again.',
+                              style: theme.textTheme.bodyMedium,
                             ),
-                          ),
-                          const SizedBox(width: 12),
-                          IconButton(
-                            onPressed: () => Navigator.of(dialogContext).pop(),
-                            icon: const Icon(Icons.close),
-                            tooltip: 'Close conflict review',
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 20),
-                      Expanded(
-                        child: conflicts.isEmpty
-                            ? Center(
-                                child: Text(
-                                  'The workspace no longer has unresolved sync conflicts.',
-                                  style: theme.textTheme.bodyLarge,
-                                  textAlign: TextAlign.center,
+                            if (conflicts.length > 1) ...[
+                              const SizedBox(height: 18),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: List<Widget>.generate(
+                                  conflicts.length,
+                                  (index) {
+                                    final entry = conflicts[index];
+                                    return ChoiceChip(
+                                      label: Text(
+                                        _taskTitleForConflictEntry(entry),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      selected: index == resolvedIndex,
+                                      onSelected: (_) {
+                                        setDialogState(() {
+                                          selectedIndex = index;
+                                        });
+                                      },
+                                    );
+                                  },
+                                ),
+                              ),
+                            ],
+                            const SizedBox(height: 20),
+                            if (selectedEntry == null)
+                              const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 80),
+                                child: Center(
+                                  child: Text(
+                                    'The workspace no longer has unresolved sync conflicts.',
+                                    textAlign: TextAlign.center,
+                                  ),
                                 ),
                               )
-                            : ListView.separated(
-                                itemCount: conflicts.length,
-                                separatorBuilder: (context, index) =>
-                                    const SizedBox(height: 16),
-                                itemBuilder: (context, index) {
-                                  final entry = conflicts[index];
-                                  return _buildConflictReviewCard(
-                                    agenda,
-                                    entry,
-                                  );
-                                },
+                            else ...[
+                              _buildConflictReviewContent(selectedEntry),
+                              const SizedBox(height: 16),
+                              Divider(
+                                height: 1,
+                                color: theme.colorScheme.outlineVariant,
                               ),
+                              const SizedBox(height: 16),
+                              Wrap(
+                                spacing: 10,
+                                runSpacing: 10,
+                                alignment: WrapAlignment.end,
+                                children: [
+                                  OutlinedButton.icon(
+                                    key: const ValueKey(
+                                      'task-workspace-keep-remote-button',
+                                    ),
+                                    style: OutlinedButton.styleFrom(
+                                      visualDensity: VisualDensity.compact,
+                                    ),
+                                    onPressed: () async {
+                                      final messenger = ScaffoldMessenger.of(
+                                        context,
+                                      );
+                                      final navigator = Navigator.of(
+                                        dialogContext,
+                                      );
+                                      await agenda.keepRemoteConflict(
+                                        selectedEntry.taskId,
+                                      );
+                                      if (!mounted) {
+                                        return;
+                                      }
+                                      messenger.showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            'Kept the remote version for ${_taskTitleForConflictEntry(selectedEntry)}.',
+                                          ),
+                                        ),
+                                      );
+                                      if (navigator.mounted &&
+                                          navigator.canPop()) {
+                                        navigator.pop();
+                                      }
+                                    },
+                                    icon: const Icon(Icons.cloud_done_outlined),
+                                    label: const Text('Keep remote version'),
+                                  ),
+                                  FilledButton.icon(
+                                    key: const ValueKey(
+                                      'task-workspace-keep-local-button',
+                                    ),
+                                    style: FilledButton.styleFrom(
+                                      visualDensity: VisualDensity.compact,
+                                    ),
+                                    onPressed: () async {
+                                      final messenger = ScaffoldMessenger.of(
+                                        context,
+                                      );
+                                      final navigator = Navigator.of(
+                                        dialogContext,
+                                      );
+                                      await agenda.reapplyLocalConflict(
+                                        selectedEntry.taskId,
+                                      );
+                                      if (!mounted) {
+                                        return;
+                                      }
+                                      messenger.showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            'Queued your local changes again for ${_taskTitleForConflictEntry(selectedEntry)}.',
+                                          ),
+                                        ),
+                                      );
+                                      if (navigator.mounted &&
+                                          navigator.canPop()) {
+                                        navigator.pop();
+                                      }
+                                    },
+                                    icon: const Icon(Icons.upload_outlined),
+                                    label: const Text('Keep my local changes'),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ],
+                        ),
                       ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ),
-        );
-      },
+                    );
+                  },
+                ),
+              );
+            },
+          );
+        },
+      ),
     );
   }
 
-  Widget _buildConflictReviewCard(AgendaProvider agenda, OutboxEntry entry) {
+  Widget _buildConflictReviewContent(OutboxEntry entry) {
     final theme = Theme.of(context);
     final localTask = _taskFromConflictJson(entry.taskPayload);
     final remoteTask = _taskFromConflictJson(entry.remoteSnapshot);
@@ -889,47 +939,6 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
                 child: _buildConflictDiffRow(diff),
               ),
             ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              OutlinedButton.icon(
-                onPressed: () async {
-                  await agenda.keepRemoteConflict(entry.taskId);
-                  if (!mounted) {
-                    return;
-                  }
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'Kept the remote version for ${_taskTitleForConflictEntry(entry)}.',
-                      ),
-                    ),
-                  );
-                },
-                icon: const Icon(Icons.cloud_done_outlined),
-                label: const Text('Keep remote version'),
-              ),
-              FilledButton.icon(
-                onPressed: () async {
-                  await agenda.reapplyLocalConflict(entry.taskId);
-                  if (!mounted) {
-                    return;
-                  }
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'Queued your local changes again for ${_taskTitleForConflictEntry(entry)}.',
-                      ),
-                    ),
-                  );
-                },
-                icon: const Icon(Icons.upload_outlined),
-                label: const Text('Keep my local changes'),
-              ),
-            ],
-          ),
         ],
       ),
     );
