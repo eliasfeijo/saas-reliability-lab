@@ -503,6 +503,79 @@ void main() {
     expect(find.text('Operator summary'), findsNothing);
   });
 
+  testWidgets('timeline actions wrap without overflowing on compact widths', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(360, 2200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final runtimeDebug = RuntimeDebugProvider();
+    addTearDown(runtimeDebug.dispose);
+    final faultInjection = FaultInjectionProvider(runtimeDebug: runtimeDebug);
+    addTearDown(faultInjection.dispose);
+    final repository = InMemoryTasksRepository([]);
+    final agenda = buildAgendaProviderForTesting(
+      repository,
+      TaskSyncService.forTesting(
+        repository,
+        remote: FakeTaskRemoteDataSource([]),
+        connectivityCheck: () async => [ConnectivityResult.wifi],
+        hasActiveSession: () => true,
+        runtimeDebug: runtimeDebug,
+      ),
+      runtimeDebug: runtimeDebug,
+    );
+    addTearDown(agenda.dispose);
+
+    runtimeDebug.addEvent(
+      category: RuntimeEventCategory.sync,
+      message: 'Compact timeline event.',
+      payload: const RuntimeEventPayload(
+        stage: 'Replay completed',
+        summary: 'Compact layout should wrap action buttons safely.',
+        metrics: [RuntimeEventMetric(label: 'Acknowledged', value: '3')],
+        tasks: [
+          RuntimeEventTaskDetail(
+            title: 'Compact task',
+            taskId: 'task-compact',
+            syncStatus: 'Synced',
+            outcome: 'Recorded',
+            description: '2026-04-22 12:25 for 1 h.',
+          ),
+          RuntimeEventTaskDetail(
+            title: 'Second compact task',
+            taskId: 'task-compact-2',
+            syncStatus: 'Synced',
+            outcome: 'Recorded',
+            description: '2026-04-22 13:25 for 1 h.',
+          ),
+          RuntimeEventTaskDetail(
+            title: 'Third compact task',
+            taskId: 'task-compact-3',
+            syncStatus: 'Synced',
+            outcome: 'Recorded',
+            description: '2026-04-22 14:25 for 1 h.',
+          ),
+        ],
+      ),
+    );
+
+    await tester.pumpWidget(
+      RailHarness(
+        agenda: agenda,
+        runtimeDebug: runtimeDebug,
+        faultInjection: faultInjection,
+        child: const SyncDebugPanel(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(find.text('Compact timeline event.'), 300);
+    expect(find.widgetWithText(TextButton, 'View context'), findsOneWidget);
+    expect(find.widgetWithText(TextButton, 'Open full record'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'event timeline can be cleared without resetting the wider diagnostics state',
     (tester) async {

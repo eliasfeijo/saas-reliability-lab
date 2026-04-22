@@ -1015,7 +1015,9 @@ class _RuntimeEventTileState extends State<_RuntimeEventTile> {
           ),
           const SizedBox(height: 10),
           if (canInspect)
-            Row(
+            Wrap(
+              spacing: 4,
+              runSpacing: 4,
               children: [
                 TextButton.icon(
                   onPressed: () {
@@ -1032,14 +1034,12 @@ class _RuntimeEventTileState extends State<_RuntimeEventTile> {
                     _detailsVisible ? 'Hide context' : 'View context',
                   ),
                 ),
-                if (shouldOfferDialog) ...[
-                  const SizedBox(width: 4),
+                if (shouldOfferDialog)
                   TextButton.icon(
                     onPressed: () => _showFullRecordDialog(context),
                     icon: const Icon(Icons.open_in_full_outlined),
                     label: const Text('Open full record'),
                   ),
-                ],
               ],
             ),
           AnimatedSize(
