@@ -76,22 +76,23 @@ This repo now uses a monorepo-style structure:
 
 ## Documentation Summary
 
-| Document                                                                         | What it covers                                                                                                    |
-| -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| [`docs/README.md`](docs/README.md)                                               | Big-picture product framing, current UI shape, system model, and the repository guide.                            |
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)                                   | Implemented topology, state ownership, and the current evolution path.                                            |
-| [`docs/OBJECTIVE_0_FOUNDATION_PLAN.md`](docs/OBJECTIVE_0_FOUNDATION_PLAN.md)     | Completed Objective 0 execution record and handoff for the finished foundation cleanup.                           |
-| [`docs/OBJECTIVE_1_OUTBOX_ENTRY_PLAN.md`](docs/OBJECTIVE_1_OUTBOX_ENTRY_PLAN.md) | Active Objective 1 entry plan for the next outbox-focused phase.                                                  |
-| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)                                       | GitHub Actions workflows, GitHub Pages, Cloudflare Worker deployment, and environment expectations.               |
-| [`docs/GITHUB_AUTOMATION.md`](docs/GITHUB_AUTOMATION.md)                         | Repository automation structure, workflow surfaces under `.github\`, and local guidance for automation changes.   |
-| [`docs/LOCAL_DEVELOPMENT.md`](docs/LOCAL_DEVELOPMENT.md)                         | Repository-root workflow, local run commands, and the day-to-day setup for working on the app locally.            |
-| [`docs/AI_ASSISTED_DEVELOPMENT.md`](docs/AI_ASSISTED_DEVELOPMENT.md)             | The intended human-and-agent development loop, Copilot workflow, and low-friction delivery model for this repo.   |
-| [`docs/TESTING_STRATEGY.md`](docs/TESTING_STRATEGY.md)                           | Repo-wide testing contract, current test inventory, and the planned structure for reliability-focused automation. |
-| [`docs/EXPERIMENTS.md`](docs/EXPERIMENTS.md)                                     | Runnable and planned reliability scenarios, expected behavior, and visible evidence.                              |
-| [`ROADMAP.md`](ROADMAP.md)                                                       | Recommended short-, medium-, and long-term implementation direction grounded in the current repository state.     |
-| [`docs/project_analysis.md`](docs/project_analysis.md)                           | Current system assessment, structural strengths, and the main gaps still left to close.                           |
-| [`docs/TASK_DELETION_LIFECYCLE.md`](docs/TASK_DELETION_LIFECYCLE.md)             | Current deletion semantics, the anonymous-task bug rationale, and the recommended future archive path.            |
-| [`docs/reliability_lab_checklist.md`](docs/reliability_lab_checklist.md)         | Milestones for turning the current prototype into a stronger reliability lab.                                     |
+| Document                                                                         | What it covers                                                                                                        |
+| -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| [`docs/README.md`](docs/README.md)                                               | Big-picture product framing, current UI shape, system model, and the repository guide.                                |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)                                   | Implemented topology, state ownership, and the current evolution path.                                                |
+| [`docs/OBJECTIVE_0_FOUNDATION_PLAN.md`](docs/OBJECTIVE_0_FOUNDATION_PLAN.md)     | Completed Objective 0 execution record and handoff for the finished foundation cleanup.                               |
+| [`docs/OBJECTIVE_1_OUTBOX_ENTRY_PLAN.md`](docs/OBJECTIVE_1_OUTBOX_ENTRY_PLAN.md) | Active Objective 1 entry plan for the next outbox-focused phase.                                                      |
+| [`docs/TRY_THE_LAB_PLAN.md`](docs/TRY_THE_LAB_PLAN.md)                           | Planned low-friction public-sandbox auth path for immediate lab access while preserving personal sign-in and sign-up. |
+| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)                                       | GitHub Actions workflows, GitHub Pages, Cloudflare Worker deployment, and environment expectations.                   |
+| [`docs/GITHUB_AUTOMATION.md`](docs/GITHUB_AUTOMATION.md)                         | Repository automation structure, workflow surfaces under `.github\`, and local guidance for automation changes.       |
+| [`docs/LOCAL_DEVELOPMENT.md`](docs/LOCAL_DEVELOPMENT.md)                         | Repository-root workflow, local run commands, and the day-to-day setup for working on the app locally.                |
+| [`docs/AI_ASSISTED_DEVELOPMENT.md`](docs/AI_ASSISTED_DEVELOPMENT.md)             | The intended human-and-agent development loop, Copilot workflow, and low-friction delivery model for this repo.       |
+| [`docs/TESTING_STRATEGY.md`](docs/TESTING_STRATEGY.md)                           | Repo-wide testing contract, current test inventory, and the planned structure for reliability-focused automation.     |
+| [`docs/EXPERIMENTS.md`](docs/EXPERIMENTS.md)                                     | Runnable and planned reliability scenarios, expected behavior, and visible evidence.                                  |
+| [`ROADMAP.md`](ROADMAP.md)                                                       | Recommended short-, medium-, and long-term implementation direction grounded in the current repository state.         |
+| [`docs/project_analysis.md`](docs/project_analysis.md)                           | Current system assessment, structural strengths, and the main gaps still left to close.                               |
+| [`docs/TASK_DELETION_LIFECYCLE.md`](docs/TASK_DELETION_LIFECYCLE.md)             | Current deletion semantics, the anonymous-task bug rationale, and the recommended future archive path.                |
+| [`docs/reliability_lab_checklist.md`](docs/reliability_lab_checklist.md)         | Milestones for turning the current prototype into a stronger reliability lab.                                         |
 
 To jump straight into the client, start with [`flutter-app/lib/main.dart`](flutter-app/lib/main.dart).
 
