@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:todo_flutter/models/fault_injection_scenario.dart';
 import 'package:todo_flutter/models/fault_injection_state.dart';
+import 'package:todo_flutter/models/outbox_entry.dart';
 import 'package:todo_flutter/models/runtime_debug_state.dart';
 import 'package:todo_flutter/models/task.dart';
 import 'package:todo_flutter/providers/agenda_provider.dart';
@@ -359,7 +360,6 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
                       builder: (context, runtimeDebug, child) {
                         final debugState = runtimeDebug.state;
                         if (debugState.failedEntryCount == 0 &&
-                            debugState.conflictEntryCount == 0 &&
                             debugState.blockedAnonymousReviewEntryCount == 0) {
                           return const SizedBox.shrink();
                         }
@@ -374,13 +374,6 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
                                 label:
                                     '${debugState.failedEntryCount} failed operation(s)',
                                 color: theme.colorScheme.tertiary,
-                              ),
-                            if (debugState.conflictEntryCount > 0)
-                              _buildOperationNoticeChip(
-                                theme,
-                                label:
-                                    '${debugState.conflictEntryCount} conflict(s)',
-                                color: theme.colorScheme.error,
                               ),
                             if (debugState.blockedAnonymousReviewEntryCount > 0)
                               _buildOperationNoticeChip(
@@ -577,6 +570,23 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
                 ),
             ],
           ),
+          Consumer<RuntimeDebugProvider>(
+            builder: (context, runtimeDebug, child) {
+              final debugState = runtimeDebug.state;
+              if (debugState.conflictEntryCount == 0) {
+                return const SizedBox.shrink();
+              }
+
+              return Padding(
+                padding: EdgeInsets.only(top: dense ? 12 : 14),
+                child: _buildConflictAlertCard(
+                  debugState: debugState,
+                  compact: compact,
+                  dense: dense,
+                ),
+              );
+            },
+          ),
           SizedBox(height: dense ? 12 : 16),
           _buildSearchBar(agenda),
           SizedBox(height: dense ? 10 : 14),
@@ -591,6 +601,600 @@ class _TaskWorkspaceState extends State<TaskWorkspace> {
         ],
       ),
     );
+  }
+
+  Widget _buildConflictAlertCard({
+    required RuntimeDebugState debugState,
+    required bool compact,
+    required bool dense,
+  }) {
+    final theme = Theme.of(context);
+    final conflictCount = debugState.conflictEntryCount;
+    final primaryEntry = debugState.conflictEntries.first;
+    final primaryTitle = _taskTitleForConflictEntry(primaryEntry);
+    final title = conflictCount == 1
+        ? 'Sync conflict needs review'
+        : '$conflictCount sync conflicts need review';
+    final message = conflictCount == 1
+        ? 'Your local changes and the remote version for "$primaryTitle" diverged. Review the diff before the next replay.'
+        : 'Local changes and remote versions diverged for multiple tasks. Review each diff before the next replay.';
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        key: const ValueKey('task-workspace-conflict-alert'),
+        borderRadius: BorderRadius.circular(dense ? 18 : 20),
+        onTap: _showConflictReviewDialog,
+        child: Container(
+          width: double.infinity,
+          padding: EdgeInsets.all(dense ? 14 : 16),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.errorContainer,
+            borderRadius: BorderRadius.circular(dense ? 18 : 20),
+            border: Border.all(
+              color: theme.colorScheme.error.withValues(alpha: 0.28),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: theme.colorScheme.error.withValues(alpha: 0.12),
+                blurRadius: 18,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: compact
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildNoticeHeader(
+                      icon: Icons.warning_amber_rounded,
+                      title: title,
+                      color: theme.colorScheme.onErrorContainer,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      message,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onErrorContainer,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    FilledButton.tonalIcon(
+                      key: const ValueKey(
+                        'task-workspace-conflict-review-button',
+                      ),
+                      onPressed: _showConflictReviewDialog,
+                      icon: const Icon(Icons.compare_arrows_rounded),
+                      label: const Text('Review conflicts'),
+                    ),
+                  ],
+                )
+              : Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.warning_amber_rounded,
+                      color: theme.colorScheme.onErrorContainer,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              color: theme.colorScheme.onErrorContainer,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            message,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: theme.colorScheme.onErrorContainer,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    FilledButton.tonalIcon(
+                      key: const ValueKey(
+                        'task-workspace-conflict-review-button',
+                      ),
+                      onPressed: _showConflictReviewDialog,
+                      icon: const Icon(Icons.compare_arrows_rounded),
+                      label: const Text('Review conflicts'),
+                    ),
+                  ],
+                ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showConflictReviewDialog() {
+    return showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        final theme = Theme.of(dialogContext);
+        return Dialog(
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 24,
+            vertical: 20,
+          ),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 860, maxHeight: 760),
+            child: Consumer2<AgendaProvider, RuntimeDebugProvider>(
+              builder: (dialogContext, agenda, runtimeDebug, child) {
+                final conflicts = runtimeDebug.state.conflictEntries;
+                return Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Conflict review',
+                                  style: theme.textTheme.headlineSmall,
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  conflicts.isEmpty
+                                      ? 'No sync conflicts are waiting for review now.'
+                                      : 'Compare your local version with the current remote version, then decide which side should win the next sync pass.',
+                                  style: theme.textTheme.bodyMedium,
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          IconButton(
+                            onPressed: () => Navigator.of(dialogContext).pop(),
+                            icon: const Icon(Icons.close),
+                            tooltip: 'Close conflict review',
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                      Expanded(
+                        child: conflicts.isEmpty
+                            ? Center(
+                                child: Text(
+                                  'The workspace no longer has unresolved sync conflicts.',
+                                  style: theme.textTheme.bodyLarge,
+                                  textAlign: TextAlign.center,
+                                ),
+                              )
+                            : ListView.separated(
+                                itemCount: conflicts.length,
+                                separatorBuilder: (context, index) =>
+                                    const SizedBox(height: 16),
+                                itemBuilder: (context, index) {
+                                  final entry = conflicts[index];
+                                  return _buildConflictReviewCard(
+                                    agenda,
+                                    entry,
+                                  );
+                                },
+                              ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildConflictReviewCard(AgendaProvider agenda, OutboxEntry entry) {
+    final theme = Theme.of(context);
+    final localTask = _taskFromConflictJson(entry.taskPayload);
+    final remoteTask = _taskFromConflictJson(entry.remoteSnapshot);
+    final diffs = _buildConflictFieldDiffs(
+      entry: entry,
+      localTask: localTask,
+      remoteTask: remoteTask,
+    );
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            _taskTitleForConflictEntry(entry),
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            _conflictSummary(entry, localTask, remoteTask),
+            style: theme.textTheme.bodyMedium,
+          ),
+          if (entry.lastError != null &&
+              entry.lastError!.trim().isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(
+              entry.lastError!,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+          const SizedBox(height: 16),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isNarrow = constraints.maxWidth < 640;
+              final localPane = _buildConflictVersionPane(
+                title: 'Local version',
+                accent: theme.colorScheme.primary,
+                task: localTask,
+                fallback: entry.operationType == OutboxOperationType.delete
+                    ? 'Delete this task from the synced queue.'
+                    : 'Local task details are no longer available.',
+              );
+              final remotePane = _buildConflictVersionPane(
+                title: 'Remote version',
+                accent: theme.colorScheme.secondary,
+                task: remoteTask,
+                fallback: 'The remote version no longer exists.',
+              );
+
+              if (isNarrow) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [localPane, const SizedBox(height: 12), remotePane],
+                );
+              }
+
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: localPane),
+                  const SizedBox(width: 12),
+                  Expanded(child: remotePane),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 16),
+          Text('What changed', style: theme.textTheme.titleSmall),
+          const SizedBox(height: 10),
+          if (diffs.isEmpty)
+            Text(
+              'This conflict is about replay order rather than obvious field-level differences. Review the local and remote summaries above before deciding.',
+              style: theme.textTheme.bodyMedium,
+            )
+          else
+            ...diffs.map(
+              (diff) => Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: _buildConflictDiffRow(diff),
+              ),
+            ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              OutlinedButton.icon(
+                onPressed: () async {
+                  await agenda.keepRemoteConflict(entry.taskId);
+                  if (!mounted) {
+                    return;
+                  }
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        'Kept the remote version for ${_taskTitleForConflictEntry(entry)}.',
+                      ),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.cloud_done_outlined),
+                label: const Text('Keep remote version'),
+              ),
+              FilledButton.icon(
+                onPressed: () async {
+                  await agenda.reapplyLocalConflict(entry.taskId);
+                  if (!mounted) {
+                    return;
+                  }
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        'Queued your local changes again for ${_taskTitleForConflictEntry(entry)}.',
+                      ),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.upload_outlined),
+                label: const Text('Keep my local changes'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildConflictVersionPane({
+    required String title,
+    required Color accent,
+    required TaskModel? task,
+    required String fallback,
+  }) {
+    final theme = Theme.of(context);
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: accent.withValues(alpha: 0.18)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: theme.textTheme.labelLarge?.copyWith(
+              color: accent,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          if (task == null)
+            Text(fallback, style: theme.textTheme.bodyMedium)
+          else ...[
+            Text(
+              task.title,
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(_formatLongTaskWindow(task), style: theme.textTheme.bodySmall),
+            const SizedBox(height: 4),
+            Text(
+              '${task.priority.displayName} priority • ${task.isCompleted ? 'Completed' : 'Open'} • ${_syncStatusLabel(task.syncStatus)}',
+              style: theme.textTheme.bodySmall,
+            ),
+            const SizedBox(height: 4),
+            Text(_taskNotes(task), style: theme.textTheme.bodySmall),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildConflictDiffRow(_ConflictFieldDiffData diff) {
+    final theme = Theme.of(context);
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isNarrow = constraints.maxWidth < 560;
+          final localBlock = _buildConflictDiffValueBlock(
+            label: 'Local',
+            value: diff.localValue,
+            accent: theme.colorScheme.primary,
+          );
+          final remoteBlock = _buildConflictDiffValueBlock(
+            label: 'Remote',
+            value: diff.remoteValue,
+            accent: theme.colorScheme.secondary,
+          );
+
+          if (isNarrow) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(diff.label, style: theme.textTheme.labelLarge),
+                const SizedBox(height: 10),
+                localBlock,
+                const SizedBox(height: 10),
+                remoteBlock,
+              ],
+            );
+          }
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(diff.label, style: theme.textTheme.labelLarge),
+              const SizedBox(height: 10),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: localBlock),
+                  const SizedBox(width: 10),
+                  Expanded(child: remoteBlock),
+                ],
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildConflictDiffValueBlock({
+    required String label,
+    required String value,
+    required Color accent,
+  }) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: accent,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(value, style: theme.textTheme.bodyMedium),
+        ],
+      ),
+    );
+  }
+
+  TaskModel? _taskFromConflictJson(Map<String, dynamic>? json) {
+    if (json == null || json.isEmpty) {
+      return null;
+    }
+
+    try {
+      return TaskModel.fromJson(json);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String _taskTitleForConflictEntry(OutboxEntry entry) {
+    final localTask = _taskFromConflictJson(entry.taskPayload);
+    final remoteTask = _taskFromConflictJson(entry.remoteSnapshot);
+    return localTask?.title ??
+        remoteTask?.title ??
+        (entry.taskPayload['title'] as String?) ??
+        'Task ${entry.taskId}';
+  }
+
+  String _conflictSummary(
+    OutboxEntry entry,
+    TaskModel? localTask,
+    TaskModel? remoteTask,
+  ) {
+    if (entry.operationType == OutboxOperationType.delete) {
+      return remoteTask == null
+          ? 'You tried to delete this task locally after the remote version had already moved. Decide whether to keep the remote state or finish the deletion.'
+          : 'You deleted this task locally, but the remote version changed first. Decide whether the task should stay in cloud state or be removed.';
+    }
+
+    if (localTask == null || remoteTask == null) {
+      return 'The local and remote copies no longer agree. Review the available state before choosing which version should win.';
+    }
+
+    return 'Your local edits to "${localTask.title}" no longer match the current remote version. Choose whether to keep the remote state or enforce your local changes.';
+  }
+
+  List<_ConflictFieldDiffData> _buildConflictFieldDiffs({
+    required OutboxEntry entry,
+    required TaskModel? localTask,
+    required TaskModel? remoteTask,
+  }) {
+    final diffs = <_ConflictFieldDiffData>[];
+
+    void addDiff(String label, String localValue, String remoteValue) {
+      if (localValue == remoteValue) {
+        return;
+      }
+      diffs.add(
+        _ConflictFieldDiffData(
+          label: label,
+          localValue: localValue,
+          remoteValue: remoteValue,
+        ),
+      );
+    }
+
+    final localIntent = entry.operationType == OutboxOperationType.delete
+        ? 'Delete this task'
+        : 'Keep and sync my edits';
+    final remoteIntent = remoteTask == null
+        ? 'Task no longer exists remotely'
+        : 'Keep the current remote task';
+    addDiff('Intent', localIntent, remoteIntent);
+
+    addDiff(
+      'Title',
+      localTask?.title.trim().isNotEmpty == true
+          ? localTask!.title.trim()
+          : 'Untitled task',
+      remoteTask?.title.trim().isNotEmpty == true
+          ? remoteTask!.title.trim()
+          : 'Untitled task',
+    );
+    addDiff(
+      'Schedule',
+      localTask == null ? 'Unavailable' : _formatLongTaskWindow(localTask),
+      remoteTask == null ? 'Unavailable' : _formatLongTaskWindow(remoteTask),
+    );
+    addDiff(
+      'Duration',
+      localTask == null
+          ? 'Unavailable'
+          : _formatDurationLabel(localTask.estimatedDuration),
+      remoteTask == null
+          ? 'Unavailable'
+          : _formatDurationLabel(remoteTask.estimatedDuration),
+    );
+    addDiff(
+      'Completion',
+      localTask == null
+          ? 'Unavailable'
+          : (localTask.isCompleted ? 'Completed' : 'Open'),
+      remoteTask == null
+          ? 'Unavailable'
+          : (remoteTask.isCompleted ? 'Completed' : 'Open'),
+    );
+    addDiff(
+      'Priority',
+      localTask?.priority.displayName ?? 'Unavailable',
+      remoteTask?.priority.displayName ?? 'Unavailable',
+    );
+    addDiff(
+      'Notes',
+      localTask == null ? 'Unavailable' : _taskNotes(localTask),
+      remoteTask == null ? 'Unavailable' : _taskNotes(remoteTask),
+    );
+    addDiff(
+      'Tags',
+      localTask == null ? 'Unavailable' : _formatConflictTags(localTask.tags),
+      remoteTask == null ? 'Unavailable' : _formatConflictTags(remoteTask.tags),
+    );
+
+    return diffs;
+  }
+
+  String _formatConflictTags(List<String> tags) {
+    if (tags.isEmpty) {
+      return 'No tags';
+    }
+
+    return tags.join(', ');
   }
 
   Widget _buildFilterStrip({
@@ -2691,6 +3295,18 @@ IconData _statusIcon(TaskStatus status) {
     case TaskStatus.pending:
       return Icons.hourglass_bottom_outlined;
   }
+}
+
+class _ConflictFieldDiffData {
+  const _ConflictFieldDiffData({
+    required this.label,
+    required this.localValue,
+    required this.remoteValue,
+  });
+
+  final String label;
+  final String localValue;
+  final String remoteValue;
 }
 
 bool _isSameDay(DateTime left, DateTime right) {

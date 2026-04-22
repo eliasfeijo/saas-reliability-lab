@@ -5,10 +5,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:todo_flutter/models/fault_injection_scenario.dart';
+import 'package:todo_flutter/models/outbox_entry.dart';
 import 'package:todo_flutter/models/task.dart';
 import 'package:todo_flutter/providers/fault_injection_provider.dart';
 import 'package:todo_flutter/providers/runtime_debug_provider.dart';
+import 'package:todo_flutter/repositories/outbox_repository.dart';
 import 'package:todo_flutter/services/fault_injection_policy.dart';
+import 'package:todo_flutter/services/task_local_snapshot_coordinator.dart';
+import 'package:todo_flutter/services/task_local_state_coordinator.dart';
 import 'package:todo_flutter/services/task_sync_service.dart';
 
 import 'test_support/app_test_support.dart';
@@ -275,5 +279,112 @@ void main() {
 
     delayCompleter.complete();
     await tester.pumpAndSettle();
+  });
+
+  testWidgets('task workspace surfaces conflict review in a modal diff flow', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1.0;
+    tester.view.physicalSize = const Size(1600, 2200);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+
+    final localTask = TaskModel(
+      id: 'task-conflict-workspace',
+      title: 'Local task title',
+      beginsAt: DateTime(2026, 3, 4, 9),
+      estimatedDuration: const Duration(hours: 2),
+      description: 'Local notes',
+      priority: TaskPriority.high,
+      tags: const ['focus'],
+      syncStatus: SyncStatus.dirty,
+      userId: 'user-1',
+      hasRemoteBackingRecord: true,
+    );
+    final remoteTask = TaskModel(
+      id: localTask.id,
+      title: 'Remote task title',
+      beginsAt: DateTime(2026, 3, 4, 11),
+      estimatedDuration: const Duration(hours: 1),
+      description: 'Remote notes',
+      priority: TaskPriority.low,
+      tags: const ['ops'],
+      syncStatus: SyncStatus.synced,
+      userId: 'user-1',
+      hasRemoteBackingRecord: true,
+    );
+
+    final repository = InMemoryTasksRepository([localTask]);
+    final runtimeDebug = RuntimeDebugProvider();
+    addTearDown(runtimeDebug.dispose);
+    final outboxRepository = InMemoryOutboxRepository();
+    final localStateCoordinator = TaskLocalStateCoordinator(
+      TaskLocalSnapshotCoordinator.fromRepository(repository),
+      outboxRepository,
+      runtimeDebug: runtimeDebug,
+    );
+    await localStateCoordinator.saveState(
+      TaskLocalState(
+        tasks: [localTask],
+        outboxState: OutboxStorageState(
+          isInitialized: true,
+          activeEntries: [
+            OutboxEntry(
+              taskId: localTask.id,
+              operationType: OutboxOperationType.upsert,
+              state: OutboxEntryState.conflict,
+              ownerScope: OutboxOwnerScope.authenticated,
+              taskPayload: localTask.toJson(),
+              remoteSnapshot: remoteTask.toJson(),
+              lastError:
+                  'Remote state changed after the local update was queued.',
+            ),
+          ],
+        ),
+      ),
+    );
+
+    final syncService = TaskSyncService.forTesting(
+      repository,
+      remote: FakeTaskRemoteDataSource([remoteTask]),
+      connectivityCheck: () async => [ConnectivityResult.wifi],
+      hasActiveSession: () => true,
+      runtimeDebug: runtimeDebug,
+      localStateCoordinator: localStateCoordinator,
+    );
+
+    final agenda = buildAgendaProviderForTesting(
+      repository,
+      syncService,
+      runtimeDebug: runtimeDebug,
+      localStateCoordinator: localStateCoordinator,
+      outboxRepository: outboxRepository,
+    );
+    addTearDown(agenda.dispose);
+
+    await tester.pumpWidget(
+      LabWorkspaceHarness(agenda: agenda, runtimeDebug: runtimeDebug),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('task-workspace-conflict-alert')),
+      findsOneWidget,
+    );
+    expect(find.text('Sync conflict needs review'), findsOneWidget);
+    expect(find.text('Review conflicts'), findsOneWidget);
+
+    await tester.tap(find.text('Review conflicts'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Conflict review'), findsOneWidget);
+    expect(find.text('Local version'), findsOneWidget);
+    expect(find.text('Remote version'), findsOneWidget);
+    expect(find.text('What changed'), findsOneWidget);
+    expect(find.text('Title'), findsOneWidget);
+    expect(find.text('Local task title'), findsWidgets);
+    expect(find.text('Remote task title'), findsWidgets);
+    expect(find.text('Keep my local changes'), findsOneWidget);
+    expect(find.text('Keep remote version'), findsOneWidget);
   });
 }

@@ -28,7 +28,7 @@ Already present today:
 - [x] Reliability-lab shell with operator rail, task workspace, and diagnostics rail
 - [x] Runtime diagnostics provider and event timeline for sync, auth, push, and local-state visibility
 - [x] Explicit client-side outbox replay with visible queued, blocked, failed, conflict, and acknowledgement evidence
-- [x] First-slice conflict visibility and resolution in the runtime diagnostics surface
+- [x] First-slice conflict visibility in diagnostics evidence with workspace-owned conflict review and resolution
 - [x] Operator-facing connectivity-loss and delayed-sync fault injection
 - [x] Dedicated architecture, experiments, analysis, and checklist documentation aligned with the lab shell
 

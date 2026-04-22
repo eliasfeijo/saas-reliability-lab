@@ -240,13 +240,12 @@ void main() {
     expect(find.text('Queued: 1', skipOffstage: false), findsOneWidget);
     expect(find.text('Conflict: 1', skipOffstage: false), findsOneWidget);
     expect(find.text('Blocked Review: 1', skipOffstage: false), findsOneWidget);
-    expect(find.text('Conflict review', skipOffstage: false), findsOneWidget);
+    expect(find.text('Conflict routing', skipOffstage: false), findsOneWidget);
     expect(
-      find.text('Keep remote version', skipOffstage: false),
-      findsOneWidget,
-    );
-    expect(
-      find.text('Reapply local intent', skipOffstage: false),
+      find.textContaining(
+        'Task Workspace now owns conflict review',
+        skipOffstage: false,
+      ),
       findsOneWidget,
     );
     expect(find.text('upsert task-ack', skipOffstage: false), findsOneWidget);

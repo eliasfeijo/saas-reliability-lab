@@ -41,7 +41,7 @@ Current implication:
 
 - the implemented delayed-sync scenario now supports three client-owned modes on the explicit outbox replay path: `local` full-pass hold, `transport` seam delay, and `backend` acknowledgement delay
 - explicit outbox replay now exists when the runtime is using the coordinated local task-plus-outbox state layer
-- failed, blocked, conflict, queued, sending, and recent acknowledgement evidence now surface through runtime diagnostics and workspace notices
+- failed, blocked, queued, sending, conflict, and recent acknowledgement evidence now surface through runtime diagnostics and workspace notices, while conflict review itself now happens in Task Workspace through a local-vs-remote diff modal
 - delayed-sync replay now reloads local state after a full-pass hold before remote work begins, and newer local mutations that arrive after replay has already started are preserved as queued follow-up work instead of being silently discarded
 - recent acknowledgements are currently retained as a rolling local history of up to 10 entries, and the diagnostics rail exposes a manual clear action for clean recording or demo setup
 - the operator rail now exposes a soft demo reset action that clears transient diagnostics history, retained acknowledgements, sync outcome surfaces, and fault-injection UI state while preserving auth state, push state truth, local tasks, and active outbox entries
@@ -261,10 +261,11 @@ Responsibilities:
 - compare session truth with cached identity
 - surface local dirty, deleted, and anonymous counts
 - render push permission and subscription state
+- show aggregated queued, sending, acknowledged, failed, blocked, and conflict evidence without owning the conflict resolution actions
 - retain a short runtime event timeline with expandable operator records for stage, task-level evidence, and state diffs
 - expose a timeline-only clear action for demo cleanup without resetting the wider diagnostics surface
 - keep the wide-layout diagnostics rail mouse-scrollable with an always-visible, wider scrollbar
-- reserve future UI slots for queued, sending, acknowledged, failed, and conflict operation states
+- keep conflict routing visible while Task Workspace owns the review and decision flow
 
 ### 6. Runtime diagnostics model
 

@@ -40,7 +40,7 @@ These decisions are the current planning contract for Objective 1:
 4. Compact local edits to the latest effective operation per task before replay.
 5. Replay operations FIFO by the earliest surviving operation timestamp.
 6. Capture conflicts explicitly and block replay for those entries until the operator resolves them.
-7. Keep `Runtime Diagnostics` as the primary home for outbox evidence and `TaskWorkspace` as the secondary home for task-scoped indicators.
+7. Keep `Runtime Diagnostics` as the primary home for outbox evidence, while `TaskWorkspace` owns task-scoped conflict alerts and operator resolution actions.
 8. Preserve the anonymous keep-or-discard review gate, but represent anonymous work as blocked outbox entries.
 9. Continue clearing the local workspace boundary on explicit sign-out so user-bound tasks do not leak across sessions on a shared device.
 
@@ -81,7 +81,7 @@ After Objective 1 is complete, the repository should have:
 ### 3. Keep the UI honest
 
 - expose outbox evidence primarily in `Runtime Diagnostics`
-- keep task-scoped failure or conflict visibility in `TaskWorkspace`
+- keep task-scoped failure visibility and conflict review in `TaskWorkspace`
 - avoid another shell redesign while these semantics land
 
 ### 4. Expand focused verification

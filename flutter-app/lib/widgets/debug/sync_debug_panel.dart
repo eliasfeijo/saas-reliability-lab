@@ -445,110 +445,31 @@ class _SyncDebugPanelState extends State<SyncDebugPanel> {
                       if (state.conflictEntries.isNotEmpty) ...[
                         const SizedBox(height: 16),
                         Text(
-                          'Conflict review',
+                          'Conflict routing',
                           style: theme.textTheme.titleSmall,
                         ),
                         const SizedBox(height: 6),
-                        ...state.conflictEntries
-                            .take(3)
-                            .map(
-                              (entry) => Padding(
-                                padding: const EdgeInsets.only(bottom: 8),
-                                child: Container(
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: theme.colorScheme.errorContainer
-                                        .withValues(alpha: 0.24),
-                                    borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(
-                                      color: theme.colorScheme.error.withValues(
-                                        alpha: 0.22,
-                                      ),
-                                    ),
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        _taskTitleForEntry(entry),
-                                        style: theme.textTheme.titleSmall,
-                                      ),
-                                      const SizedBox(height: 16),
-                                      Text(
-                                        entry.lastError ??
-                                            'Remote state changed after this operation was queued.',
-                                        style: theme.textTheme.bodySmall,
-                                      ),
-                                      if (_remoteSnapshotTitle(entry) !=
-                                          null) ...[
-                                        const SizedBox(height: 16),
-                                        Text(
-                                          'Remote version: ${_remoteSnapshotTitle(entry)}',
-                                          style: theme.textTheme.bodySmall,
-                                        ),
-                                      ],
-                                      const SizedBox(height: 8),
-                                      Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.stretch,
-                                        children: [
-                                          OutlinedButton(
-                                            onPressed: () async {
-                                              await context
-                                                  .read<AgendaProvider>()
-                                                  .keepRemoteConflict(
-                                                    entry.taskId,
-                                                  );
-                                              if (!context.mounted) {
-                                                return;
-                                              }
-                                              ScaffoldMessenger.of(
-                                                context,
-                                              ).showSnackBar(
-                                                SnackBar(
-                                                  content: Text(
-                                                    'Kept remote state for ${_taskTitleForEntry(entry)}.',
-                                                  ),
-                                                ),
-                                              );
-                                            },
-                                            child: const Text(
-                                              'Keep remote version',
-                                            ),
-                                          ),
-                                          const SizedBox(height: 8),
-                                          FilledButton(
-                                            onPressed: () async {
-                                              await context
-                                                  .read<AgendaProvider>()
-                                                  .reapplyLocalConflict(
-                                                    entry.taskId,
-                                                  );
-                                              if (!context.mounted) {
-                                                return;
-                                              }
-                                              ScaffoldMessenger.of(
-                                                context,
-                                              ).showSnackBar(
-                                                SnackBar(
-                                                  content: Text(
-                                                    'Re-queued local intent for ${_taskTitleForEntry(entry)}.',
-                                                  ),
-                                                ),
-                                              );
-                                            },
-                                            child: const Text(
-                                              'Reapply local intent',
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                ),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.errorContainer.withValues(
+                              alpha: 0.24,
+                            ),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: theme.colorScheme.error.withValues(
+                                alpha: 0.22,
                               ),
                             ),
+                          ),
+                          child: Text(
+                            state.conflictEntryCount == 1
+                                ? 'Task Workspace now owns conflict review. Open the workspace alert to compare local and remote versions for ${_taskTitleForEntry(state.conflictEntries.first)}.'
+                                : 'Task Workspace now owns conflict review. Open the workspace alert to compare local and remote versions before choosing which side wins.',
+                            style: theme.textTheme.bodySmall,
+                          ),
+                        ),
                       ],
                       if (state.recentAcknowledgements.isNotEmpty) ...[
                         const SizedBox(height: 8),

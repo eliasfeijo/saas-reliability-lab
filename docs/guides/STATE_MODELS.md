@@ -128,12 +128,12 @@ Still not true:
 
 Implemented now:
 
-- first-slice conflicts are visible in the runtime diagnostics surface
-- operators can keep remote state or re-queue local intent
+- first-slice conflicts are visible through runtime diagnostics evidence and a clearly visible Task Workspace alert
+- operators can open a local-vs-remote diff review modal, then keep remote state or re-queue local intent
 
 Still not true:
 
-- there is no field-level merge workflow
+- there is no automatic field-level merge workflow
 - there is no broader multi-device conflict-management model yet
 
 ### 4. Fault injection vs broader experiment control
