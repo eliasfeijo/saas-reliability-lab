@@ -4,6 +4,7 @@ import 'package:connectivity_plus_platform_interface/connectivity_plus_platform_
 import 'package:flutter_test/flutter_test.dart';
 import 'package:todo_flutter/models/fault_injection_scenario.dart';
 import 'package:todo_flutter/models/fault_injection_state.dart';
+import 'package:todo_flutter/models/outbox_entry.dart';
 import 'package:todo_flutter/models/task.dart';
 import 'package:todo_flutter/providers/runtime_debug_provider.dart';
 import 'package:todo_flutter/repositories/outbox_repository.dart';
@@ -459,6 +460,136 @@ void main() {
       expect(remoteTasks.single.id, updatedTask.id);
       expect(reloadedAgenda.tasks, hasLength(1));
       expect(reloadedAgenda.totalTasks, 1);
+      expect(runtimeDebug.state.deletedTaskCount, 0);
+      expect(
+        runtimeDebug.state.recentEvents.any(
+          (event) =>
+              event.payload?.stage == 'Concurrent local mutations preserved' &&
+              event.message.contains(
+                'preserved while replay was already in progress',
+              ),
+        ),
+        isTrue,
+      );
+    },
+  );
+
+  test(
+    'agenda provider queues a delete follow-up when the same task is deleted during an in-flight update',
+    () async {
+      final runtimeDebug = RuntimeDebugProvider();
+      addTearDown(runtimeDebug.dispose);
+      final updatedTask = buildTask(
+        id: 'task-race-same-task',
+        title: 'Update then delete same task',
+        beginsAt: DateTime(2026, 2, 19, 9),
+        estimatedDuration: const Duration(hours: 1),
+        syncStatus: SyncStatus.dirty,
+        lastModifiedAt: DateTime(2026, 2, 19, 10),
+        updatedAt: DateTime(2026, 2, 19, 8),
+        userId: 'user-1',
+        hasRemoteBackingRecord: true,
+      );
+      final remoteUpdatedBase = buildTask(
+        id: updatedTask.id,
+        title: 'Remote stale title',
+        beginsAt: updatedTask.beginsAt,
+        estimatedDuration: updatedTask.estimatedDuration,
+        syncStatus: SyncStatus.synced,
+        updatedAt: DateTime(2026, 2, 19, 8),
+        userId: 'user-1',
+        hasRemoteBackingRecord: true,
+      );
+
+      final repository = InMemoryTasksRepository([updatedTask]);
+      final remote = FakeTaskRemoteDataSource([remoteUpdatedBase]);
+      final outboxRepository = InMemoryOutboxRepository();
+      final localStateCoordinator = TaskLocalStateCoordinator(
+        TaskLocalSnapshotCoordinator.fromRepository(repository),
+        outboxRepository,
+        runtimeDebug: runtimeDebug,
+      );
+      await localStateCoordinator.saveTaskSnapshot(
+        [updatedTask],
+        changedTaskIds: {updatedTask.id},
+      );
+
+      final delayCompleter = Completer<void>();
+      final service = TaskSyncService.forTesting(
+        repository,
+        remote: remote,
+        connectivityCheck: () async => [ConnectivityResult.wifi],
+        hasActiveSession: () => true,
+        runtimeDebug: runtimeDebug,
+        faultInjectionPolicy: FaultInjectionPolicy(
+          readState: () => const FaultInjectionState(
+            activeScenario: FaultInjectionScenario.delayedSync,
+            isEnabled: true,
+            delayMs: 500,
+            delayedSyncMode: DelayedSyncMode.backend,
+            delayedSyncTarget: DelayedSyncTarget.update,
+            delayedSyncBehavior: DelayedSyncBehavior.oneShot,
+          ),
+        ),
+        localStateCoordinator: localStateCoordinator,
+        delayExecution: (_) => delayCompleter.future,
+      );
+      final agenda =
+          buildAgendaProviderForTesting(
+              repository,
+              service,
+              runtimeDebug: runtimeDebug,
+              localStateCoordinator: localStateCoordinator,
+              outboxRepository: outboxRepository,
+            )
+            ..userId = 'user-1'
+            ..tasks = [updatedTask];
+
+      final firstSyncFuture = agenda.syncAllTasks();
+      await Future<void>.delayed(Duration.zero);
+
+      await agenda.deleteTask(updatedTask.id);
+      delayCompleter.complete();
+      await firstSyncFuture;
+
+      final afterFirstSyncState = await localStateCoordinator.loadState();
+      expect(afterFirstSyncState.tasks, hasLength(1));
+      expect(afterFirstSyncState.tasks.single.id, updatedTask.id);
+      expect(afterFirstSyncState.tasks.single.syncStatus, SyncStatus.deleted);
+      expect(afterFirstSyncState.outboxState.activeEntries, hasLength(1));
+      expect(
+        afterFirstSyncState.outboxState.activeEntries.single.taskId,
+        updatedTask.id,
+      );
+      expect(
+        afterFirstSyncState.outboxState.activeEntries.single.operationType,
+        OutboxOperationType.delete,
+      );
+      expect(
+        runtimeDebug.state.lastSyncMessage,
+        'Sync completed. 1 task(s) acknowledged. 1 newer local change(s) remain queued for a follow-up sync.',
+      );
+
+      await agenda.syncAllTasks();
+
+      final reloadedAgenda = buildAgendaProviderForTesting(
+        repository,
+        service,
+        runtimeDebug: runtimeDebug,
+        localStateCoordinator: localStateCoordinator,
+        outboxRepository: outboxRepository,
+      )..userId = 'user-1';
+      await reloadedAgenda.loadTasks();
+
+      final savedTasks = await repository.loadTasks();
+      final finalOutboxState = await outboxRepository.loadState();
+      final remoteTasks = await remote.fetchAllTasks();
+
+      expect(savedTasks, isEmpty);
+      expect(finalOutboxState.activeEntries, isEmpty);
+      expect(remoteTasks, isEmpty);
+      expect(reloadedAgenda.tasks, isEmpty);
+      expect(reloadedAgenda.totalTasks, 0);
       expect(runtimeDebug.state.deletedTaskCount, 0);
       expect(
         runtimeDebug.state.recentEvents.any(

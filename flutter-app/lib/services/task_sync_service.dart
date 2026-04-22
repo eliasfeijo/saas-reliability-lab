@@ -792,8 +792,8 @@ class TaskSyncService implements TaskSyncGateway {
 
       if (syncEntry == null) {
         if (latestEntry != null &&
-            removedEntry != null &&
-            _wasOutboxEntryMutatedAfter(latestEntry, removedEntry)) {
+            (removedEntry == null ||
+                _wasOutboxEntryMutatedAfter(latestEntry, removedEntry))) {
           mergedActiveEntries.add(latestEntry);
           preservedConcurrentEntries.add(latestEntry);
         }
